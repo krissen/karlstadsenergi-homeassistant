@@ -18,7 +18,7 @@
       },
       "bankid": {
         "title": "Karlstadsenergi - BankID",
-        "description": "Öppna denna länk på din telefon för att starta BankID: [{bankid_link}]({bankid_link})\n\nEfter signering i BankID, klicka Skicka nedan.",
+        "description": "Skanna denna QR-kod med BankID på din telefon:\n\n![BankID QR](data:image/png;base64,{qr_code})\n\nEller på telefonen: [Öppna BankID-appen](bankid:///?autostarttoken={auto_start_token}&redirect=null)\n\nEfter signering, klicka **Skicka**.",
         "data": {}
       }
     },
