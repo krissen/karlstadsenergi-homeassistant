@@ -1,0 +1,32 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Karlstadsenergi",
+        "description": "Log in with your Karlstadsenergi customer number and password.",
+        "data": {
+          "customer_number": "Customer number (kundnummer)",
+          "password": "Password"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Invalid customer number or password",
+      "cannot_connect": "Could not connect to Karlstadsenergi",
+      "unknown": "Unexpected error"
+    },
+    "abort": {
+      "already_configured": "This customer is already configured"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Karlstadsenergi Options",
+        "data": {
+          "update_interval": "Update interval (hours)"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "domain": "karlstadsenergi",
+  "name": "Karlstadsenergi",
+  "codeowners": ["@krissen"],
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://github.com/krissen/karlstadsenergi-ha",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/krissen/karlstadsenergi-ha/issues",
+  "requirements": [],
+  "version": "0.1.0"
+}
