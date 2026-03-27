@@ -3,20 +3,34 @@
     "step": {
       "user": {
         "title": "Karlstadsenergi",
-        "description": "Logga in med ditt kundnummer och lösenord hos Karlstadsenergi.",
+        "description": "Välj inloggningssätt.",
         "data": {
-          "customer_number": "Kundnummer",
+          "personnummer": "Personnummer",
+          "auth_method": "Inloggningssätt"
+        }
+      },
+      "password": {
+        "title": "Karlstadsenergi - Lösenord",
+        "description": "Ange ditt lösenord.",
+        "data": {
           "password": "Lösenord"
         }
+      },
+      "bankid": {
+        "title": "Karlstadsenergi - BankID",
+        "description": "Öppna BankID på din telefon och signera för {personnummer}. Klicka sedan Skicka.",
+        "data": {}
       }
     },
     "error": {
-      "invalid_auth": "Fel kundnummer eller lösenord",
+      "invalid_auth": "Fel personnummer eller lösenord",
       "cannot_connect": "Kunde inte ansluta till Karlstadsenergi",
+      "bankid_pending": "BankID inte signerat ännu. Öppna BankID-appen och försök igen.",
+      "bankid_failed": "BankID-inloggning misslyckades",
       "unknown": "Oväntat fel"
     },
     "abort": {
-      "already_configured": "Denna kund är redan konfigurerad"
+      "already_configured": "Denna person är redan konfigurerad"
     }
   },
   "options": {

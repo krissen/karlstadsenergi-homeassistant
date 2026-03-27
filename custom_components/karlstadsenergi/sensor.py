@@ -22,7 +22,7 @@ from . import (
     KarlstadsenergiConsumptionCoordinator,
     KarlstadsenergiWasteCoordinator,
 )
-from .const import CONF_CUSTOMER_NUMBER, DOMAIN, WASTE_TYPE_SLUG
+from .const import CONF_PERSONNUMMER, DOMAIN, WASTE_TYPE_SLUG
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -47,7 +47,7 @@ async def async_setup_entry(
     consumption_coordinator: KarlstadsenergiConsumptionCoordinator = data[
         "consumption_coordinator"
     ]
-    customer_number = entry.data[CONF_CUSTOMER_NUMBER]
+    customer_number = entry.data[CONF_PERSONNUMMER]
 
     entities: list[SensorEntity] = []
 

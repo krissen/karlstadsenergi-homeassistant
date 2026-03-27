@@ -20,7 +20,8 @@ URL_CONSUMPTION = f"{BASE_URL}/consumption/consumption.aspx/GetConsumption"
 URL_SERVICE_INFO = f"{BASE_URL}/consumption/consumption.aspx/GetServiceInfo"
 
 # Config keys
-CONF_CUSTOMER_NUMBER = "customer_number"
+CONF_PERSONNUMMER = "personnummer"
+CONF_AUTH_METHOD = "auth_method"
 CONF_UPDATE_INTERVAL = "update_interval"
 
 # Defaults
