@@ -299,6 +299,15 @@ class KarlstadsenergiApi:
         _LOGGER.debug("Login response: %s", result)
 
         if result.get("Key") is True:
+            # Navigate to start page to initialize the session view
+            # (server requires this before API calls work)
+            session = await self._ensure_session()
+            await session.get(
+                f"{BASE_URL}/start.aspx",
+                headers={"X-Requested-With": "XMLHttpRequest"},
+            )
+            _LOGGER.debug("Visited start.aspx to initialize session")
+
             self._authenticated = True
             _LOGGER.debug("BankID authentication successful")
             return True
@@ -371,6 +380,23 @@ class KarlstadsenergiApi:
 
         data = await resp.json()
         return _parse_aspnet_response(data)
+
+    async def async_get_next_flex_dates(self) -> list[dict[str, Any]]:
+        """Get next pickup dates (simple summary from start page).
+
+        Returns list of {Date, Address, Type, Size}.
+        """
+        result = await self._request(
+            f"{BASE_URL}/Start.aspx/GetNextFlexFetchDate",
+        )
+        if isinstance(result, str):
+            try:
+                result = json.loads(result)
+            except (json.JSONDecodeError, TypeError):
+                return []
+        if not isinstance(result, list):
+            return []
+        return result
 
     async def async_get_flex_services(self) -> list[dict[str, Any]]:
         """Get all waste collection services."""
