@@ -18,7 +18,7 @@
       },
       "bankid": {
         "title": "Karlstadsenergi - BankID",
-        "description": "Open BankID on your phone and sign in for {personnummer}. Then click Submit.",
+        "description": "Open this link on your phone to start BankID: [{bankid_link}]({bankid_link})\n\nAfter signing in BankID, click Submit below.",
         "data": {}
       }
     },

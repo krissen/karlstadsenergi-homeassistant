@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
@@ -122,7 +123,7 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
     async def async_step_bankid(
         self, user_input: dict[str, Any] | None = None,
     ) -> FlowResult:
-        """Handle BankID authentication: initiate and wait."""
+        """Handle BankID authentication: initiate and show link."""
         errors: dict[str, str] = {}
 
         if self._api is None:
@@ -154,12 +155,21 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
                 )
 
         if user_input is not None:
-            # User clicked "I have signed" - poll for completion
+            # User clicked Submit - poll for completion
             try:
-                result = await self._api.bankid_poll(
-                    self._bankid_init["order_ref"],
-                )
-                if result["status"] == 0:  # COMPLETE
+                # Poll a few times to give user time
+                result = None
+                for _ in range(15):
+                    result = await self._api.bankid_poll(
+                        self._bankid_init["order_ref"],
+                    )
+                    if result["status"] == 0:  # COMPLETE
+                        break
+                    if result["status"] not in (1, 2, 5):
+                        break
+                    await asyncio.sleep(2)
+
+                if result and result["status"] == 0:
                     # Extract data for login
                     collect = result["data"].get("CollectResponseType", {})
                     validation = collect.get("validationInfoField", {})
@@ -192,6 +202,15 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
                     )
                 else:
                     errors["base"] = "bankid_pending"
+                    # Re-initiate for next attempt
+                    try:
+                        self._bankid_init = (
+                            await self._api.bankid_initiate()
+                        )
+                    except KarlstadsenergiConnectionError:
+                        errors["base"] = "cannot_connect"
+                        await self._api.async_close()
+                        self._api = None
             except KarlstadsenergiAuthError:
                 errors["base"] = "bankid_failed"
                 await self._api.async_close()
@@ -206,10 +225,18 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
                 await self._api.async_close()
                 self._api = None
 
+        # Build BankID app link
+        auto_start_token = self._bankid_init.get("auto_start_token", "")
+        bankid_link = (
+            f"https://app.bankid.com/"
+            f"?autostarttoken={auto_start_token}&redirect=null"
+        )
+
         return self.async_show_form(
             step_id="bankid",
             description_placeholders={
                 "personnummer": self._personnummer,
+                "bankid_link": bankid_link,
             },
             data_schema=vol.Schema({}),
             errors=errors,
