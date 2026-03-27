@@ -439,6 +439,16 @@ class KarlstadsenergiApi:
             return {}
         return result
 
+    async def async_heartbeat(self) -> bool:
+        """Send heartbeat to keep session alive."""
+        session = await self._ensure_session()
+        try:
+            async with asyncio.timeout(10):
+                resp = await session.get(f"{BASE_URL}/heart.beat")
+                return resp.status == 200
+        except Exception:
+            return False
+
     async def async_close(self) -> None:
         """Close the HTTP session."""
         if self._session and not self._session.closed:

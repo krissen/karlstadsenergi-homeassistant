@@ -238,52 +238,6 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
-    async def _do_bankid_login(
-        self, account: dict[str, Any],
-    ) -> FlowResult:
-        """Login with selected account and create entry."""
-        try:
-            await self._api.bankid_login(
-                self._personnummer,
-                account["customer_id"],
-                self._bankid_init["transaction_id"],
-                account.get("sub_user_id", ""),
-            )
-
-            # Verify data access
-            await self._api.async_get_flex_services()
-
-            cookies = self._api.get_session_cookies()
-
-            # Pass API to setup_entry
-            self.hass.data.setdefault(DOMAIN, {})
-            self.hass.data[DOMAIN]["pending_api"] = self._api
-            self._api = None
-
-            customer_code = account.get("customer_code", "")
-            full_name = account.get("full_name", "")
-            title = f"Karlstadsenergi {full_name} ({customer_code})" if full_name else f"Karlstadsenergi ({customer_code})"
-
-            return self.async_create_entry(
-                title=title,
-                data={
-                    CONF_PERSONNUMMER: self._personnummer,
-                    CONF_AUTH_METHOD: AUTH_BANKID,
-                    "customer_code": customer_code,
-                    "customer_id": account["customer_id"],
-                    "sub_user_id": account.get("sub_user_id", ""),
-                    "session_cookies": cookies,
-                },
-            )
-        except KarlstadsenergiAuthError as err:
-            _LOGGER.error("BankID login failed: %s", err)
-            await self._cleanup_api()
-            return self.async_abort(reason="bankid_failed")
-        except Exception:
-            _LOGGER.exception("Unexpected error during BankID login")
-            await self._cleanup_api()
-            return self.async_abort(reason="unknown")
-
     def _account_label(self, account: dict[str, Any]) -> str:
         name = account.get("full_name", "")
         code = account.get("customer_code", "")
@@ -314,6 +268,93 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
         if self._api:
             await self._api.async_close()
             self._api = None
+
+    async def async_step_reauth(
+        self, entry_data: dict[str, Any],
+    ) -> FlowResult:
+        """Handle re-authentication when session expires."""
+        self._personnummer = entry_data.get(CONF_PERSONNUMMER, "")
+        self._auth_method = entry_data.get(CONF_AUTH_METHOD, AUTH_BANKID)
+        return await self.async_step_reauth_confirm()
+
+    async def async_step_reauth_confirm(
+        self, user_input: dict[str, Any] | None = None,
+    ) -> FlowResult:
+        """Show reauth confirmation and start BankID."""
+        if user_input is not None:
+            # Start BankID flow (reuses bankid step)
+            return await self.async_step_bankid()
+
+        return self.async_show_form(
+            step_id="reauth_confirm",
+            description_placeholders={
+                "personnummer": self._personnummer,
+            },
+            data_schema=vol.Schema({}),
+        )
+
+    async def _do_bankid_login(
+        self, account: dict[str, Any],
+    ) -> FlowResult:
+        """Login with selected account and create/update entry."""
+        try:
+            await self._api.bankid_login(
+                self._personnummer,
+                account["customer_id"],
+                self._bankid_init["transaction_id"],
+                account.get("sub_user_id", ""),
+            )
+
+            # Verify data access
+            await self._api.async_get_next_flex_dates()
+
+            cookies = self._api.get_session_cookies()
+
+            # Pass API to setup_entry
+            self.hass.data.setdefault(DOMAIN, {})
+            self.hass.data[DOMAIN]["pending_api"] = self._api
+            self._api = None
+
+            customer_code = account.get("customer_code", "")
+            full_name = account.get("full_name", "")
+            title = (
+                f"Karlstadsenergi {full_name} ({customer_code})"
+                if full_name
+                else f"Karlstadsenergi ({customer_code})"
+            )
+
+            new_data = {
+                CONF_PERSONNUMMER: self._personnummer,
+                CONF_AUTH_METHOD: AUTH_BANKID,
+                "customer_code": customer_code,
+                "customer_id": account["customer_id"],
+                "sub_user_id": account.get("sub_user_id", ""),
+                "session_cookies": cookies,
+            }
+
+            # Check if this is a reauth
+            reauth_entry = self.hass.config_entries.async_get_entry(
+                self.context.get("entry_id", ""),
+            )
+            if reauth_entry:
+                self.hass.config_entries.async_update_entry(
+                    reauth_entry, data=new_data,
+                )
+                await self.hass.config_entries.async_reload(
+                    reauth_entry.entry_id,
+                )
+                return self.async_abort(reason="reauth_successful")
+
+            return self.async_create_entry(title=title, data=new_data)
+
+        except KarlstadsenergiAuthError as err:
+            _LOGGER.error("BankID login failed: %s", err)
+            await self._cleanup_api()
+            return self.async_abort(reason="bankid_failed")
+        except Exception:
+            _LOGGER.exception("Unexpected error during BankID login")
+            await self._cleanup_api()
+            return self.async_abort(reason="unknown")
 
     @staticmethod
     @callback

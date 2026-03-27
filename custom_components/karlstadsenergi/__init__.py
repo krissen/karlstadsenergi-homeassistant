@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import timedelta
 
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.config_entries import ConfigEntry, ConfigEntryState
 from homeassistant.const import CONF_PASSWORD
-from homeassistant.core import HomeAssistant, callback
-from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
+from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .api import (
@@ -33,7 +35,7 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
-type KarlstadsenergiConfigEntry = ConfigEntry
+HEARTBEAT_INTERVAL = timedelta(minutes=5)
 
 
 class _CookieSavingCoordinator(DataUpdateCoordinator[dict]):
@@ -81,11 +83,9 @@ class KarlstadsenergiWasteCoordinator(_CookieSavingCoordinator):
     async def _async_update_data(self) -> dict:
         """Fetch waste collection data."""
         try:
-            # Use the simple start-page endpoint first (always works)
             next_dates = await self.api.async_get_next_flex_dates()
             _LOGGER.debug("Next flex dates: %s", next_dates)
 
-            # Try the detailed endpoint (may need page visit first)
             services = []
             dates = {}
             try:
@@ -102,11 +102,6 @@ class KarlstadsenergiWasteCoordinator(_CookieSavingCoordinator):
             except Exception:
                 _LOGGER.debug("Detailed flex services unavailable, using summary")
 
-            _LOGGER.debug(
-                "Waste update: %d services, dates=%s, next_dates=%d items",
-                len(services), dates, len(next_dates),
-            )
-
             self._save_cookies()
             return {
                 "services": services,
@@ -115,7 +110,9 @@ class KarlstadsenergiWasteCoordinator(_CookieSavingCoordinator):
             }
 
         except KarlstadsenergiAuthError as err:
-            raise UpdateFailed(f"Authentication failed: {err}") from err
+            raise ConfigEntryAuthFailed(
+                f"Authentication failed: {err}"
+            ) from err
         except KarlstadsenergiConnectionError as err:
             raise UpdateFailed(f"Connection error: {err}") from err
         except KarlstadsenergiApiError as err:
@@ -145,7 +142,9 @@ class KarlstadsenergiConsumptionCoordinator(_CookieSavingCoordinator):
                 "service_info": service_info,
             }
         except KarlstadsenergiAuthError as err:
-            raise UpdateFailed(f"Authentication failed: {err}") from err
+            raise ConfigEntryAuthFailed(
+                f"Authentication failed: {err}"
+            ) from err
         except KarlstadsenergiConnectionError as err:
             raise UpdateFailed(f"Connection error: {err}") from err
         except KarlstadsenergiApiError as err:
@@ -180,12 +179,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         saved_cookies = entry.data.get("session_cookies")
         if saved_cookies:
             api.set_session_cookies(saved_cookies)
+            _LOGGER.debug("Restored session cookies from config entry")
         elif auth_method == AUTH_PASSWORD:
             try:
                 await api.authenticate()
             except KarlstadsenergiApiError as err:
                 await api.async_close()
-                raise ConfigEntryNotReady(f"Could not authenticate: {err}") from err
+                raise ConfigEntryNotReady(
+                    f"Could not authenticate: {err}"
+                ) from err
 
     waste_coordinator = KarlstadsenergiWasteCoordinator(
         hass, api, update_interval, entry,
@@ -196,16 +198,20 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     try:
         await waste_coordinator.async_config_entry_first_refresh()
+    except ConfigEntryAuthFailed:
+        await api.async_close()
+        raise
     except Exception as err:
         await api.async_close()
-        raise ConfigEntryNotReady(f"Could not fetch waste data: {err}") from err
+        raise ConfigEntryNotReady(
+            f"Could not fetch waste data: {err}"
+        ) from err
 
     try:
         await consumption_coordinator.async_config_entry_first_refresh()
     except Exception as err:
         _LOGGER.warning("Could not fetch consumption data: %s", err)
 
-    hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = {
         "api": api,
         "waste_coordinator": waste_coordinator,
@@ -214,6 +220,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
+    # Heartbeat: keep session alive every 5 minutes
+    async def _heartbeat(_now=None) -> None:
+        try:
+            await api.async_heartbeat()
+            _LOGGER.debug("Heartbeat sent")
+        except Exception:
+            _LOGGER.debug("Heartbeat failed (session may have expired)")
+
+    cancel_heartbeat = async_track_time_interval(
+        hass, _heartbeat, HEARTBEAT_INTERVAL,
+    )
+    entry.async_on_unload(cancel_heartbeat)
     entry.async_on_unload(
         entry.add_update_listener(_async_reload_entry)
     )

@@ -27,6 +27,11 @@
         "data": {
           "account": "Account"
         }
+      },
+      "reauth_confirm": {
+        "title": "Karlstadsenergi - Re-authenticate",
+        "description": "Session expired for {personnummer}. Click Submit to start BankID sign-in.",
+        "data": {}
       }
     },
     "error": {
@@ -38,6 +43,7 @@
     },
     "abort": {
       "already_configured": "This person is already configured",
+      "reauth_successful": "Re-authentication successful",
       "bankid_failed": "BankID authentication failed",
       "unknown": "Unexpected error"
     }
