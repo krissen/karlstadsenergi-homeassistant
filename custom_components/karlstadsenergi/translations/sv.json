@@ -20,6 +20,13 @@
         "title": "Karlstadsenergi - BankID",
         "description": "Skanna denna QR-kod med BankID på din telefon:\n\n![BankID QR](data:image/png;base64,{qr_code})\n\nEller på telefonen: [Öppna BankID-appen](bankid:///?autostarttoken={auto_start_token}&redirect=null)\n\nEfter signering, klicka **Skicka**.",
         "data": {}
+      },
+      "select_account": {
+        "title": "Välj konto",
+        "description": "Flera konton hittades. Välj vilket som ska användas.",
+        "data": {
+          "account": "Konto"
+        }
       }
     },
     "error": {
@@ -30,7 +37,9 @@
       "unknown": "Oväntat fel"
     },
     "abort": {
-      "already_configured": "Denna person är redan konfigurerad"
+      "already_configured": "Denna person är redan konfigurerad",
+      "bankid_failed": "BankID-inloggning misslyckades",
+      "unknown": "Oväntat fel"
     }
   },
   "options": {

@@ -36,7 +36,37 @@ _LOGGER = logging.getLogger(__name__)
 type KarlstadsenergiConfigEntry = ConfigEntry
 
 
-class KarlstadsenergiWasteCoordinator(DataUpdateCoordinator[dict]):
+class _CookieSavingCoordinator(DataUpdateCoordinator[dict]):
+    """Base coordinator that persists session cookies after each update."""
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        api: KarlstadsenergiApi,
+        update_interval_hours: int,
+        entry: ConfigEntry,
+        name: str,
+    ) -> None:
+        super().__init__(
+            hass,
+            _LOGGER,
+            name=name,
+            update_interval=timedelta(hours=update_interval_hours),
+        )
+        self.api = api
+        self._entry = entry
+
+    def _save_cookies(self) -> None:
+        """Persist current session cookies to config entry."""
+        cookies = self.api.get_session_cookies()
+        if cookies and cookies != self._entry.data.get("session_cookies"):
+            new_data = {**self._entry.data, "session_cookies": cookies}
+            self.hass.config_entries.async_update_entry(
+                self._entry, data=new_data,
+            )
+
+
+class KarlstadsenergiWasteCoordinator(_CookieSavingCoordinator):
     """Coordinator for waste collection data."""
 
     def __init__(
@@ -44,14 +74,9 @@ class KarlstadsenergiWasteCoordinator(DataUpdateCoordinator[dict]):
         hass: HomeAssistant,
         api: KarlstadsenergiApi,
         update_interval_hours: int,
+        entry: ConfigEntry,
     ) -> None:
-        super().__init__(
-            hass,
-            _LOGGER,
-            name=f"{DOMAIN}_waste",
-            update_interval=timedelta(hours=update_interval_hours),
-        )
-        self.api = api
+        super().__init__(hass, api, update_interval_hours, entry, f"{DOMAIN}_waste")
 
     async def _async_update_data(self) -> dict:
         """Fetch waste collection services and pickup dates."""
@@ -69,6 +94,7 @@ class KarlstadsenergiWasteCoordinator(DataUpdateCoordinator[dict]):
             service_ids = [s["FlexServiceId"] for s in active]
             dates = await self.api.async_get_flex_dates(service_ids)
 
+            self._save_cookies()
             return {"services": active, "dates": dates}
 
         except KarlstadsenergiAuthError as err:
@@ -79,7 +105,7 @@ class KarlstadsenergiWasteCoordinator(DataUpdateCoordinator[dict]):
             raise UpdateFailed(f"API error: {err}") from err
 
 
-class KarlstadsenergiConsumptionCoordinator(DataUpdateCoordinator[dict]):
+class KarlstadsenergiConsumptionCoordinator(_CookieSavingCoordinator):
     """Coordinator for electricity consumption data."""
 
     def __init__(
@@ -87,20 +113,16 @@ class KarlstadsenergiConsumptionCoordinator(DataUpdateCoordinator[dict]):
         hass: HomeAssistant,
         api: KarlstadsenergiApi,
         update_interval_hours: int,
+        entry: ConfigEntry,
     ) -> None:
-        super().__init__(
-            hass,
-            _LOGGER,
-            name=f"{DOMAIN}_consumption",
-            update_interval=timedelta(hours=update_interval_hours),
-        )
-        self.api = api
+        super().__init__(hass, api, update_interval_hours, entry, f"{DOMAIN}_consumption")
 
     async def _async_update_data(self) -> dict:
         """Fetch electricity consumption data."""
         try:
             consumption = await self.api.async_get_consumption()
             service_info = await self.api.async_get_service_info()
+            self._save_cookies()
             return {
                 "consumption": consumption,
                 "service_info": service_info,
@@ -127,23 +149,44 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         MAX_UPDATE_INTERVAL,
     )
 
-    api = KarlstadsenergiApi(personnummer, auth_method, password)
+    # Try to reuse API instance from config flow (BankID session handoff)
+    api = None
+    hass.data.setdefault(DOMAIN, {})
+    pending = hass.data[DOMAIN].pop("pending_api", None)
+    if pending is not None and pending._authenticated:
+        api = pending
+        _LOGGER.debug("Reusing authenticated API session from config flow")
 
-    try:
-        await api.authenticate()
-    except KarlstadsenergiApiError as err:
-        await api.async_close()
-        raise ConfigEntryNotReady(f"Could not authenticate: {err}") from err
+    if api is None:
+        api = KarlstadsenergiApi(personnummer, auth_method, password)
+        # Restore session cookies if available
+        saved_cookies = entry.data.get("session_cookies")
+        if saved_cookies:
+            api.set_session_cookies(saved_cookies)
+        elif auth_method == AUTH_PASSWORD:
+            try:
+                await api.authenticate()
+            except KarlstadsenergiApiError as err:
+                await api.async_close()
+                raise ConfigEntryNotReady(f"Could not authenticate: {err}") from err
 
     waste_coordinator = KarlstadsenergiWasteCoordinator(
-        hass, api, update_interval,
+        hass, api, update_interval, entry,
     )
     consumption_coordinator = KarlstadsenergiConsumptionCoordinator(
-        hass, api, max(update_interval // 6, 1),
+        hass, api, max(update_interval // 6, 1), entry,
     )
 
-    await waste_coordinator.async_config_entry_first_refresh()
-    await consumption_coordinator.async_config_entry_first_refresh()
+    try:
+        await waste_coordinator.async_config_entry_first_refresh()
+    except Exception as err:
+        await api.async_close()
+        raise ConfigEntryNotReady(f"Could not fetch waste data: {err}") from err
+
+    try:
+        await consumption_coordinator.async_config_entry_first_refresh()
+    except Exception as err:
+        _LOGGER.warning("Could not fetch consumption data: %s", err)
 
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = {

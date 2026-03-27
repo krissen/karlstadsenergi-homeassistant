@@ -20,6 +20,13 @@
         "title": "Karlstadsenergi - BankID",
         "description": "Scan this QR code with BankID on your phone:\n\n![BankID QR](data:image/png;base64,{qr_code})\n\nOr on your phone: [Open BankID app](bankid:///?autostarttoken={auto_start_token}&redirect=null)\n\nAfter signing, click **Submit**.",
         "data": {}
+      },
+      "select_account": {
+        "title": "Select account",
+        "description": "Multiple accounts found. Choose which one to use.",
+        "data": {
+          "account": "Account"
+        }
       }
     },
     "error": {
@@ -30,7 +37,9 @@
       "unknown": "Unexpected error"
     },
     "abort": {
-      "already_configured": "This person is already configured"
+      "already_configured": "This person is already configured",
+      "bankid_failed": "BankID authentication failed",
+      "unknown": "Unexpected error"
     }
   },
   "options": {
