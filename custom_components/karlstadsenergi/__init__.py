@@ -7,18 +7,21 @@ from datetime import timedelta
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_PASSWORD
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .api import (
+    AUTH_BANKID,
+    AUTH_PASSWORD,
     KarlstadsenergiApi,
     KarlstadsenergiApiError,
     KarlstadsenergiAuthError,
     KarlstadsenergiConnectionError,
 )
 from .const import (
-    CONF_CUSTOMER_NUMBER,
+    CONF_AUTH_METHOD,
+    CONF_PERSONNUMMER,
     CONF_UPDATE_INTERVAL,
     DEFAULT_UPDATE_INTERVAL,
     DOMAIN,
@@ -112,8 +115,9 @@ class KarlstadsenergiConsumptionCoordinator(DataUpdateCoordinator[dict]):
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Karlstadsenergi from a config entry."""
-    customer_number = entry.data[CONF_CUSTOMER_NUMBER]
-    password = entry.data[CONF_PASSWORD]
+    personnummer = entry.data[CONF_PERSONNUMMER]
+    auth_method = entry.data.get(CONF_AUTH_METHOD, AUTH_BANKID)
+    password = entry.data.get(CONF_PASSWORD, "")
 
     update_interval = min(
         max(
@@ -123,7 +127,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         MAX_UPDATE_INTERVAL,
     )
 
-    api = KarlstadsenergiApi(customer_number, password)
+    api = KarlstadsenergiApi(personnummer, auth_method, password)
 
     try:
         await api.authenticate()
