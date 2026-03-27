@@ -1,1 +1,12 @@
-tmp
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+.env
+tmp/
+*.egg-info/
+dist/
+build/
+.coverage
+.pytest_cache/
+.ruff_cache/
