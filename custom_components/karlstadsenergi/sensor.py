@@ -51,20 +51,44 @@ async def async_setup_entry(
 
     entities: list[SensorEntity] = []
 
+    _LOGGER.debug(
+        "Setting up sensors: waste_data=%s, consumption_data=%s",
+        bool(waste_coordinator.data),
+        bool(consumption_coordinator.data),
+    )
+
     # Waste collection sensors
     if waste_coordinator.data:
         services = waste_coordinator.data.get("services", [])
-        for service in services:
-            waste_type = service.get("FlexServiceContainTypeValue", "")
-            if not waste_type:
-                continue
-            entities.append(
-                WasteCollectionSensor(
-                    coordinator=waste_coordinator,
-                    customer_number=customer_number,
-                    service=service,
+        next_dates = waste_coordinator.data.get("next_dates", [])
+        _LOGGER.debug("Waste services: %d, next_dates: %d", len(services), len(next_dates))
+
+        if services:
+            # Detailed mode: one sensor per service
+            for service in services:
+                waste_type = service.get("FlexServiceContainTypeValue", "")
+                if not waste_type:
+                    continue
+                entities.append(
+                    WasteCollectionSensor(
+                        coordinator=waste_coordinator,
+                        customer_number=customer_number,
+                        service=service,
+                    )
                 )
-            )
+        elif next_dates:
+            # Summary mode: create sensors from start page data
+            for item in next_dates:
+                waste_type = item.get("Type", "")
+                if not waste_type:
+                    continue
+                entities.append(
+                    WasteCollectionSummary(
+                        coordinator=waste_coordinator,
+                        customer_number=customer_number,
+                        item=item,
+                    )
+                )
 
     # Electricity consumption sensor
     if consumption_coordinator.data:
@@ -78,6 +102,7 @@ async def async_setup_entry(
                 )
             )
 
+    _LOGGER.debug("Adding %d entities", len(entities))
     async_add_entities(entities, update_before_add=False)
 
 
@@ -139,6 +164,67 @@ class WasteCollectionSensor(
             "container_size": self._container_size,
             "frequency": self._frequency,
             "service_id": self._service_id,
+        }
+        pickup_date = self.native_value
+        if pickup_date:
+            today = datetime.date.today()
+            delta = (pickup_date - today).days
+            attrs["days_until_pickup"] = delta
+            attrs["pickup_is_today"] = delta == 0
+            attrs["pickup_is_tomorrow"] = delta == 1
+        return attrs
+
+
+class WasteCollectionSummary(
+    CoordinatorEntity[KarlstadsenergiWasteCoordinator], SensorEntity,
+):
+    """Sensor for waste collection from start page summary data."""
+
+    _attr_has_entity_name = True
+    _attr_device_class = SensorDeviceClass.DATE
+    _attr_icon = "mdi:trash-can"
+
+    def __init__(
+        self,
+        coordinator: KarlstadsenergiWasteCoordinator,
+        customer_number: str,
+        item: dict[str, Any],
+    ) -> None:
+        super().__init__(coordinator)
+        self._customer_number = customer_number
+        self._waste_type = item.get("Type", "")
+        self._slug = _slug_for_waste_type(self._waste_type)
+        self._address = item.get("Address", "").strip()
+        self._container_size = item.get("Size", "")
+
+        self._attr_unique_id = f"{DOMAIN}_{customer_number}_{self._slug}"
+        self._attr_name = self._waste_type
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        return DeviceInfo(
+            identifiers={(DOMAIN, f"{self._customer_number}")},
+            name=f"Karlstadsenergi ({self._address})",
+            manufacturer="Karlstads Energi",
+        )
+
+    @property
+    def native_value(self) -> datetime.date | None:
+        if not self.coordinator.data:
+            return None
+        for item in self.coordinator.data.get("next_dates", []):
+            if item.get("Type") == self._waste_type:
+                try:
+                    return datetime.date.fromisoformat(item["Date"])
+                except (ValueError, TypeError, KeyError):
+                    return None
+        return None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        attrs: dict[str, Any] = {
+            "address": self._address,
+            "container_size": self._container_size,
         }
         pickup_date = self.native_value
         if pickup_date:

@@ -79,23 +79,40 @@ class KarlstadsenergiWasteCoordinator(_CookieSavingCoordinator):
         super().__init__(hass, api, update_interval_hours, entry, f"{DOMAIN}_waste")
 
     async def _async_update_data(self) -> dict:
-        """Fetch waste collection services and pickup dates."""
+        """Fetch waste collection data."""
         try:
-            services = await self.api.async_get_flex_services()
+            # Use the simple start-page endpoint first (always works)
+            next_dates = await self.api.async_get_next_flex_dates()
+            _LOGGER.debug("Next flex dates: %s", next_dates)
 
-            # Filter to active container services (skip billing-only)
-            active = [
-                s for s in services
-                if s.get("FSStatusName") == "Aktiv"
-                and s.get("FlexServiceGroupName") not in SKIP_GROUP_NAMES
-            ]
+            # Try the detailed endpoint (may need page visit first)
+            services = []
+            dates = {}
+            try:
+                services = await self.api.async_get_flex_services()
+                active = [
+                    s for s in services
+                    if s.get("FSStatusName") == "Aktiv"
+                    and s.get("FlexServiceGroupName") not in SKIP_GROUP_NAMES
+                ]
+                if active:
+                    service_ids = [s["FlexServiceId"] for s in active]
+                    dates = await self.api.async_get_flex_dates(service_ids)
+                    services = active
+            except Exception:
+                _LOGGER.debug("Detailed flex services unavailable, using summary")
 
-            # Get next pickup dates
-            service_ids = [s["FlexServiceId"] for s in active]
-            dates = await self.api.async_get_flex_dates(service_ids)
+            _LOGGER.debug(
+                "Waste update: %d services, dates=%s, next_dates=%d items",
+                len(services), dates, len(next_dates),
+            )
 
             self._save_cookies()
-            return {"services": active, "dates": dates}
+            return {
+                "services": services,
+                "dates": dates,
+                "next_dates": next_dates,
+            }
 
         except KarlstadsenergiAuthError as err:
             raise UpdateFailed(f"Authentication failed: {err}") from err
