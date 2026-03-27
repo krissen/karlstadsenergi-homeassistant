@@ -27,6 +27,11 @@
         "data": {
           "account": "Konto"
         }
+      },
+      "reauth_confirm": {
+        "title": "Karlstadsenergi - Logga in igen",
+        "description": "Sessionen har gått ut för {personnummer}. Klicka Skicka för att starta BankID-inloggning.",
+        "data": {}
       }
     },
     "error": {
@@ -38,6 +43,7 @@
     },
     "abort": {
       "already_configured": "Denna person är redan konfigurerad",
+      "reauth_successful": "Omautentisering lyckades",
       "bankid_failed": "BankID-inloggning misslyckades",
       "unknown": "Oväntat fel"
     }
