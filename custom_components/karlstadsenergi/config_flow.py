@@ -225,18 +225,15 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
                 await self._api.async_close()
                 self._api = None
 
-        # Build BankID app link
         auto_start_token = self._bankid_init.get("auto_start_token", "")
-        bankid_link = (
-            f"https://app.bankid.com/"
-            f"?autostarttoken={auto_start_token}&redirect=null"
-        )
+        qr_base64 = self._bankid_init.get("qr_code_base64", "")
 
         return self.async_show_form(
             step_id="bankid",
             description_placeholders={
                 "personnummer": self._personnummer,
-                "bankid_link": bankid_link,
+                "auto_start_token": auto_start_token,
+                "qr_code": qr_base64,
             },
             data_schema=vol.Schema({}),
             errors=errors,

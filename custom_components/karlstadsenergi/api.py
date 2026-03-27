@@ -143,7 +143,8 @@ class KarlstadsenergiApi:
     async def bankid_initiate(self) -> dict[str, str]:
         """Start BankID authentication.
 
-        Returns dict with transaction_id, order_ref, auto_start_token.
+        Returns dict with transaction_id, order_ref, auto_start_token,
+        and qr_code_base64 (PNG image for scanning).
         """
         transaction_id = uuid.uuid4().hex
         url = f"{BASE_URL}/api/grp2/Authenticate/{transaction_id}/bankid/0"
@@ -156,6 +157,9 @@ class KarlstadsenergiApi:
             "transaction_id": transaction_id,
             "order_ref": order_resp.get("orderRefField", ""),
             "auto_start_token": order_resp.get("autoStartTokenField", ""),
+            "qr_start_token": order_resp.get("qrStartTokenField", ""),
+            "qr_code_base64": data.get("QrCodeBase64", ""),
+            "data_field": data.get("Data", ""),
         }
 
     async def bankid_poll(self, order_ref: str) -> dict[str, Any]:
