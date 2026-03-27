@@ -16,6 +16,7 @@ from homeassistant.data_entry_flow import FlowResult
 from .api import (
     AUTH_BANKID,
     AUTH_PASSWORD,
+    BANKID_COMPLETE,
     KarlstadsenergiApi,
     KarlstadsenergiAuthError,
     KarlstadsenergiConnectionError,
@@ -39,16 +40,16 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
     VERSION = 1
 
     def __init__(self) -> None:
-        """Initialize config flow."""
         self._personnummer: str = ""
         self._auth_method: str = AUTH_BANKID
         self._api: KarlstadsenergiApi | None = None
         self._bankid_init: dict[str, str] = {}
+        self._accounts: list[dict[str, Any]] = []
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None,
     ) -> FlowResult:
-        """Handle the initial step: choose auth method."""
+        """Step 1: Choose auth method and enter personnummer."""
         errors: dict[str, str] = {}
 
         if user_input is not None:
@@ -92,6 +93,7 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
             try:
                 await api.authenticate_password()
                 await api.async_get_flex_services()
+                cookies = api.get_session_cookies()
             except KarlstadsenergiAuthError:
                 errors["base"] = "invalid_auth"
             except KarlstadsenergiConnectionError:
@@ -109,6 +111,7 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
                         CONF_PERSONNUMMER: self._personnummer,
                         CONF_AUTH_METHOD: AUTH_PASSWORD,
                         CONF_PASSWORD: password,
+                        "session_cookies": cookies,
                     },
                 )
 
@@ -123,9 +126,10 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
     async def async_step_bankid(
         self, user_input: dict[str, Any] | None = None,
     ) -> FlowResult:
-        """Handle BankID authentication: initiate and show link."""
+        """Step 2 (BankID): Show QR code and wait for signing."""
         errors: dict[str, str] = {}
 
+        # Initiate BankID on first entry
         if self._api is None:
             self._api = KarlstadsenergiApi(
                 self._personnummer, AUTH_BANKID,
@@ -136,70 +140,36 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
                 errors["base"] = "cannot_connect"
                 await self._api.async_close()
                 self._api = None
-                return self.async_show_form(
-                    step_id="user",
-                    data_schema=vol.Schema(
-                        {
-                            vol.Required(CONF_PERSONNUMMER): str,
-                            vol.Required(
-                                CONF_AUTH_METHOD, default=AUTH_BANKID,
-                            ): vol.In(
-                                {
-                                    AUTH_BANKID: "Mobilt BankID",
-                                    AUTH_PASSWORD: "Kundnummer & lösenord",
-                                }
-                            ),
-                        }
-                    ),
-                    errors=errors,
-                )
+                return self._show_user_form(errors)
 
         if user_input is not None:
-            # User clicked Submit - poll for completion
+            # User clicked Submit -- poll for completion
             try:
-                # Poll a few times to give user time
                 result = None
                 for _ in range(15):
                     result = await self._api.bankid_poll(
                         self._bankid_init["order_ref"],
                     )
-                    if result["status"] == 0:  # COMPLETE
+                    if result["status"] == BANKID_COMPLETE:
                         break
                     if result["status"] not in (1, 2, 5):
                         break
                     await asyncio.sleep(2)
 
-                if result and result["status"] == 0:
-                    # Extract data for login
-                    collect = result["data"].get("CollectResponseType", {})
-                    validation = collect.get("validationInfoField", {})
-                    data_field = ""
-                    if validation:
-                        attrs = validation.get("attributesField", {})
-                        attr_list = attrs.get("attributeField", [])
-                        for attr in attr_list:
-                            if attr.get("nameField") == "userData":
-                                data_field = attr.get("valueField", "")
-                                break
-
-                    await self._api.bankid_complete(
-                        self._bankid_init["transaction_id"],
+                if result and result["status"] == BANKID_COMPLETE:
+                    # Get available accounts
+                    self._accounts = await self._api.bankid_get_customers(
                         self._personnummer,
-                        data_field,
+                        self._bankid_init["transaction_id"],
                     )
-
-                    # Verify we can fetch data
-                    await self._api.async_get_flex_services()
-                    await self._api.async_close()
-                    self._api = None
-
-                    return self.async_create_entry(
-                        title=f"Karlstadsenergi ({self._personnummer})",
-                        data={
-                            CONF_PERSONNUMMER: self._personnummer,
-                            CONF_AUTH_METHOD: AUTH_BANKID,
-                        },
-                    )
+                    if len(self._accounts) == 1:
+                        # Only one account -- login directly
+                        return await self._do_bankid_login(self._accounts[0])
+                    elif len(self._accounts) > 1:
+                        # Multiple accounts -- show selection
+                        return await self.async_step_select_account()
+                    else:
+                        errors["base"] = "bankid_failed"
                 else:
                     errors["base"] = "bankid_pending"
                     # Re-initiate for next attempt
@@ -209,21 +179,19 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
                         )
                     except KarlstadsenergiConnectionError:
                         errors["base"] = "cannot_connect"
-                        await self._api.async_close()
-                        self._api = None
-            except KarlstadsenergiAuthError:
+                        await self._cleanup_api()
+            except KarlstadsenergiAuthError as err:
+                _LOGGER.error("BankID auth failed: %s", err)
                 errors["base"] = "bankid_failed"
-                await self._api.async_close()
-                self._api = None
-            except KarlstadsenergiConnectionError:
+                await self._cleanup_api()
+            except KarlstadsenergiConnectionError as err:
+                _LOGGER.error("BankID connection error: %s", err)
                 errors["base"] = "cannot_connect"
-                await self._api.async_close()
-                self._api = None
+                await self._cleanup_api()
             except Exception:
                 _LOGGER.exception("Unexpected error during BankID setup")
                 errors["base"] = "unknown"
-                await self._api.async_close()
-                self._api = None
+                await self._cleanup_api()
 
         auto_start_token = self._bankid_init.get("auto_start_token", "")
         qr_base64 = self._bankid_init.get("qr_code_base64", "")
@@ -239,12 +207,119 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
+    async def async_step_select_account(
+        self, user_input: dict[str, Any] | None = None,
+    ) -> FlowResult:
+        """Step 3: Select which account/contract to use."""
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            selected = user_input.get("account")
+            # Find selected account
+            for account in self._accounts:
+                label = self._account_label(account)
+                if label == selected:
+                    return await self._do_bankid_login(account)
+            errors["base"] = "unknown"
+
+        # Build selection options
+        options = {}
+        for account in self._accounts:
+            label = self._account_label(account)
+            options[label] = label
+
+        return self.async_show_form(
+            step_id="select_account",
+            data_schema=vol.Schema(
+                {
+                    vol.Required("account"): vol.In(options),
+                }
+            ),
+            errors=errors,
+        )
+
+    async def _do_bankid_login(
+        self, account: dict[str, Any],
+    ) -> FlowResult:
+        """Login with selected account and create entry."""
+        try:
+            await self._api.bankid_login(
+                self._personnummer,
+                account["customer_id"],
+                self._bankid_init["transaction_id"],
+                account.get("sub_user_id", ""),
+            )
+
+            # Verify data access
+            await self._api.async_get_flex_services()
+
+            cookies = self._api.get_session_cookies()
+
+            # Pass API to setup_entry
+            self.hass.data.setdefault(DOMAIN, {})
+            self.hass.data[DOMAIN]["pending_api"] = self._api
+            self._api = None
+
+            customer_code = account.get("customer_code", "")
+            full_name = account.get("full_name", "")
+            title = f"Karlstadsenergi {full_name} ({customer_code})" if full_name else f"Karlstadsenergi ({customer_code})"
+
+            return self.async_create_entry(
+                title=title,
+                data={
+                    CONF_PERSONNUMMER: self._personnummer,
+                    CONF_AUTH_METHOD: AUTH_BANKID,
+                    "customer_code": customer_code,
+                    "customer_id": account["customer_id"],
+                    "sub_user_id": account.get("sub_user_id", ""),
+                    "session_cookies": cookies,
+                },
+            )
+        except KarlstadsenergiAuthError as err:
+            _LOGGER.error("BankID login failed: %s", err)
+            await self._cleanup_api()
+            return self.async_abort(reason="bankid_failed")
+        except Exception:
+            _LOGGER.exception("Unexpected error during BankID login")
+            await self._cleanup_api()
+            return self.async_abort(reason="unknown")
+
+    def _account_label(self, account: dict[str, Any]) -> str:
+        name = account.get("full_name", "")
+        code = account.get("customer_code", "")
+        if name and code:
+            return f"{name} ({code})"
+        return name or code or "Unknown"
+
+    def _show_user_form(self, errors: dict) -> FlowResult:
+        return self.async_show_form(
+            step_id="user",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_PERSONNUMMER): str,
+                    vol.Required(
+                        CONF_AUTH_METHOD, default=AUTH_BANKID,
+                    ): vol.In(
+                        {
+                            AUTH_BANKID: "Mobilt BankID",
+                            AUTH_PASSWORD: "Kundnummer & lösenord",
+                        }
+                    ),
+                }
+            ),
+            errors=errors,
+        )
+
+    async def _cleanup_api(self) -> None:
+        if self._api:
+            await self._api.async_close()
+            self._api = None
+
     @staticmethod
     @callback
     def async_get_options_flow(
         config_entry: ConfigEntry,
     ) -> OptionsFlow:
-        """Get the options flow."""
         return KarlstadsenergiOptionsFlow(config_entry)
 
 
@@ -257,7 +332,6 @@ class KarlstadsenergiOptionsFlow(OptionsFlow):
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None,
     ) -> FlowResult:
-        """Manage options."""
         if user_input is not None:
             return self.async_create_entry(title="", data=user_input)
 

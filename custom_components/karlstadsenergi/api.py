@@ -85,6 +85,7 @@ class KarlstadsenergiApi:
         self._password = password
         self._session: aiohttp.ClientSession | None = None
         self._authenticated = False
+        self._saved_cookies: dict[str, str] | None = None
 
     async def _ensure_session(self) -> aiohttp.ClientSession:
         """Create session if needed."""
@@ -92,7 +93,32 @@ class KarlstadsenergiApi:
             jar = aiohttp.CookieJar(unsafe=True)
             self._session = aiohttp.ClientSession(cookie_jar=jar)
             self._authenticated = False
+            # Restore saved cookies if available
+            if self._saved_cookies:
+                from yarl import URL
+                for name, value in self._saved_cookies.items():
+                    jar.update_cookies(
+                        {name: value},
+                        URL(BASE_URL),
+                    )
+                self._authenticated = True
+                self._saved_cookies = None
+                _LOGGER.debug("Restored session from saved cookies")
         return self._session
+
+    def get_session_cookies(self) -> dict[str, str]:
+        """Export current session cookies for persistence."""
+        if not self._session or self._session.closed:
+            return {}
+        cookies = {}
+        for cookie in self._session.cookie_jar:
+            if cookie.key in ("ASP.NET_SessionId", ".PORTALAUTH"):
+                cookies[cookie.key] = cookie.value
+        return cookies
+
+    def set_session_cookies(self, cookies: dict[str, str]) -> None:
+        """Set saved cookies to restore on next session creation."""
+        self._saved_cookies = cookies
 
     async def _post(
         self, url: str, json_data: Any = None, **kwargs: Any,
@@ -183,31 +209,94 @@ class KarlstadsenergiApi:
 
         return {"status": status, "data": data}
 
-    async def bankid_complete(
-        self, transaction_id: str, personnummer: str, data_field: str,
-    ) -> bool:
-        """Complete BankID login after successful collect.
+    async def _parse_grp2_json(self, resp: aiohttp.ClientResponse) -> Any:
+        """Parse GRP2 response (may or may not have ASP.NET wrapper)."""
+        raw = await resp.json()
+        data = raw
+        if isinstance(raw, dict) and "d" in raw:
+            data = _parse_aspnet_response(raw)
+        if isinstance(data, str):
+            try:
+                data = json.loads(data)
+            except (json.JSONDecodeError, TypeError):
+                pass
+        return data
 
-        Calls GetCustomerByPinCode and Login to establish session.
+    async def bankid_get_customers(
+        self, personnummer: str, transaction_id: str,
+    ) -> list[dict[str, Any]]:
+        """Get customers and sub-users for the authenticated person.
+
+        Returns a combined list of accounts to choose from, each with:
+        - FullName, CustomerCode, CustomerId, SubUserId (optional)
         """
-        # Get customer info
-        url_customer = (
+        # Get main customers
+        url = (
             f"{BASE_URL}/api/grp2/GetCustomerByPinCode"
             f"/{personnummer}/{transaction_id}"
         )
-        resp = await self._post(url_customer)
+        resp = await self._post(url)
         resp.raise_for_status()
+        customers = await self._parse_grp2_json(resp)
+        if not isinstance(customers, list):
+            customers = []
+        _LOGGER.debug("Customers: %s", str(customers)[:300])
 
-        # Login with the validated data
-        session_id = uuid.uuid4().hex
+        # Get sub-users
+        url_sub = f"{BASE_URL}/api/subuser/GetSubUsersByPinCode/{personnummer}"
+        resp = await self._post(url_sub)
+        resp.raise_for_status()
+        sub_users = await self._parse_grp2_json(resp)
+        if not isinstance(sub_users, list):
+            sub_users = []
+        _LOGGER.debug("SubUsers: %s", str(sub_users)[:500])
+
+        # Build unified account list
+        accounts: list[dict[str, Any]] = []
+        for c in customers:
+            accounts.append({
+                "full_name": c.get("FullName", ""),
+                "customer_code": c.get("CustomerCode", ""),
+                "customer_id": c.get("CustomerId", ""),
+                "sub_user_id": "",
+            })
+
+        # Add sub-users (other people's accounts you have access to)
+        for su in sub_users:
+            first = su.get("ParentFirstName", "")
+            last = su.get("ParentLastName", "")
+            name = f"{first} {last}".strip() if first else last
+            accounts.append({
+                "full_name": name,
+                "customer_code": su.get("ParentCode", ""),
+                "customer_id": su.get("ParentIdEncrypted", ""),
+                "sub_user_id": str(su.get("UserId", "")),
+            })
+
+        return accounts
+
+    async def bankid_login(
+        self,
+        personnummer: str,
+        customer_id: str,
+        transaction_id: str,
+        sub_user_id: str = "",
+    ) -> bool:
+        """Complete BankID login for a selected account."""
+        import base64
+        b64_customer_id = base64.b64encode(
+            customer_id.encode("utf-8"),
+        ).decode("ascii")
+
         url_login = (
             f"{BASE_URL}/api/grp2/Login"
-            f"/{personnummer}/{data_field}"
-            f"/{transaction_id}/{session_id}"
+            f"/{personnummer}/{b64_customer_id}"
+            f"/{transaction_id}/{sub_user_id}"
         )
         resp = await self._post(url_login)
         resp.raise_for_status()
         result = await resp.json()
+        _LOGGER.debug("Login response: %s", result)
 
         if result.get("Key") is True:
             self._authenticated = True
@@ -219,50 +308,14 @@ class KarlstadsenergiApi:
         )
 
     async def bankid_authenticate(self) -> bool:
-        """Full BankID flow: initiate, poll until complete, login.
+        """Full BankID flow (non-interactive, for re-auth).
 
-        This blocks until the user signs in the BankID app (up to 60s).
+        Cannot be used for initial setup -- requires interactive QR scan.
+        Raises KarlstadsenergiAuthError always for BankID.
         """
-        init = await self.bankid_initiate()
-        order_ref = init["order_ref"]
-        transaction_id = init["transaction_id"]
-
-        elapsed = 0
-        data_field = ""
-        while elapsed < BANKID_POLL_TIMEOUT:
-            await asyncio.sleep(BANKID_POLL_INTERVAL)
-            elapsed += BANKID_POLL_INTERVAL
-
-            result = await self.bankid_poll(order_ref)
-            status = result["status"]
-
-            if status == BANKID_COMPLETE:
-                # Extract the Data field from the validation response
-                collect = result["data"].get("CollectResponseType", {})
-                validation = collect.get("validationInfoField", {})
-                if validation:
-                    # The Data field from the original Authenticate response
-                    # is used in the Login call as base64-encoded password
-                    attrs = validation.get("attributesField", {})
-                    attr_list = attrs.get("attributeField", [])
-                    for attr in attr_list:
-                        if attr.get("nameField") == "userData":
-                            data_field = attr.get("valueField", "")
-                            break
-                break
-
-            if status not in (
-                BANKID_OUTSTANDING, BANKID_USER_SIGN,
-            ):
-                raise KarlstadsenergiAuthError(
-                    f"BankID unexpected status: {status}"
-                )
-
-        if status != BANKID_COMPLETE:
-            raise KarlstadsenergiAuthError("BankID authentication timed out")
-
-        return await self.bankid_complete(
-            transaction_id, self._personnummer, data_field,
+        raise KarlstadsenergiAuthError(
+            "BankID requires interactive authentication (QR scan). "
+            "Session cookies must be restored instead."
         )
 
     # ── Unified authenticate ─────────────────────────────────
@@ -306,6 +359,14 @@ class KarlstadsenergiApi:
         if resp.status != 200:
             raise KarlstadsenergiApiError(
                 f"API returned status {resp.status}"
+            )
+
+        content_type = resp.headers.get("Content-Type", "")
+        if "json" not in content_type:
+            text = await resp.text()
+            _LOGGER.debug("Non-JSON response from %s: %s", url, text[:200])
+            raise KarlstadsenergiAuthError(
+                f"Expected JSON, got {content_type} (likely session expired)"
             )
 
         data = await resp.json()
