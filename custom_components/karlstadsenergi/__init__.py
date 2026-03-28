@@ -296,8 +296,8 @@ class KarlstadsenergiSpotPriceCoordinator(DataUpdateCoordinator[dict]):
                     if now >= p["start"]:
                         current_price = p["price_sek"]
                     break
-            # If no interval matches (data is stale), use the last known price
-            if current_price is None:
+            # If stale (now is past all known prices), use the last known price
+            if current_price is None and now >= prices[-1]["start"]:
                 current_price = prices[-1]["price_sek"]
 
         return {
