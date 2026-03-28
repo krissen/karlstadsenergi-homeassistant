@@ -23,7 +23,7 @@ async def async_setup_entry(
 ) -> None:
     """Set up Karlstadsenergi binary sensors."""
     waste_coordinator = entry.runtime_data.waste_coordinator
-    customer_number = entry.data[CONF_PERSONNUMMER]
+    customer_id = entry.data.get("customer_code") or entry.data[CONF_PERSONNUMMER]
 
     entities: list[BinarySensorEntity] = []
 
@@ -39,7 +39,7 @@ async def async_setup_entry(
                 entities.append(
                     WastePickupTomorrowSensor(
                         coordinator=waste_coordinator,
-                        customer_number=customer_number,
+                        customer_id=customer_id,
                         service=service,
                     )
                 )
@@ -51,7 +51,7 @@ async def async_setup_entry(
                 entities.append(
                     WastePickupTomorrowSummarySensor(
                         coordinator=waste_coordinator,
-                        customer_number=customer_number,
+                        customer_id=customer_id,
                         item=item,
                     )
                 )
@@ -70,11 +70,11 @@ class WastePickupTomorrowSensor(
     def __init__(
         self,
         coordinator: KarlstadsenergiWasteCoordinator,
-        customer_number: str,
+        customer_id: str,
         service: dict[str, Any],
     ) -> None:
         super().__init__(coordinator)
-        self._customer_number = customer_number
+        self._customer_id = customer_id
         self._service_id = service["FlexServiceId"]
         self._waste_type = service.get("FlexServiceContainTypeValue", "")
         self._slug = slug_for_waste_type(self._waste_type)
@@ -82,14 +82,14 @@ class WastePickupTomorrowSensor(
         self._place_id = service.get("FlexServicePlaceId", "")
 
         self._attr_unique_id = (
-            f"{DOMAIN}_{customer_number}_{self._place_id}_{self._slug}_pickup_tomorrow"
+            f"{DOMAIN}_{customer_id}_{self._place_id}_{self._slug}_pickup_tomorrow"
         )
         self._attr_name = f"{self._waste_type} pickup tomorrow"
 
     @property
     def device_info(self) -> DeviceInfo:
         return DeviceInfo(
-            identifiers={(DOMAIN, f"{self._customer_number}_{self._place_id}")},
+            identifiers={(DOMAIN, f"{self._customer_id}_{self._place_id}")},
             name=f"Karlstadsenergi ({self._address})",
             manufacturer="Karlstads Energi",
         )
@@ -134,24 +134,24 @@ class WastePickupTomorrowSummarySensor(
     def __init__(
         self,
         coordinator: KarlstadsenergiWasteCoordinator,
-        customer_number: str,
+        customer_id: str,
         item: dict[str, Any],
     ) -> None:
         super().__init__(coordinator)
-        self._customer_number = customer_number
+        self._customer_id = customer_id
         self._waste_type = item.get("Type", "")
         self._slug = slug_for_waste_type(self._waste_type)
         self._address = item.get("Address", "").strip()
 
         self._attr_unique_id = (
-            f"{DOMAIN}_{customer_number}_{self._slug}_pickup_tomorrow"
+            f"{DOMAIN}_{customer_id}_{self._slug}_pickup_tomorrow"
         )
         self._attr_name = f"{self._waste_type} pickup tomorrow"
 
     @property
     def device_info(self) -> DeviceInfo:
         return DeviceInfo(
-            identifiers={(DOMAIN, f"{self._customer_number}")},
+            identifiers={(DOMAIN, f"{self._customer_id}")},
             name=f"Karlstadsenergi ({self._address})",
             manufacturer="Karlstads Energi",
         )

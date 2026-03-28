@@ -76,7 +76,12 @@ class _CookieSavingCoordinator(DataUpdateCoordinator[dict]):
         self._entry = entry
 
     def _save_cookies(self) -> None:
-        """Persist current session cookies to config entry."""
+        """Persist current session cookies to config entry.
+
+        Note: async_update_entry triggers the update listener which will
+        reload the integration. This is acceptable -- the reload uses the
+        freshly saved cookies and restores a healthy session state.
+        """
         cookies = self.api.get_session_cookies()
         if cookies and cookies != self._entry.data.get("session_cookies"):
             new_data = {**self._entry.data, "session_cookies": cookies}
