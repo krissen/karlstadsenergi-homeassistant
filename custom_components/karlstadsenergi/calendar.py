@@ -69,7 +69,8 @@ async def async_setup_entry(
 
 
 class WasteCollectionCalendar(
-    CoordinatorEntity[KarlstadsenergiWasteCoordinator], CalendarEntity,
+    CoordinatorEntity[KarlstadsenergiWasteCoordinator],
+    CalendarEntity,
 ):
     """Calendar entity for waste collection (detailed mode)."""
 
@@ -151,7 +152,8 @@ class WasteCollectionCalendar(
 
 
 class WasteCollectionSummaryCalendar(
-    CoordinatorEntity[KarlstadsenergiWasteCoordinator], CalendarEntity,
+    CoordinatorEntity[KarlstadsenergiWasteCoordinator],
+    CalendarEntity,
 ):
     """Calendar entity for waste collection (summary/fallback mode)."""
 

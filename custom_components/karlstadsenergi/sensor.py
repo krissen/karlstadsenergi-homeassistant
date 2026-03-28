@@ -20,9 +20,22 @@ from homeassistant.util import dt as dt_util
 
 from . import (
     KarlstadsenergiConsumptionCoordinator,
+    KarlstadsenergiContractCoordinator,
+    KarlstadsenergiSpotPriceCoordinator,
     KarlstadsenergiWasteCoordinator,
 )
-from .const import CONF_PERSONNUMMER, DOMAIN, WASTE_TYPE_SLUG
+from .const import (
+    CONF_PERSONNUMMER,
+    CONTRACT_TYPE_SLUG,
+    DOMAIN,
+    FEE_CONSUMPTION,
+    FEE_ENERGY_TAX,
+    FEE_FIXED,
+    FEE_POWER,
+    FEE_SUM,
+    FEE_VAT,
+    WASTE_TYPE_SLUG,
+)
 
 
 def _slug_for_waste_type(waste_type: str) -> str:
@@ -81,6 +94,15 @@ async def async_setup_entry(
                     )
                 )
 
+    # Extract address/place_id from consumption data for device grouping
+    site_address = ""
+    site_place_id = ""
+    if consumption_coordinator.data:
+        consumption = consumption_coordinator.data.get("consumption", {})
+        model = consumption.get("ConsumptionModel", {})
+        site_address = model.get("SiteName", "")
+        site_place_id = model.get("SiteId", "")
+
     # Electricity consumption sensor
     if consumption_coordinator.data:
         consumption = consumption_coordinator.data.get("consumption", {})
@@ -93,11 +115,57 @@ async def async_setup_entry(
                 )
             )
 
+        # Electricity price sensor (from fee breakdown)
+        fee_data = consumption_coordinator.data.get("fee_data", {})
+        if fee_data:
+            entities.append(
+                ElectricityPriceSensor(
+                    coordinator=consumption_coordinator,
+                    customer_number=customer_number,
+                )
+            )
+
+    # Spot price sensor (public Evado API)
+    spot_price_coordinator: KarlstadsenergiSpotPriceCoordinator = data[
+        "spot_price_coordinator"
+    ]
+    if (
+        spot_price_coordinator.data
+        and spot_price_coordinator.data.get("current_price") is not None
+    ):
+        entities.append(
+            SpotPriceSensor(
+                coordinator=spot_price_coordinator,
+                customer_number=customer_number,
+                address=site_address,
+                place_id=site_place_id,
+            )
+        )
+
+    # Contract sensors (one per contract)
+    contract_coordinator: KarlstadsenergiContractCoordinator = data[
+        "contract_coordinator"
+    ]
+    if contract_coordinator.data:
+        for contract in contract_coordinator.data.get("contracts", []):
+            utility = contract.get("UtilityName", "")
+            if utility:
+                entities.append(
+                    ContractSensor(
+                        coordinator=contract_coordinator,
+                        customer_number=customer_number,
+                        contract=contract,
+                        address=site_address,
+                        place_id=site_place_id,
+                    )
+                )
+
     async_add_entities(entities, update_before_add=False)
 
 
 class WasteCollectionSensor(
-    CoordinatorEntity[KarlstadsenergiWasteCoordinator], SensorEntity,
+    CoordinatorEntity[KarlstadsenergiWasteCoordinator],
+    SensorEntity,
 ):
     """Sensor for waste collection next pickup date."""
 
@@ -166,7 +234,8 @@ class WasteCollectionSensor(
 
 
 class WasteCollectionSummary(
-    CoordinatorEntity[KarlstadsenergiWasteCoordinator], SensorEntity,
+    CoordinatorEntity[KarlstadsenergiWasteCoordinator],
+    SensorEntity,
 ):
     """Sensor for waste collection from start page summary data."""
 
@@ -227,7 +296,8 @@ class WasteCollectionSummary(
 
 
 class ElectricityConsumptionSensor(
-    CoordinatorEntity[KarlstadsenergiConsumptionCoordinator], SensorEntity,
+    CoordinatorEntity[KarlstadsenergiConsumptionCoordinator],
+    SensorEntity,
 ):
     """Sensor for electricity consumption."""
 
@@ -275,7 +345,11 @@ class ElectricityConsumptionSensor(
     @property
     def native_value(self) -> float | None:
         """Return latest day's consumption in kWh."""
-        consumption = self.coordinator.data.get("consumption", {}) if self.coordinator.data else {}
+        consumption = (
+            self.coordinator.data.get("consumption", {})
+            if self.coordinator.data
+            else {}
+        )
         chart = consumption.get("DetailedConsumptionChart", {})
         series_list = chart.get("SeriesList", [])
         if not series_list:
@@ -312,7 +386,8 @@ class ElectricityConsumptionSensor(
         try:
             naive_date = datetime.date.fromisoformat(date_str[:10])
             midnight = datetime.datetime.combine(
-                naive_date, datetime.time.min,
+                naive_date,
+                datetime.time.min,
             )
             return midnight.replace(tzinfo=dt_util.get_default_time_zone())
         except (ValueError, TypeError):
@@ -331,7 +406,8 @@ class ElectricityConsumptionSensor(
         if service_info:
             attrs["meter_number"] = service_info.get("MeterNumber", "")
             attrs["service_identifier"] = service_info.get(
-                "ServiceIdentifier", "",
+                "ServiceIdentifier",
+                "",
             )
             attrs["net_area"] = service_info.get("NetAreaId", "")
 
@@ -372,14 +448,13 @@ class ElectricityConsumptionSensor(
             # Latest date
             if data_points:
                 attrs["latest_date"] = data_points[-1].get(
-                    "dateInterval", "",
+                    "dateInterval",
+                    "",
                 )
 
         # Hourly data (last 24h for today)
         hourly = (
-            self.coordinator.data.get("hourly", {})
-            if self.coordinator.data
-            else {}
+            self.coordinator.data.get("hourly", {}) if self.coordinator.data else {}
         )
         hourly_chart = hourly.get("DetailedConsumptionChart", {})
         hourly_series = hourly_chart.get("SeriesList", [])
@@ -394,3 +469,323 @@ class ElectricityConsumptionSensor(
             attrs["hourly_data_points"] = len(hourly_points)
 
         return attrs
+
+
+def _extract_fee_series(fee_data: dict) -> dict[str, float]:
+    """Extract fee amounts from fee-type consumption response.
+
+    Returns dict of series_id -> total SEK for the period.
+    """
+    chart = fee_data.get("DetailedConsumptionChart", {})
+    series_list = chart.get("SeriesList", [])
+    fees: dict[str, float] = {}
+    for series in series_list:
+        series_id = series.get("id", "")
+        if not series_id:
+            continue
+        data_points = series.get("data", [])
+        total = sum(p.get("y", 0) for p in data_points)
+        fees[series_id] = round(total, 2)
+    return fees
+
+
+def _extract_fee_months(fee_data: dict) -> set[str]:
+    """Extract which months the fee data covers.
+
+    Returns set of month keys like {"2026-02"} from the fee SeriesList
+    dateInterval fields (e.g. "2026-02-01" -> "2026-02").
+    """
+    chart = fee_data.get("DetailedConsumptionChart", {})
+    series_list = chart.get("SeriesList", [])
+    months: set[str] = set()
+    for series in series_list:
+        for point in series.get("data", []):
+            date_str = point.get("dateInterval", "")
+            if len(date_str) >= 7:
+                months.add(date_str[:7])
+    return months
+
+
+def _slug_for_contract(utility_name: str) -> str:
+    """Get English slug for a Swedish contract utility name."""
+    slug = CONTRACT_TYPE_SLUG.get(utility_name)
+    if slug:
+        return slug
+    return "".join(c if c.isalnum() else "_" for c in utility_name.lower()).strip("_")
+
+
+class ElectricityPriceSensor(
+    CoordinatorEntity[KarlstadsenergiConsumptionCoordinator],
+    SensorEntity,
+):
+    """Effective electricity price derived from fee breakdown.
+
+    Compatible with HA Energy Dashboard (matches Nordpool/Tibber pattern).
+    """
+
+    _attr_has_entity_name = True
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = "SEK/kWh"
+    _attr_icon = "mdi:cash"
+    _attr_suggested_display_precision = 4
+
+    def __init__(
+        self,
+        coordinator: KarlstadsenergiConsumptionCoordinator,
+        customer_number: str,
+    ) -> None:
+        super().__init__(coordinator)
+        self._customer_number = customer_number
+        self._attr_unique_id = f"{DOMAIN}_{customer_number}_electricity_price"
+        self._attr_name = "Electricity price"
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        address = self._get_address()
+        place_id = self._get_site_id()
+        return DeviceInfo(
+            identifiers={(DOMAIN, f"{self._customer_number}_{place_id}")},
+            name=f"Karlstadsenergi ({address})",
+            manufacturer="Karlstads Energi",
+        )
+
+    def _get_model(self) -> dict[str, Any]:
+        if not self.coordinator.data:
+            return {}
+        consumption = self.coordinator.data.get("consumption", {})
+        return consumption.get("ConsumptionModel", {})
+
+    def _get_address(self) -> str:
+        return self._get_model().get("SiteName", "")
+
+    def _get_site_id(self) -> str:
+        return self._get_model().get("SiteId", "")
+
+    def _get_total_kwh_for_fee_period(self) -> float:
+        """Get total kWh consumption matching the fee data's months only."""
+        if not self.coordinator.data:
+            return 0.0
+        fee_data = self.coordinator.data.get("fee_data", {})
+        fee_months = _extract_fee_months(fee_data)
+        if not fee_months:
+            return 0.0
+
+        consumption = self.coordinator.data.get("consumption", {})
+        chart = consumption.get("DetailedConsumptionChart", {})
+        series_list = chart.get("SeriesList", [])
+        if not series_list:
+            return 0.0
+        data_points = series_list[0].get("data", [])
+        return sum(
+            p.get("y", 0)
+            for p in data_points
+            if p.get("dateInterval", "")[:7] in fee_months
+        )
+
+    @property
+    def native_value(self) -> float | None:
+        """Return effective energy price in SEK/kWh.
+
+        Calculated as ConsumptionFee (SEK) / consumption (kWh) for the
+        same month(s) that the fee data covers.
+        """
+        if not self.coordinator.data:
+            return None
+        fee_data = self.coordinator.data.get("fee_data", {})
+        fees = _extract_fee_series(fee_data)
+        consumption_fee = fees.get(FEE_CONSUMPTION)
+        if consumption_fee is None or consumption_fee <= 0:
+            return None
+        total_kwh = self._get_total_kwh_for_fee_period()
+        if total_kwh <= 0:
+            return None
+        return round(consumption_fee / total_kwh, 4)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        if not self.coordinator.data:
+            return {}
+        fee_data = self.coordinator.data.get("fee_data", {})
+        fees = _extract_fee_series(fee_data)
+        total_kwh = self._get_total_kwh_for_fee_period()
+        attrs: dict[str, Any] = {
+            "consumption_fee_sek": fees.get(FEE_CONSUMPTION),
+            "power_fee_sek": fees.get(FEE_POWER),
+            "fixed_fee_sek": fees.get(FEE_FIXED),
+            "energy_tax_sek": fees.get(FEE_ENERGY_TAX),
+            "vat_sek": fees.get(FEE_VAT),
+            "total_invoice_sek": fees.get(FEE_SUM),
+            "total_consumption_kwh": round(total_kwh, 1) if total_kwh else None,
+        }
+        # Calculate total variable cost per kWh (energy + grid + tax, ex VAT)
+        variable_fees = sum(
+            fees.get(k, 0) for k in (FEE_CONSUMPTION, FEE_POWER, FEE_ENERGY_TAX)
+        )
+        if total_kwh and variable_fees:
+            attrs["total_variable_price_sek_kwh"] = round(variable_fees / total_kwh, 4)
+        return attrs
+
+
+class SpotPriceSensor(
+    CoordinatorEntity[KarlstadsenergiSpotPriceCoordinator],
+    SensorEntity,
+):
+    """Current Nord Pool spot price from Evado public API.
+
+    Compatible with HA Energy Dashboard.
+    """
+
+    _attr_has_entity_name = True
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = "SEK/kWh"
+    _attr_icon = "mdi:flash"
+    _attr_suggested_display_precision = 4
+
+    def __init__(
+        self,
+        coordinator: KarlstadsenergiSpotPriceCoordinator,
+        customer_number: str,
+        address: str = "",
+        place_id: str = "",
+    ) -> None:
+        super().__init__(coordinator)
+        self._customer_number = customer_number
+        self._address = address
+        self._place_id = place_id
+        self._attr_unique_id = f"{DOMAIN}_{customer_number}_spot_price"
+        self._attr_name = "Spot price"
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        identifier = (
+            f"{self._customer_number}_{self._place_id}"
+            if self._place_id
+            else self._customer_number
+        )
+        name = (
+            f"Karlstadsenergi ({self._address})" if self._address else "Karlstadsenergi"
+        )
+        return DeviceInfo(
+            identifiers={(DOMAIN, identifier)},
+            name=name,
+            manufacturer="Karlstads Energi",
+        )
+
+    @property
+    def native_value(self) -> float | None:
+        """Return current spot price in SEK/kWh."""
+        if not self.coordinator.data:
+            return None
+        return self.coordinator.data.get("current_price")
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        if not self.coordinator.data:
+            return {}
+        data = self.coordinator.data
+        attrs: dict[str, Any] = {"region": data.get("region", "SE3")}
+
+        # Current price in öre for reference
+        current_sek = data.get("current_price")
+        if current_sek is not None:
+            attrs["price_ore_kwh"] = round(current_sek * 100, 2)
+
+        # Today's prices summary
+        prices = data.get("prices", [])
+        now = datetime.datetime.now(tz=datetime.timezone.utc)
+        today = now.date()
+        tomorrow = today + datetime.timedelta(days=1)
+
+        today_prices = [p["price_sek"] for p in prices if p["start"].date() == today]
+        if today_prices:
+            attrs["today_min"] = min(today_prices)
+            attrs["today_max"] = max(today_prices)
+            attrs["today_average"] = round(sum(today_prices) / len(today_prices), 4)
+
+        tomorrow_prices = [
+            p["price_sek"] for p in prices if p["start"].date() == tomorrow
+        ]
+        if tomorrow_prices:
+            attrs["tomorrow_min"] = min(tomorrow_prices)
+            attrs["tomorrow_max"] = max(tomorrow_prices)
+            attrs["tomorrow_average"] = round(
+                sum(tomorrow_prices) / len(tomorrow_prices), 4
+            )
+
+        return attrs
+
+
+class ContractSensor(
+    CoordinatorEntity[KarlstadsenergiContractCoordinator],
+    SensorEntity,
+):
+    """Sensor showing contract details."""
+
+    _attr_has_entity_name = True
+    _attr_icon = "mdi:file-document-outline"
+
+    def __init__(
+        self,
+        coordinator: KarlstadsenergiContractCoordinator,
+        customer_number: str,
+        contract: dict[str, Any],
+        address: str = "",
+        place_id: str = "",
+    ) -> None:
+        super().__init__(coordinator)
+        self._customer_number = customer_number
+        self._address = address
+        self._place_id = place_id
+        self._utility_name = contract.get("UtilityName", "")
+        self._slug = _slug_for_contract(self._utility_name)
+        self._contract_id = contract.get("ContractId", "")
+
+        self._attr_unique_id = f"{DOMAIN}_{customer_number}_contract_{self._slug}"
+        self._attr_name = f"Contract {self._utility_name}"
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        identifier = (
+            f"{self._customer_number}_{self._place_id}"
+            if self._place_id
+            else self._customer_number
+        )
+        name = (
+            f"Karlstadsenergi ({self._address})" if self._address else "Karlstadsenergi"
+        )
+        return DeviceInfo(
+            identifiers={(DOMAIN, identifier)},
+            name=name,
+            manufacturer="Karlstads Energi",
+        )
+
+    def _get_contract(self) -> dict[str, Any]:
+        """Find this contract in coordinator data."""
+        if not self.coordinator.data:
+            return {}
+        for c in self.coordinator.data.get("contracts", []):
+            if c.get("ContractId") == self._contract_id:
+                return c
+        return {}
+
+    @property
+    def native_value(self) -> str | None:
+        """Return contract alternative (e.g. 'Fast månadspris')."""
+        contract = self._get_contract()
+        return contract.get("ContractAlternative") or contract.get("UtilityName")
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        contract = self._get_contract()
+        if not contract:
+            return {}
+        return {
+            "contract_id": contract.get("ContractId"),
+            "contract_code": contract.get("ContractCode"),
+            "contract_start_date": contract.get("ContractStartDate"),
+            "contract_end_date": contract.get("ContractEndDate"),
+            "utility_name": contract.get("UtilityName"),
+            "gsrn_number": contract.get("GsrnNumber"),
+            "net_area_code": contract.get("NetAreaCode"),
+            "electricity_region": contract.get("ElecticityRegion"),
+        }

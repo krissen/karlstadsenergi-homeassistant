@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_PASSWORD
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
@@ -30,6 +32,7 @@ from .const import (
     MIN_UPDATE_INTERVAL,
     PLATFORMS,
     SKIP_GROUP_NAMES,
+    URL_SPOT_PRICES,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -63,7 +66,8 @@ class _CookieSavingCoordinator(DataUpdateCoordinator[dict]):
         if cookies and cookies != self._entry.data.get("session_cookies"):
             new_data = {**self._entry.data, "session_cookies": cookies}
             self.hass.config_entries.async_update_entry(
-                self._entry, data=new_data,
+                self._entry,
+                data=new_data,
             )
 
 
@@ -88,7 +92,8 @@ class KarlstadsenergiWasteCoordinator(_CookieSavingCoordinator):
             try:
                 all_services = await self.api.async_get_flex_services()
                 services = [
-                    s for s in all_services
+                    s
+                    for s in all_services
                     if s.get("FSStatusName") == "Aktiv"
                     and s.get("FlexServiceGroupName") not in SKIP_GROUP_NAMES
                 ]
@@ -111,9 +116,7 @@ class KarlstadsenergiWasteCoordinator(_CookieSavingCoordinator):
             }
 
         except KarlstadsenergiAuthError as err:
-            raise ConfigEntryAuthFailed(
-                f"Authentication failed: {err}"
-            ) from err
+            raise ConfigEntryAuthFailed(f"Authentication failed: {err}") from err
         except KarlstadsenergiConnectionError as err:
             raise UpdateFailed(f"Connection error: {err}") from err
         except KarlstadsenergiApiError as err:
@@ -130,7 +133,9 @@ class KarlstadsenergiConsumptionCoordinator(_CookieSavingCoordinator):
         update_interval_hours: int,
         entry: ConfigEntry,
     ) -> None:
-        super().__init__(hass, api, update_interval_hours, entry, f"{DOMAIN}_consumption")
+        super().__init__(
+            hass, api, update_interval_hours, entry, f"{DOMAIN}_consumption"
+        )
 
     async def _async_update_data(self) -> dict:
         """Fetch electricity consumption data."""
@@ -152,20 +157,133 @@ class KarlstadsenergiConsumptionCoordinator(_CookieSavingCoordinator):
             except Exception:
                 _LOGGER.debug("GetServiceInfo failed, continuing without it")
 
+            fee_data = {}
+            if model:
+                try:
+                    fee_data = await self.api.async_get_fee_consumption(model)
+                except Exception:
+                    _LOGGER.debug("Fee consumption unavailable")
+
             self._save_cookies()
             return {
                 "consumption": consumption,
                 "hourly": hourly,
                 "service_info": service_info,
+                "fee_data": fee_data,
             }
         except KarlstadsenergiAuthError as err:
-            raise ConfigEntryAuthFailed(
-                f"Authentication failed: {err}"
-            ) from err
+            raise ConfigEntryAuthFailed(f"Authentication failed: {err}") from err
         except KarlstadsenergiConnectionError as err:
             raise UpdateFailed(f"Connection error: {err}") from err
         except KarlstadsenergiApiError as err:
             raise UpdateFailed(f"API error: {err}") from err
+
+
+class KarlstadsenergiContractCoordinator(_CookieSavingCoordinator):
+    """Coordinator for contract details (daily refresh)."""
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        api: KarlstadsenergiApi,
+        entry: ConfigEntry,
+        site_ids: list[str],
+    ) -> None:
+        super().__init__(hass, api, 24, entry, f"{DOMAIN}_contracts")
+        self._site_ids = site_ids
+
+    async def _async_update_data(self) -> dict:
+        """Fetch contract details."""
+        try:
+            contracts = await self.api.async_get_contract_details(self._site_ids)
+            self._save_cookies()
+            return {"contracts": contracts}
+        except KarlstadsenergiAuthError as err:
+            raise ConfigEntryAuthFailed(f"Authentication failed: {err}") from err
+        except KarlstadsenergiConnectionError as err:
+            raise UpdateFailed(f"Connection error: {err}") from err
+        except KarlstadsenergiApiError as err:
+            raise UpdateFailed(f"API error: {err}") from err
+
+
+class KarlstadsenergiSpotPriceCoordinator(DataUpdateCoordinator[dict]):
+    """Coordinator for Evado public spot prices (15-minute refresh)."""
+
+    def __init__(self, hass: HomeAssistant) -> None:
+        super().__init__(
+            hass,
+            _LOGGER,
+            name=f"{DOMAIN}_spot_price",
+            update_interval=timedelta(minutes=15),
+        )
+
+    async def _async_update_data(self) -> dict:
+        """Fetch spot prices from Evado public API."""
+        session = async_get_clientsession(self.hass)
+        try:
+            async with asyncio.timeout(15):
+                resp = await session.get(URL_SPOT_PRICES)
+                resp.raise_for_status()
+                data = await resp.json()
+        except Exception as err:
+            raise UpdateFailed(f"Spot price fetch failed: {err}") from err
+        return self._parse_spot_data(data)
+
+    @staticmethod
+    def _parse_spot_data(data: dict) -> dict:
+        """Parse Evado spot price response.
+
+        Response format:
+        {"timezone": "Europe/Stockholm", "spotprices": [
+            {"Spotprice": {"region": "SE3", "start_time": "...", "end_time": "...",
+                           "price": 52.235, "modified": "..."}}, ...
+        ]}
+
+        Prices are in öre/kWh, 15-minute intervals, times in UTC.
+        """
+        spotprices = data.get("spotprices", [])
+        if not spotprices:
+            return {"current_price": None, "prices": []}
+
+        # Parse all price points
+        prices = []
+        for entry in spotprices:
+            sp = entry.get("Spotprice", {})
+            start_str = sp.get("start_time", "")
+            price_ore = sp.get("price")
+            if not start_str or price_ore is None:
+                continue
+            # Parse UTC time: "2026-03-26T23:00:00+0000"
+            try:
+                start_dt = datetime.fromisoformat(start_str.replace("+0000", "+00:00"))
+            except (ValueError, TypeError):
+                continue
+            prices.append(
+                {
+                    "start": start_dt,
+                    "price_ore": float(price_ore),
+                    "price_sek": round(float(price_ore) / 100, 4),
+                }
+            )
+
+        prices.sort(key=lambda p: p["start"])
+
+        # Find current price
+        now = datetime.now(tz=prices[0]["start"].tzinfo) if prices else None
+        current_price = None
+        if now and prices:
+            for i, p in enumerate(prices):
+                next_start = prices[i + 1]["start"] if i + 1 < len(prices) else None
+                if next_start is None or now < next_start:
+                    if now >= p["start"]:
+                        current_price = p["price_sek"]
+                    break
+
+        return {
+            "current_price": current_price,
+            "prices": prices,
+            "region": "SE3",
+        }
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -200,15 +318,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 await api.authenticate()
             except KarlstadsenergiApiError as err:
                 await api.async_close()
-                raise ConfigEntryNotReady(
-                    f"Could not authenticate: {err}"
-                ) from err
+                raise ConfigEntryNotReady(f"Could not authenticate: {err}") from err
 
     waste_coordinator = KarlstadsenergiWasteCoordinator(
-        hass, api, update_interval, entry,
+        hass,
+        api,
+        update_interval,
+        entry,
     )
     consumption_coordinator = KarlstadsenergiConsumptionCoordinator(
-        hass, api, max(update_interval // 6, 1), entry,
+        hass,
+        api,
+        max(update_interval // 6, 1),
+        entry,
     )
 
     try:
@@ -218,19 +340,47 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         raise
     except Exception as err:
         await api.async_close()
-        raise ConfigEntryNotReady(
-            f"Could not fetch waste data: {err}"
-        ) from err
+        raise ConfigEntryNotReady(f"Could not fetch waste data: {err}") from err
 
     try:
         await consumption_coordinator.async_config_entry_first_refresh()
     except Exception as err:
         _LOGGER.warning("Could not fetch consumption data: %s", err)
 
+    # Extract site_id from consumption data for contract fetching
+    site_ids: list[str] = []
+    if consumption_coordinator.data:
+        consumption = consumption_coordinator.data.get("consumption", {})
+        model = consumption.get("ConsumptionModel", {})
+        site_id = model.get("SiteId", "")
+        if site_id:
+            site_ids = [str(site_id)]
+
+    # Contract coordinator (24h interval, needs site_id from consumption)
+    contract_coordinator = KarlstadsenergiContractCoordinator(
+        hass,
+        api,
+        entry,
+        site_ids,
+    )
+    try:
+        await contract_coordinator.async_config_entry_first_refresh()
+    except Exception as err:
+        _LOGGER.warning("Could not fetch contract data: %s", err)
+
+    # Spot price coordinator (15 min interval, public API, no auth)
+    spot_price_coordinator = KarlstadsenergiSpotPriceCoordinator(hass)
+    try:
+        await spot_price_coordinator.async_config_entry_first_refresh()
+    except Exception as err:
+        _LOGGER.warning("Could not fetch spot prices: %s", err)
+
     hass.data[DOMAIN][entry.entry_id] = {
         "api": api,
         "waste_coordinator": waste_coordinator,
         "consumption_coordinator": consumption_coordinator,
+        "contract_coordinator": contract_coordinator,
+        "spot_price_coordinator": spot_price_coordinator,
     }
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -243,12 +393,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             pass
 
     cancel_heartbeat = async_track_time_interval(
-        hass, _heartbeat, HEARTBEAT_INTERVAL,
+        hass,
+        _heartbeat,
+        HEARTBEAT_INTERVAL,
     )
     entry.async_on_unload(cancel_heartbeat)
-    entry.async_on_unload(
-        entry.add_update_listener(_async_reload_entry)
-    )
+    entry.async_on_unload(entry.add_update_listener(_async_reload_entry))
 
     return True
 
@@ -256,7 +406,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
     unload_ok = await hass.config_entries.async_unload_platforms(
-        entry, PLATFORMS,
+        entry,
+        PLATFORMS,
     )
     if unload_ok:
         data = hass.data[DOMAIN].pop(entry.entry_id)
@@ -265,7 +416,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 async def _async_reload_entry(
-    hass: HomeAssistant, entry: ConfigEntry,
+    hass: HomeAssistant,
+    entry: ConfigEntry,
 ) -> None:
     """Reload entry on options change."""
     await hass.config_entries.async_reload(entry.entry_id)

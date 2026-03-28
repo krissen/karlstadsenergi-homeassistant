@@ -20,6 +20,9 @@ A Home Assistant integration for [Karlstads Energi](https://www.karlstadsenergi.
 - **Waste collection calendar** -- Calendar entities compatible with [TrashCard](https://github.com/idaho/hassio-trash-card) and HA's built-in Calendar card
 - **Pickup reminders** -- Binary sensors for "pickup tomorrow" per waste type
 - **Electricity consumption** -- Daily and hourly consumption data with year-over-year comparison, Energy Dashboard compatible
+- **Electricity price** -- Effective energy price (SEK/kWh) derived from your invoice fee breakdown, Energy Dashboard compatible
+- **Spot price** -- Current Nord Pool SE3 spot price (15-minute intervals) from Karlstadsenergi/Evado public API
+- **Contract overview** -- Sensors for each contract (grid, trading, waste) with contract type, dates, and identifiers
 - **Computed attributes** -- `days_until_pickup`, `pickup_is_today`, `pickup_is_tomorrow` for easy automations
 - **Session management** -- Automatic session keepalive (heartbeat), cookie persistence across restarts, and re-authentication on session expiry
 - **Configurable update interval** -- Set how often data is refreshed (1--24 hours)
@@ -151,6 +154,71 @@ One calendar entity per waste type, compatible with [TrashCard](https://github.c
 | `hourly_consumption` | list | Last 24 hours (`[{"time": "...", "kWh": 1.2}, ...]`) |
 | `hourly_data_points` | int | Total number of hourly data points |
 
+### Electricity price sensor
+
+Derived from your invoice fee breakdown. Use this or the spot price sensor as the price entity in the **Energy Dashboard**.
+
+| Sensor | Entity ID example | State | Unit |
+|--------|-------------------|-------|------|
+| Electricity price | `sensor.karlstadsenergi_electricity_price` | Effective price | SEK/kWh |
+
+#### Price sensor attributes
+
+| Attribute | Type | Description |
+|-----------|------|-------------|
+| `consumption_fee_sek` | float | Energy charge for the period (SEK) |
+| `power_fee_sek` | float | Grid power fee (SEK) |
+| `fixed_fee_sek` | float | Fixed monthly fee (SEK) |
+| `energy_tax_sek` | float | Energy tax (SEK) |
+| `vat_sek` | float | VAT (SEK) |
+| `total_invoice_sek` | float | Total invoice amount (SEK) |
+| `total_consumption_kwh` | float | Consumption for the fee period (kWh) |
+| `total_variable_price_sek_kwh` | float | All variable costs per kWh (energy + grid + tax, ex VAT) |
+
+### Spot price sensor
+
+Current Nord Pool electricity spot price for SE3 (Karlstad region), fetched from Karlstadsenergi's public Evado API every 15 minutes. No authentication required.
+
+| Sensor | Entity ID example | State | Unit |
+|--------|-------------------|-------|------|
+| Spot price | `sensor.karlstadsenergi_spot_price` | Current spot price | SEK/kWh |
+
+#### Spot price attributes
+
+| Attribute | Type | Description |
+|-----------|------|-------------|
+| `region` | string | Electricity region (`SE3`) |
+| `price_ore_kwh` | float | Current price in öre/kWh |
+| `today_min` | float | Today's lowest price (SEK/kWh) |
+| `today_max` | float | Today's highest price (SEK/kWh) |
+| `today_average` | float | Today's average price (SEK/kWh) |
+| `tomorrow_min` | float | Tomorrow's lowest price (if available) |
+| `tomorrow_max` | float | Tomorrow's highest price (if available) |
+| `tomorrow_average` | float | Tomorrow's average price (if available) |
+
+### Contract sensors
+
+One sensor per contract (grid, trading, waste).
+
+| Sensor | Entity ID example | State |
+|--------|-------------------|-------|
+| Grid contract | `sensor.karlstadsenergi_contract_grid` | Contract type name |
+| Trading contract | `sensor.karlstadsenergi_contract_trading` | Contract alternative (e.g. "Fast månadspris") |
+| Waste contract | `sensor.karlstadsenergi_contract_waste` | Contract type name |
+
+#### Contract sensor attributes
+
+| Attribute | Type | Description |
+|-----------|------|-------------|
+| `contract_id` | string | Internal contract ID |
+| `contract_code` | string | Contract number |
+| `contract_start_date` | string | Contract start date |
+| `contract_end_date` | string | Contract end date (or "Tillsvidare") |
+| `utility_name` | string | Utility type (e.g. "Elhandel - Handelsavtal") |
+| `gsrn_number` | string | Metering point identifier (GSRN) |
+| `net_area_code` | string | Network area code |
+| `electricity_region` | string | Electricity price region |
+
 ---
 
 ## Automation examples
@@ -212,7 +280,9 @@ template:
 ### Update interval
 
 - Waste data updates at the configured interval (default: 6 hours).
-- Electricity consumption updates 6x more frequently (default: 1 hour).
+- Electricity consumption and fee data updates 6x more frequently (default: 1 hour).
+- Contract data updates once per day.
+- Spot prices update every 15 minutes (public API, no authentication required).
 - To trigger an immediate refresh, use the `homeassistant.update_entity` service.
 
 ---

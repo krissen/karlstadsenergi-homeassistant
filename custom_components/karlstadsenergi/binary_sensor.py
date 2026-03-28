@@ -69,7 +69,8 @@ async def async_setup_entry(
 
 
 class WastePickupTomorrowSensor(
-    CoordinatorEntity[KarlstadsenergiWasteCoordinator], BinarySensorEntity,
+    CoordinatorEntity[KarlstadsenergiWasteCoordinator],
+    BinarySensorEntity,
 ):
     """Binary sensor: on when waste pickup is tomorrow (detailed mode)."""
 
@@ -132,7 +133,8 @@ class WastePickupTomorrowSensor(
 
 
 class WastePickupTomorrowSummarySensor(
-    CoordinatorEntity[KarlstadsenergiWasteCoordinator], BinarySensorEntity,
+    CoordinatorEntity[KarlstadsenergiWasteCoordinator],
+    BinarySensorEntity,
 ):
     """Binary sensor: on when waste pickup is tomorrow (summary mode)."""
 

@@ -18,6 +18,11 @@ URL_FLEX_DATES = (
 URL_FLEX_NEXT = f"{BASE_URL}/Start.aspx/GetNextFlexFetchDate"
 URL_CONSUMPTION = f"{BASE_URL}/consumption/consumption.aspx/GetConsumption"
 URL_SERVICE_INFO = f"{BASE_URL}/consumption/consumption.aspx/GetServiceInfo"
+URL_CONTRACT_DETAILS = f"{BASE_URL}/Contract/Contracts.aspx/GetContractDetails"
+URL_SPOT_PRICES = (
+    "https://emc.evado.se/web/spotprices/find_spotprices.json"
+    "?Company:name=karlstads_energi&Spotprice:region=SE3&_tree"
+)
 
 # Config keys
 CONF_PERSONNUMMER = "personnummer"
@@ -38,3 +43,18 @@ WASTE_TYPE_SLUG: dict[str, str] = {
 
 # Skip these service groups (billing only, no pickup dates)
 SKIP_GROUP_NAMES = {"Grundavgft"}
+
+# Contract type slug mapping (Swedish UtilityName -> English entity slug)
+CONTRACT_TYPE_SLUG: dict[str, str] = {
+    "Elnät - Nätavtal": "grid",
+    "Elhandel - Handelsavtal": "trading",
+    "Renhållning - Hushållsavfall": "waste",
+}
+
+# Fee series IDs from GetConsumption IsFeeTypeRequest response
+FEE_CONSUMPTION = "ConsumptionFee"
+FEE_POWER = "PowerFee"
+FEE_FIXED = "FixFee"
+FEE_ENERGY_TAX = "EnergyTax"
+FEE_VAT = "VAT"
+FEE_SUM = "SUM"
