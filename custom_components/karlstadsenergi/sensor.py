@@ -489,6 +489,23 @@ def _extract_fee_series(fee_data: dict) -> dict[str, float]:
     return fees
 
 
+def _extract_fee_months(fee_data: dict) -> set[str]:
+    """Extract which months the fee data covers.
+
+    Returns set of month keys like {"2026-02"} from the fee SeriesList
+    dateInterval fields (e.g. "2026-02-01" -> "2026-02").
+    """
+    chart = fee_data.get("DetailedConsumptionChart", {})
+    series_list = chart.get("SeriesList", [])
+    months: set[str] = set()
+    for series in series_list:
+        for point in series.get("data", []):
+            date_str = point.get("dateInterval", "")
+            if len(date_str) >= 7:
+                months.add(date_str[:7])
+    return months
+
+
 def _slug_for_contract(utility_name: str) -> str:
     """Get English slug for a Swedish contract utility name."""
     slug = CONTRACT_TYPE_SLUG.get(utility_name)
@@ -544,25 +561,33 @@ class ElectricityPriceSensor(
     def _get_site_id(self) -> str:
         return self._get_model().get("SiteId", "")
 
-    def _get_total_kwh(self) -> float:
-        """Get total kWh consumption for the fee period."""
-        consumption = (
-            self.coordinator.data.get("consumption", {})
-            if self.coordinator.data
-            else {}
-        )
+    def _get_total_kwh_for_fee_period(self) -> float:
+        """Get total kWh consumption matching the fee data's months only."""
+        if not self.coordinator.data:
+            return 0.0
+        fee_data = self.coordinator.data.get("fee_data", {})
+        fee_months = _extract_fee_months(fee_data)
+        if not fee_months:
+            return 0.0
+
+        consumption = self.coordinator.data.get("consumption", {})
         chart = consumption.get("DetailedConsumptionChart", {})
         series_list = chart.get("SeriesList", [])
         if not series_list:
             return 0.0
         data_points = series_list[0].get("data", [])
-        return sum(p.get("y", 0) for p in data_points)
+        return sum(
+            p.get("y", 0)
+            for p in data_points
+            if p.get("dateInterval", "")[:7] in fee_months
+        )
 
     @property
     def native_value(self) -> float | None:
         """Return effective energy price in SEK/kWh.
 
-        Calculated as ConsumptionFee (SEK) / total consumption (kWh).
+        Calculated as ConsumptionFee (SEK) / consumption (kWh) for the
+        same month(s) that the fee data covers.
         """
         if not self.coordinator.data:
             return None
@@ -571,7 +596,7 @@ class ElectricityPriceSensor(
         consumption_fee = fees.get(FEE_CONSUMPTION)
         if consumption_fee is None or consumption_fee <= 0:
             return None
-        total_kwh = self._get_total_kwh()
+        total_kwh = self._get_total_kwh_for_fee_period()
         if total_kwh <= 0:
             return None
         return round(consumption_fee / total_kwh, 4)
@@ -582,7 +607,7 @@ class ElectricityPriceSensor(
             return {}
         fee_data = self.coordinator.data.get("fee_data", {})
         fees = _extract_fee_series(fee_data)
-        total_kwh = self._get_total_kwh()
+        total_kwh = self._get_total_kwh_for_fee_period()
         attrs: dict[str, Any] = {
             "consumption_fee_sek": fees.get(FEE_CONSUMPTION),
             "power_fee_sek": fees.get(FEE_POWER),
