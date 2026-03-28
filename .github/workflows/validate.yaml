@@ -7,6 +7,29 @@ on:
     - cron: "0 0 * * *"
 
 jobs:
+  ruff:
+    name: Ruff (lint + format)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install ruff
+      - run: ruff format --check custom_components/karlstadsenergi/
+      - run: ruff check custom_components/karlstadsenergi/
+
+  pytest:
+    name: Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements_test.txt
+      - run: pytest tests/ -v
+
   hassfest:
     name: hassfest
     runs-on: "ubuntu-latest"

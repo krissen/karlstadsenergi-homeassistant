@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 
 from homeassistant.config_entries import ConfigEntry
@@ -38,6 +39,20 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 HEARTBEAT_INTERVAL = timedelta(minutes=5)
+
+
+@dataclass
+class KarlstadsenergiData:
+    """Runtime data for a Karlstadsenergi config entry."""
+
+    api: KarlstadsenergiApi
+    waste_coordinator: KarlstadsenergiWasteCoordinator
+    consumption_coordinator: KarlstadsenergiConsumptionCoordinator
+    contract_coordinator: KarlstadsenergiContractCoordinator
+    spot_price_coordinator: KarlstadsenergiSpotPriceCoordinator
+
+
+type KarlstadsenergiConfigEntry = ConfigEntry[KarlstadsenergiData]
 
 
 class _CookieSavingCoordinator(DataUpdateCoordinator[dict]):
@@ -108,7 +123,6 @@ class KarlstadsenergiWasteCoordinator(_CookieSavingCoordinator):
             if not services:
                 next_dates = await self.api.async_get_next_flex_dates()
 
-            self._save_cookies()
             return {
                 "services": services,
                 "dates": dates,
@@ -121,6 +135,8 @@ class KarlstadsenergiWasteCoordinator(_CookieSavingCoordinator):
             raise UpdateFailed(f"Connection error: {err}") from err
         except KarlstadsenergiApiError as err:
             raise UpdateFailed(f"API error: {err}") from err
+        finally:
+            self._save_cookies()
 
 
 class KarlstadsenergiConsumptionCoordinator(_CookieSavingCoordinator):
@@ -164,7 +180,6 @@ class KarlstadsenergiConsumptionCoordinator(_CookieSavingCoordinator):
                 except Exception:
                     _LOGGER.debug("Fee consumption unavailable")
 
-            self._save_cookies()
             return {
                 "consumption": consumption,
                 "hourly": hourly,
@@ -177,6 +192,8 @@ class KarlstadsenergiConsumptionCoordinator(_CookieSavingCoordinator):
             raise UpdateFailed(f"Connection error: {err}") from err
         except KarlstadsenergiApiError as err:
             raise UpdateFailed(f"API error: {err}") from err
+        finally:
+            self._save_cookies()
 
 
 class KarlstadsenergiContractCoordinator(_CookieSavingCoordinator):
@@ -196,7 +213,6 @@ class KarlstadsenergiContractCoordinator(_CookieSavingCoordinator):
         """Fetch contract details."""
         try:
             contracts = await self.api.async_get_contract_details(self._site_ids)
-            self._save_cookies()
             return {"contracts": contracts}
         except KarlstadsenergiAuthError as err:
             raise ConfigEntryAuthFailed(f"Authentication failed: {err}") from err
@@ -204,6 +220,8 @@ class KarlstadsenergiContractCoordinator(_CookieSavingCoordinator):
             raise UpdateFailed(f"Connection error: {err}") from err
         except KarlstadsenergiApiError as err:
             raise UpdateFailed(f"API error: {err}") from err
+        finally:
+            self._save_cookies()
 
 
 class KarlstadsenergiSpotPriceCoordinator(DataUpdateCoordinator[dict]):
@@ -268,7 +286,7 @@ class KarlstadsenergiSpotPriceCoordinator(DataUpdateCoordinator[dict]):
 
         prices.sort(key=lambda p: p["start"])
 
-        # Find current price
+        # Find current price (fall back to most recent known price if stale)
         now = datetime.now(tz=prices[0]["start"].tzinfo) if prices else None
         current_price = None
         if now and prices:
@@ -278,6 +296,9 @@ class KarlstadsenergiSpotPriceCoordinator(DataUpdateCoordinator[dict]):
                     if now >= p["start"]:
                         current_price = p["price_sek"]
                     break
+            # If stale (now is past all known prices), use the last known price
+            if current_price is None and now >= prices[-1]["start"]:
+                current_price = prices[-1]["price_sek"]
 
         return {
             "current_price": current_price,
@@ -286,7 +307,9 @@ class KarlstadsenergiSpotPriceCoordinator(DataUpdateCoordinator[dict]):
         }
 
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+async def async_setup_entry(
+    hass: HomeAssistant, entry: KarlstadsenergiConfigEntry
+) -> bool:
     """Set up Karlstadsenergi from a config entry."""
     personnummer = entry.data[CONF_PERSONNUMMER]
     auth_method = entry.data.get(CONF_AUTH_METHOD, AUTH_BANKID)
@@ -300,25 +323,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         MAX_UPDATE_INTERVAL,
     )
 
-    # Try to reuse API instance from config flow (BankID session handoff)
-    api = None
-    hass.data.setdefault(DOMAIN, {})
-    pending = hass.data[DOMAIN].pop("pending_api", None)
-    if pending is not None and pending._authenticated:
-        api = pending
-
-    if api is None:
-        api = KarlstadsenergiApi(personnummer, auth_method, password)
-        # Restore session cookies if available
-        saved_cookies = entry.data.get("session_cookies")
-        if saved_cookies:
-            api.set_session_cookies(saved_cookies)
-        elif auth_method == AUTH_PASSWORD:
-            try:
-                await api.authenticate()
-            except KarlstadsenergiApiError as err:
-                await api.async_close()
-                raise ConfigEntryNotReady(f"Could not authenticate: {err}") from err
+    api = KarlstadsenergiApi(personnummer, auth_method, password)
+    saved_cookies = entry.data.get("session_cookies")
+    if saved_cookies:
+        api.set_session_cookies(saved_cookies)
+    elif auth_method == AUTH_PASSWORD:
+        try:
+            await api.authenticate()
+        except KarlstadsenergiApiError as err:
+            await api.async_close()
+            raise ConfigEntryNotReady(f"Could not authenticate: {err}") from err
 
     waste_coordinator = KarlstadsenergiWasteCoordinator(
         hass,
@@ -375,13 +389,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     except Exception as err:
         _LOGGER.warning("Could not fetch spot prices: %s", err)
 
-    hass.data[DOMAIN][entry.entry_id] = {
-        "api": api,
-        "waste_coordinator": waste_coordinator,
-        "consumption_coordinator": consumption_coordinator,
-        "contract_coordinator": contract_coordinator,
-        "spot_price_coordinator": spot_price_coordinator,
-    }
+    entry.runtime_data = KarlstadsenergiData(
+        api=api,
+        waste_coordinator=waste_coordinator,
+        consumption_coordinator=consumption_coordinator,
+        contract_coordinator=contract_coordinator,
+        spot_price_coordinator=spot_price_coordinator,
+    )
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
@@ -403,21 +417,31 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return True
 
 
-async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+async def async_migrate_entry(
+    hass: HomeAssistant, entry: KarlstadsenergiConfigEntry
+) -> bool:
+    """Migrate config entry to a new version."""
+    _LOGGER.debug("Migrating config entry from version %s", entry.version)
+    # Currently at VERSION=1, no migrations needed
+    return True
+
+
+async def async_unload_entry(
+    hass: HomeAssistant, entry: KarlstadsenergiConfigEntry
+) -> bool:
     """Unload a config entry."""
     unload_ok = await hass.config_entries.async_unload_platforms(
         entry,
         PLATFORMS,
     )
     if unload_ok:
-        data = hass.data[DOMAIN].pop(entry.entry_id)
-        await data["api"].async_close()
+        await entry.runtime_data.api.async_close()
     return unload_ok
 
 
 async def _async_reload_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: KarlstadsenergiConfigEntry,
 ) -> None:
     """Reload entry on options change."""
     await hass.config_entries.async_reload(entry.entry_id)

@@ -26,16 +26,19 @@ custom_components/karlstadsenergi/
 ```
 Config Flow (auth) --> async_setup_entry
   --> KarlstadsenergiApi (session, cookies)
-  --> WasteCoordinator ---------> WasteCollectionSensor (per waste type)
-  |                            +> WasteCollectionCalendar (per waste type)
-  |                            +> WastePickupTomorrowSensor (per waste type)
-  --> ConsumptionCoordinator ----> ElectricityConsumptionSensor
+  --> WasteCoordinator (6h) ---------> WasteCollectionSensor (per waste type)
+  |                                 +> WasteCollectionCalendar (per waste type)
+  |                                 +> WastePickupTomorrowSensor (per waste type)
+  --> ConsumptionCoordinator (1h) ---> ElectricityConsumptionSensor
+  |                                 +> ElectricityPriceSensor
+  --> ContractCoordinator (24h) -----> ContractSensor (per contract)
+  --> SpotPriceCoordinator (15min) --> SpotPriceSensor
   --> Heartbeat timer (every 5 min)
 ```
 
 ### Key design decisions
 
-- **Two coordinators**: Waste data changes rarely (every few hours is fine), while consumption data benefits from more frequent updates.
+- **Four coordinators**: Each data source has its own refresh interval -- waste (6h), consumption (1h), contracts (24h), spot prices (15min).
 - **Cookie persistence**: Session cookies are saved to the config entry so sessions survive HA restarts.
 - **Heartbeat**: A timer sends a keepalive every 5 minutes to prevent server-side session timeout.
 - **Fallback data**: If detailed services are unavailable, the integration falls back to a simpler summary endpoint.
@@ -63,6 +66,15 @@ cd ../hass-test && docker compose restart
 ```bash
 ruff format custom_components/karlstadsenergi/
 ruff check custom_components/karlstadsenergi/ --fix
+```
+
+### Translations
+
+`strings.json` is the source of truth. `translations/en.json` must be an exact copy. After editing `strings.json`, copy it:
+
+```bash
+cp custom_components/karlstadsenergi/strings.json \
+   custom_components/karlstadsenergi/translations/en.json
 ```
 
 ### Validating

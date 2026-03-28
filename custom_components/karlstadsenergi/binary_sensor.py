@@ -6,32 +6,23 @@ import datetime
 from typing import Any
 
 from homeassistant.components.binary_sensor import BinarySensorEntity
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.util import dt as dt_util
 
-from . import KarlstadsenergiWasteCoordinator
-from .const import CONF_PERSONNUMMER, DOMAIN, WASTE_TYPE_SLUG
-
-
-def _slug_for_waste_type(waste_type: str) -> str:
-    """Get English slug for a Swedish waste type name."""
-    slug = WASTE_TYPE_SLUG.get(waste_type)
-    if slug:
-        return slug
-    return "".join(c if c.isalnum() else "_" for c in waste_type.lower()).strip("_")
+from . import KarlstadsenergiConfigEntry, KarlstadsenergiWasteCoordinator
+from .const import CONF_PERSONNUMMER, DOMAIN, slug_for_waste_type
 
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: KarlstadsenergiConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Karlstadsenergi binary sensors."""
-    data = hass.data[DOMAIN][entry.entry_id]
-    waste_coordinator: KarlstadsenergiWasteCoordinator = data["waste_coordinator"]
+    waste_coordinator = entry.runtime_data.waste_coordinator
     customer_number = entry.data[CONF_PERSONNUMMER]
 
     entities: list[BinarySensorEntity] = []
@@ -86,12 +77,12 @@ class WastePickupTomorrowSensor(
         self._customer_number = customer_number
         self._service_id = service["FlexServiceId"]
         self._waste_type = service.get("FlexServiceContainTypeValue", "")
-        self._slug = _slug_for_waste_type(self._waste_type)
+        self._slug = slug_for_waste_type(self._waste_type)
         self._address = service.get("FlexServicePlaceAddress", "")
         self._place_id = service.get("FlexServicePlaceId", "")
 
         self._attr_unique_id = (
-            f"{DOMAIN}_{customer_number}_{self._slug}_pickup_tomorrow"
+            f"{DOMAIN}_{customer_number}_{self._place_id}_{self._slug}_pickup_tomorrow"
         )
         self._attr_name = f"{self._waste_type} pickup tomorrow"
 
@@ -122,7 +113,7 @@ class WastePickupTomorrowSensor(
         pickup_date = self._next_pickup_date()
         if pickup_date is None:
             return None
-        return pickup_date == datetime.date.today() + datetime.timedelta(days=1)
+        return pickup_date == dt_util.now().date() + datetime.timedelta(days=1)
 
     @property
     def icon(self) -> str:
@@ -149,7 +140,7 @@ class WastePickupTomorrowSummarySensor(
         super().__init__(coordinator)
         self._customer_number = customer_number
         self._waste_type = item.get("Type", "")
-        self._slug = _slug_for_waste_type(self._waste_type)
+        self._slug = slug_for_waste_type(self._waste_type)
         self._address = item.get("Address", "").strip()
 
         self._attr_unique_id = (
@@ -183,7 +174,7 @@ class WastePickupTomorrowSummarySensor(
         pickup_date = self._next_pickup_date()
         if pickup_date is None:
             return None
-        return pickup_date == datetime.date.today() + datetime.timedelta(days=1)
+        return pickup_date == dt_util.now().date() + datetime.timedelta(days=1)
 
     @property
     def icon(self) -> str:

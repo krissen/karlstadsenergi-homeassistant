@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
 import logging
 import uuid
 from typing import Any
 
 import aiohttp
+from yarl import URL
 
 from .const import (
     BASE_URL,
@@ -89,13 +91,11 @@ class KarlstadsenergiApi:
     async def _ensure_session(self) -> aiohttp.ClientSession:
         """Create session if needed."""
         if self._session is None or self._session.closed:
-            jar = aiohttp.CookieJar(unsafe=True)
+            jar = aiohttp.CookieJar()
             self._session = aiohttp.ClientSession(cookie_jar=jar)
             self._authenticated = False
             # Restore saved cookies if available
             if self._saved_cookies:
-                from yarl import URL
-
                 for name, value in self._saved_cookies.items():
                     jar.update_cookies(
                         {name: value},
@@ -241,6 +241,10 @@ class KarlstadsenergiApi:
 
         Returns a combined list of accounts to choose from, each with:
         - FullName, CustomerCode, CustomerId, SubUserId (optional)
+
+        Note: The upstream API requires personnummer in the URL path.
+        This is a design decision in the Karlstadsenergi portal, not ours.
+        All requests use HTTPS so the path is encrypted in transit.
         """
         # Get main customers
         url = (
@@ -296,8 +300,6 @@ class KarlstadsenergiApi:
         sub_user_id: str = "",
     ) -> bool:
         """Complete BankID login for a selected account."""
-        import base64
-
         b64_customer_id = base64.b64encode(
             customer_id.encode("utf-8"),
         ).decode("ascii")
@@ -457,29 +459,21 @@ class KarlstadsenergiApi:
 
         session = await self._ensure_session()
         # Visit pages to initialize server-side state (same session)
-        async with asyncio.timeout(REQUEST_TIMEOUT):
-            await session.get(f"{BASE_URL}/start.aspx")
-            await session.get(f"{BASE_URL}/consumption/consumption.aspx")
-
-        url = f"{BASE_URL}/Consumption/Consumption.aspx/GetConsumptionViewModelOnLoad"
         try:
             async with asyncio.timeout(REQUEST_TIMEOUT):
-                resp = await session.post(
-                    url,
-                    json={},
-                    headers=REQUEST_HEADERS,
-                    allow_redirects=False,
-                )
-        except Exception as err:
-            _LOGGER.error("Consumption POST failed: %s", err)
-            raise KarlstadsenergiConnectionError(str(err)) from err
+                await session.get(f"{BASE_URL}/start.aspx")
+                await session.get(f"{BASE_URL}/consumption/consumption.aspx")
+        except asyncio.TimeoutError as err:
+            raise KarlstadsenergiConnectionError(
+                "Timeout visiting consumption pages"
+            ) from err
+        except aiohttp.ClientError as err:
+            raise KarlstadsenergiConnectionError(
+                f"Connection error visiting consumption pages: {err}"
+            ) from err
 
-        if resp.status != 200:
-            raise KarlstadsenergiApiError(
-                f"GetConsumptionViewModelOnLoad returned {resp.status}"
-            )
-        data = await resp.json()
-        result = _parse_aspnet_response(data)
+        url = f"{BASE_URL}/Consumption/Consumption.aspx/GetConsumptionViewModelOnLoad"
+        result = await self._request(url)
         if not isinstance(result, dict):
             return {}
         return result
@@ -498,18 +492,7 @@ class KarlstadsenergiApi:
         model["IsPageLoad"] = False
 
         url = f"{BASE_URL}/Consumption/Consumption.aspx/GetConsumption"
-        await self._ensure_session()
-        resp = await self._post(
-            url,
-            json_data={"data": json.dumps(model)},
-            allow_redirects=False,
-        )
-        if resp.status != 200:
-            raise KarlstadsenergiApiError(
-                f"GetConsumption (hourly) returned {resp.status}"
-            )
-        data = await resp.json()
-        result = _parse_aspnet_response(data)
+        result = await self._request(url, {"data": json.dumps(model)})
         if not isinstance(result, dict):
             return {}
         return result
@@ -564,18 +547,7 @@ class KarlstadsenergiApi:
         model["IsPageLoad"] = False
 
         url = f"{BASE_URL}/Consumption/Consumption.aspx/GetConsumption"
-        await self._ensure_session()
-        resp = await self._post(
-            url,
-            json_data={"data": json.dumps(model)},
-            allow_redirects=False,
-        )
-        if resp.status != 200:
-            raise KarlstadsenergiApiError(
-                f"GetConsumption (fee) returned {resp.status}"
-            )
-        data = await resp.json()
-        result = _parse_aspnet_response(data)
+        result = await self._request(url, {"data": json.dumps(model)})
         if not isinstance(result, dict):
             return {}
         return result
