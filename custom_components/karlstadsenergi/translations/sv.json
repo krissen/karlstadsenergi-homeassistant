@@ -3,9 +3,12 @@
     "step": {
       "user": {
         "title": "Karlstadsenergi",
-        "description": "Välj inloggningssätt.",
+        "description": "Logga in på ditt Karlstadsenergi-konto. Kundnummer och lösenord rekommenderas för de flesta användare.",
         "data": {
           "auth_method": "Inloggningssätt"
+        },
+        "data_description": {
+          "auth_method": "Välj kundnummer & lösenord för enklast möjliga konfiguration. BankID finns som alternativ men kräver QR-kodskanning."
         }
       },
       "bankid_personnummer": {
@@ -25,7 +28,7 @@
       },
       "bankid": {
         "title": "Karlstadsenergi - BankID",
-        "description": "Skanna denna QR-kod med BankID på din telefon:\n\n![BankID QR](data:image/png;base64,{qr_code})\n\nEller på telefonen: [Öppna BankID-appen](bankid:///?autostarttoken={auto_start_token}&redirect=null)\n\nEfter signering, klicka **Skicka**.",
+        "description": "Öppna BankID på din telefon och signera.\n\nPå telefonen: [Öppna BankID-appen](bankid:///?autostarttoken={auto_start_token}&redirect=null)\n\nEfter signering, klicka **Skicka**.",
         "data": {}
       },
       "select_account": {
@@ -37,7 +40,7 @@
       },
       "reauth_confirm": {
         "title": "Karlstadsenergi - Logga in igen",
-        "description": "Sessionen har gått ut för {personnummer}. Klicka Skicka för att starta BankID-inloggning.",
+        "description": "Sessionen har gått ut för konto {personnummer}. Klicka Skicka för att logga in igen.",
         "data": {}
       }
     },
@@ -59,8 +62,12 @@
     "step": {
       "init": {
         "title": "Karlstadsenergi-inställningar",
+        "description": "Konfigurera uppdateringsinställningar för Karlstadsenergi-integrationen.",
         "data": {
           "update_interval": "Uppdateringsintervall (timmar)"
+        },
+        "data_description": {
+          "update_interval": "Hur ofta data hämtas från Karlstadsenergi (1-24 timmar)."
         }
       }
     }
