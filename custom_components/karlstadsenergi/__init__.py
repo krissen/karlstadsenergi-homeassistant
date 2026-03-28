@@ -364,6 +364,10 @@ async def async_setup_entry(
     try:
         await consumption_coordinator.async_config_entry_first_refresh()
     except Exception as err:
+        # Review note (V2): Consumption failure is logged here and the
+        # integration continues without consumption/contract data. This
+        # is intentional -- waste collection (the primary feature) should
+        # work even if the electricity API is temporarily unavailable.
         _LOGGER.warning("Could not fetch consumption data: %s", err)
 
     # Extract site_id from consumption data for contract fetching
@@ -425,9 +429,13 @@ async def async_setup_entry(
 async def async_migrate_entry(
     hass: HomeAssistant, entry: KarlstadsenergiConfigEntry
 ) -> bool:
-    """Migrate config entry to a new version."""
+    """Migrate config entry to a new version.
+
+    Review note (V9): Empty stub is correct for VERSION=1 -- there are no
+    prior schema versions to migrate from. Will be populated when VERSION
+    is bumped for a breaking config change.
+    """
     _LOGGER.debug("Migrating config entry from version %s", entry.version)
-    # Currently at VERSION=1, no migrations needed
     return True
 
 

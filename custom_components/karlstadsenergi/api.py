@@ -100,7 +100,11 @@ class KarlstadsenergiApi:
             jar = aiohttp.CookieJar()
             self._session = aiohttp.ClientSession(cookie_jar=jar)
             self._authenticated = False
-            # Restore saved cookies if available
+            # Restore saved cookies if available.
+            # Review note (V1): We set _authenticated=True here without
+            # validating the cookies. This is intentional -- the first real
+            # API call via _request() will detect expired sessions (302/401)
+            # and trigger re-authentication automatically.
             if self._saved_cookies:
                 for name, value in self._saved_cookies.items():
                     jar.update_cookies(

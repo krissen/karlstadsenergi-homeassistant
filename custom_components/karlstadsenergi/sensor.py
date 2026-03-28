@@ -167,6 +167,10 @@ class WasteCollectionSensor(
         self._place_id = service.get("FlexServicePlaceId", "")
 
         self._attr_unique_id = f"{DOMAIN}_{customer_id}_{self._place_id}_{self._slug}"
+        # Review note (V7): Entity names use the Swedish waste type string
+        # from the API (e.g. "Mat- och restavfall") intentionally. Translating
+        # them would break the match with the actual service names shown on
+        # the Karlstadsenergi portal.
         self._attr_name = self._waste_type
 
     @property
@@ -232,6 +236,9 @@ class WasteCollectionSummary(
         self._address = item.get("Address", "").strip()
         self._container_size = item.get("Size", "")
 
+        # Review note (V6): Summary mode unique_id lacks place_id because the
+        # start-page API response doesn't reliably include it. Acceptable since
+        # summary mode is the fallback when detailed services are unavailable.
         self._attr_unique_id = f"{DOMAIN}_{customer_id}_{self._slug}"
         self._attr_name = self._waste_type
 
@@ -320,7 +327,13 @@ class ElectricityConsumptionSensor(
 
     @property
     def native_value(self) -> float | None:
-        """Return latest day's consumption in kWh."""
+        """Return latest day's consumption in kWh.
+
+        Review note (V3): This value may lag days/weeks behind real-time
+        because the portal API only provides historical data. The
+        ``latest_date`` attribute exposes the actual data date so users
+        can judge staleness.
+        """
         consumption = (
             self.coordinator.data.get("consumption", {})
             if self.coordinator.data

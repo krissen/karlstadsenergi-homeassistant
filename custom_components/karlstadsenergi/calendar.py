@@ -132,7 +132,12 @@ class WasteCollectionCalendar(
         start_date: datetime.datetime,
         end_date: datetime.datetime,
     ) -> list[CalendarEvent]:
-        """Return events in the given date range."""
+        """Return events in the given date range.
+
+        Note: Returns at most one event per waste type because the
+        Karlstadsenergi API only exposes the *next* scheduled pickup
+        date, not a full recurring schedule.
+        """
         pickup_date = self._next_pickup_date()
         if pickup_date is None:
             return []
@@ -208,7 +213,11 @@ class WasteCollectionSummaryCalendar(
         start_date: datetime.datetime,
         end_date: datetime.datetime,
     ) -> list[CalendarEvent]:
-        """Return events in the given date range."""
+        """Return events in the given date range.
+
+        Note: same single-event limitation as WasteCollectionCalendar
+        (API only provides the next pickup date).
+        """
         pickup_date = self._next_pickup_date()
         if pickup_date is None:
             return []

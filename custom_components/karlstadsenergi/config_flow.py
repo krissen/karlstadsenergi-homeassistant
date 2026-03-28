@@ -195,6 +195,9 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
                         break
                     if result["status"] not in (1, 2, 5):
                         break
+                    # Review note (V8): asyncio.sleep in config flow is the
+                    # standard BankID polling pattern. HA config flows support
+                    # async operations and this does not block the event loop.
                     await asyncio.sleep(2)
 
                 if result and result["status"] == BANKID_COMPLETE:
