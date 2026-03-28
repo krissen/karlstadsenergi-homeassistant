@@ -10,7 +10,6 @@ from homeassistant.components.sensor import (
     SensorEntity,
     SensorStateClass,
 )
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import UnitOfEnergy
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import DeviceInfo
@@ -19,6 +18,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
 from . import (
+    KarlstadsenergiConfigEntry,
     KarlstadsenergiConsumptionCoordinator,
     KarlstadsenergiContractCoordinator,
     KarlstadsenergiSpotPriceCoordinator,
@@ -49,23 +49,19 @@ def _slug_for_waste_type(waste_type: str) -> str:
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: KarlstadsenergiConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Karlstadsenergi sensors."""
-    data = hass.data[DOMAIN][entry.entry_id]
-    waste_coordinator: KarlstadsenergiWasteCoordinator = data["waste_coordinator"]
-    consumption_coordinator: KarlstadsenergiConsumptionCoordinator = data[
-        "consumption_coordinator"
-    ]
+    runtime = entry.runtime_data
     customer_number = entry.data[CONF_PERSONNUMMER]
 
     entities: list[SensorEntity] = []
 
     # Waste collection sensors
-    if waste_coordinator.data:
-        services = waste_coordinator.data.get("services", [])
-        next_dates = waste_coordinator.data.get("next_dates", [])
+    if runtime.waste_coordinator.data:
+        services = runtime.waste_coordinator.data.get("services", [])
+        next_dates = runtime.waste_coordinator.data.get("next_dates", [])
 
         if services:
             # Detailed mode: one sensor per service
@@ -75,7 +71,7 @@ async def async_setup_entry(
                     continue
                 entities.append(
                     WasteCollectionSensor(
-                        coordinator=waste_coordinator,
+                        coordinator=runtime.waste_coordinator,
                         customer_number=customer_number,
                         service=service,
                     )
@@ -88,7 +84,7 @@ async def async_setup_entry(
                     continue
                 entities.append(
                     WasteCollectionSummary(
-                        coordinator=waste_coordinator,
+                        coordinator=runtime.waste_coordinator,
                         customer_number=customer_number,
                         item=item,
                     )
@@ -97,62 +93,52 @@ async def async_setup_entry(
     # Extract address/place_id from consumption data for device grouping
     site_address = ""
     site_place_id = ""
-    if consumption_coordinator.data:
-        consumption = consumption_coordinator.data.get("consumption", {})
+    if runtime.consumption_coordinator.data:
+        consumption = runtime.consumption_coordinator.data.get("consumption", {})
         model = consumption.get("ConsumptionModel", {})
         site_address = model.get("SiteName", "")
         site_place_id = model.get("SiteId", "")
 
     # Electricity consumption sensor
-    if consumption_coordinator.data:
-        consumption = consumption_coordinator.data.get("consumption", {})
+    if runtime.consumption_coordinator.data:
+        consumption = runtime.consumption_coordinator.data.get("consumption", {})
         model = consumption.get("ConsumptionModel", {})
         if model:
             entities.append(
                 ElectricityConsumptionSensor(
-                    coordinator=consumption_coordinator,
+                    coordinator=runtime.consumption_coordinator,
                     customer_number=customer_number,
                 )
             )
 
         # Electricity price sensor (from fee breakdown)
-        fee_data = consumption_coordinator.data.get("fee_data", {})
+        fee_data = runtime.consumption_coordinator.data.get("fee_data", {})
         if fee_data:
             entities.append(
                 ElectricityPriceSensor(
-                    coordinator=consumption_coordinator,
+                    coordinator=runtime.consumption_coordinator,
                     customer_number=customer_number,
                 )
             )
 
-    # Spot price sensor (public Evado API)
-    spot_price_coordinator: KarlstadsenergiSpotPriceCoordinator = data[
-        "spot_price_coordinator"
-    ]
-    if (
-        spot_price_coordinator.data
-        and spot_price_coordinator.data.get("current_price") is not None
-    ):
-        entities.append(
-            SpotPriceSensor(
-                coordinator=spot_price_coordinator,
-                customer_number=customer_number,
-                address=site_address,
-                place_id=site_place_id,
-            )
+    # Spot price sensor (always created -- shows unavailable if API is down)
+    entities.append(
+        SpotPriceSensor(
+            coordinator=runtime.spot_price_coordinator,
+            customer_number=customer_number,
+            address=site_address,
+            place_id=site_place_id,
         )
+    )
 
     # Contract sensors (one per contract)
-    contract_coordinator: KarlstadsenergiContractCoordinator = data[
-        "contract_coordinator"
-    ]
-    if contract_coordinator.data:
-        for contract in contract_coordinator.data.get("contracts", []):
+    if runtime.contract_coordinator.data:
+        for contract in runtime.contract_coordinator.data.get("contracts", []):
             utility = contract.get("UtilityName", "")
             if utility:
                 entities.append(
                     ContractSensor(
-                        coordinator=contract_coordinator,
+                        coordinator=runtime.contract_coordinator,
                         customer_number=customer_number,
                         contract=contract,
                         address=site_address,
@@ -225,7 +211,7 @@ class WasteCollectionSensor(
         }
         pickup_date = self.native_value
         if pickup_date:
-            today = datetime.date.today()
+            today = dt_util.now().date()
             delta = (pickup_date - today).days
             attrs["days_until_pickup"] = delta
             attrs["pickup_is_today"] = delta == 0
@@ -287,7 +273,7 @@ class WasteCollectionSummary(
         }
         pickup_date = self.native_value
         if pickup_date:
-            today = datetime.date.today()
+            today = dt_util.now().date()
             delta = (pickup_date - today).days
             attrs["days_until_pickup"] = delta
             attrs["pickup_is_today"] = delta == 0
@@ -304,7 +290,7 @@ class ElectricityConsumptionSensor(
     _attr_has_entity_name = True
     _attr_device_class = SensorDeviceClass.ENERGY
     _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
-    _attr_state_class = SensorStateClass.TOTAL
+    _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_icon = "mdi:flash"
     _attr_suggested_display_precision = 1
 
@@ -317,6 +303,7 @@ class ElectricityConsumptionSensor(
         self._customer_number = customer_number
         self._attr_unique_id = f"{DOMAIN}_{customer_number}_electricity"
         self._attr_name = "Electricity consumption"
+        self._attr_translation_key = "electricity_consumption"
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -364,34 +351,6 @@ class ElectricityConsumptionSensor(
         if value is not None:
             return round(float(value), 3)
         return None
-
-    @property
-    def last_reset(self) -> datetime.datetime | None:
-        """Return the start of the day the consumption value corresponds to."""
-        consumption = (
-            self.coordinator.data.get("consumption", {})
-            if self.coordinator.data
-            else {}
-        )
-        chart = consumption.get("DetailedConsumptionChart", {})
-        series_list = chart.get("SeriesList", [])
-        if not series_list:
-            return None
-        data_points = series_list[0].get("data", [])
-        if not data_points:
-            return None
-        date_str = data_points[-1].get("dateInterval", "")
-        if not date_str:
-            return None
-        try:
-            naive_date = datetime.date.fromisoformat(date_str[:10])
-            midnight = datetime.datetime.combine(
-                naive_date,
-                datetime.time.min,
-            )
-            return midnight.replace(tzinfo=dt_util.get_default_time_zone())
-        except (ValueError, TypeError):
-            return None
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
@@ -524,6 +483,7 @@ class ElectricityPriceSensor(
     """
 
     _attr_has_entity_name = True
+    _attr_device_class = SensorDeviceClass.MONETARY
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = "SEK/kWh"
     _attr_icon = "mdi:cash"
@@ -538,6 +498,7 @@ class ElectricityPriceSensor(
         self._customer_number = customer_number
         self._attr_unique_id = f"{DOMAIN}_{customer_number}_electricity_price"
         self._attr_name = "Electricity price"
+        self._attr_translation_key = "electricity_price"
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -636,6 +597,7 @@ class SpotPriceSensor(
     """
 
     _attr_has_entity_name = True
+    _attr_device_class = SensorDeviceClass.MONETARY
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = "SEK/kWh"
     _attr_icon = "mdi:flash"
@@ -654,6 +616,7 @@ class SpotPriceSensor(
         self._place_id = place_id
         self._attr_unique_id = f"{DOMAIN}_{customer_number}_spot_price"
         self._attr_name = "Spot price"
+        self._attr_translation_key = "spot_price"
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -690,20 +653,26 @@ class SpotPriceSensor(
         if current_sek is not None:
             attrs["price_ore_kwh"] = round(current_sek * 100, 2)
 
-        # Today's prices summary
+        # Today's prices summary (use local time for correct day boundaries)
         prices = data.get("prices", [])
-        now = datetime.datetime.now(tz=datetime.timezone.utc)
-        today = now.date()
+        local_now = dt_util.now()
+        today = local_now.date()
         tomorrow = today + datetime.timedelta(days=1)
 
-        today_prices = [p["price_sek"] for p in prices if p["start"].date() == today]
+        today_prices = [
+            p["price_sek"]
+            for p in prices
+            if p["start"].astimezone(local_now.tzinfo).date() == today
+        ]
         if today_prices:
             attrs["today_min"] = min(today_prices)
             attrs["today_max"] = max(today_prices)
             attrs["today_average"] = round(sum(today_prices) / len(today_prices), 4)
 
         tomorrow_prices = [
-            p["price_sek"] for p in prices if p["start"].date() == tomorrow
+            p["price_sek"]
+            for p in prices
+            if p["start"].astimezone(local_now.tzinfo).date() == tomorrow
         ]
         if tomorrow_prices:
             attrs["tomorrow_min"] = min(tomorrow_prices)
@@ -740,8 +709,11 @@ class ContractSensor(
         self._slug = _slug_for_contract(self._utility_name)
         self._contract_id = contract.get("ContractId", "")
 
-        self._attr_unique_id = f"{DOMAIN}_{customer_number}_contract_{self._slug}"
+        self._attr_unique_id = (
+            f"{DOMAIN}_{customer_number}_contract_{self._contract_id}"
+        )
         self._attr_name = f"Contract {self._utility_name}"
+        self._attr_translation_key = f"contract_{self._slug}"
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -785,7 +757,9 @@ class ContractSensor(
             "contract_start_date": contract.get("ContractStartDate"),
             "contract_end_date": contract.get("ContractEndDate"),
             "utility_name": contract.get("UtilityName"),
-            "gsrn_number": contract.get("GsrnNumber"),
+            # GsrnNumber omitted: it is a personally identifiable infrastructure
+            # identifier for Swedish electricity customers and must not be exposed
+            # as a default entity attribute.
             "net_area_code": contract.get("NetAreaCode"),
             "electricity_region": contract.get("ElecticityRegion"),
         }
