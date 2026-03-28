@@ -94,6 +94,15 @@ async def async_setup_entry(
                     )
                 )
 
+    # Extract address/place_id from consumption data for device grouping
+    site_address = ""
+    site_place_id = ""
+    if consumption_coordinator.data:
+        consumption = consumption_coordinator.data.get("consumption", {})
+        model = consumption.get("ConsumptionModel", {})
+        site_address = model.get("SiteName", "")
+        site_place_id = model.get("SiteId", "")
+
     # Electricity consumption sensor
     if consumption_coordinator.data:
         consumption = consumption_coordinator.data.get("consumption", {})
@@ -128,6 +137,8 @@ async def async_setup_entry(
             SpotPriceSensor(
                 coordinator=spot_price_coordinator,
                 customer_number=customer_number,
+                address=site_address,
+                place_id=site_place_id,
             )
         )
 
@@ -144,6 +155,8 @@ async def async_setup_entry(
                         coordinator=contract_coordinator,
                         customer_number=customer_number,
                         contract=contract,
+                        address=site_address,
+                        place_id=site_place_id,
                     )
                 )
 
@@ -607,17 +620,29 @@ class SpotPriceSensor(
         self,
         coordinator: KarlstadsenergiSpotPriceCoordinator,
         customer_number: str,
+        address: str = "",
+        place_id: str = "",
     ) -> None:
         super().__init__(coordinator)
         self._customer_number = customer_number
+        self._address = address
+        self._place_id = place_id
         self._attr_unique_id = f"{DOMAIN}_{customer_number}_spot_price"
         self._attr_name = "Spot price"
 
     @property
     def device_info(self) -> DeviceInfo:
+        identifier = (
+            f"{self._customer_number}_{self._place_id}"
+            if self._place_id
+            else self._customer_number
+        )
+        name = (
+            f"Karlstadsenergi ({self._address})" if self._address else "Karlstadsenergi"
+        )
         return DeviceInfo(
-            identifiers={(DOMAIN, f"{self._customer_number}")},
-            name="Karlstadsenergi",
+            identifiers={(DOMAIN, identifier)},
+            name=name,
             manufacturer="Karlstads Energi",
         )
 
@@ -679,9 +704,13 @@ class ContractSensor(
         coordinator: KarlstadsenergiContractCoordinator,
         customer_number: str,
         contract: dict[str, Any],
+        address: str = "",
+        place_id: str = "",
     ) -> None:
         super().__init__(coordinator)
         self._customer_number = customer_number
+        self._address = address
+        self._place_id = place_id
         self._utility_name = contract.get("UtilityName", "")
         self._slug = _slug_for_contract(self._utility_name)
         self._contract_id = contract.get("ContractId", "")
@@ -691,9 +720,17 @@ class ContractSensor(
 
     @property
     def device_info(self) -> DeviceInfo:
+        identifier = (
+            f"{self._customer_number}_{self._place_id}"
+            if self._place_id
+            else self._customer_number
+        )
+        name = (
+            f"Karlstadsenergi ({self._address})" if self._address else "Karlstadsenergi"
+        )
         return DeviceInfo(
-            identifiers={(DOMAIN, f"{self._customer_number}")},
-            name="Karlstadsenergi",
+            identifiers={(DOMAIN, identifier)},
+            name=name,
             manufacturer="Karlstads Energi",
         )
 
