@@ -1,0 +1,6 @@
+# Test dependencies for karlstadsenergi-ha
+pytest>=8.0
+pytest-asyncio>=0.24
+# homeassistant is required to import the integration modules.
+# Pin to a recent stable release; adjust if you need a newer HA API.
+homeassistant>=2024.11
