@@ -8,17 +8,18 @@
 
 A Home Assistant integration for [Karlstads Energi](https://www.karlstadsenergi.se/) customers. Track your waste collection pickup dates and monitor electricity consumption -- all from within Home Assistant.
 
-> **Note:** This integration communicates with the Karlstads Energi customer portal ("Mina sidor") and requires a valid customer account. It supports both **Mobile BankID** and **customer number + password** authentication.
+> **Note:** This integration communicates with the Karlstads Energi customer portal ("Mina sidor") and requires a valid customer account.
 
 ---
 
 ## Features
 
 - **Waste collection sensors** -- Next pickup date for each waste type (food & residual waste, glass/metal, plastic & paper packaging)
-- **Electricity consumption** -- Daily and hourly consumption data with year-over-year comparison
+- **Waste collection calendar** -- Calendar entities compatible with [TrashCard](https://github.com/idaho/hassio-trash-card) and HA's built-in Calendar card
+- **Pickup reminders** -- Binary sensors for "pickup tomorrow" per waste type
+- **Electricity consumption** -- Daily and hourly consumption data with year-over-year comparison, Energy Dashboard compatible
 - **Computed attributes** -- `days_until_pickup`, `pickup_is_today`, `pickup_is_tomorrow` for easy automations
 - **Session management** -- Automatic session keepalive (heartbeat), cookie persistence across restarts, and re-authentication on session expiry
-- **BankID and password login** -- Choose the authentication method that works for you
 - **Configurable update interval** -- Set how often data is refreshed (1--24 hours)
 
 ---
@@ -45,19 +46,35 @@ A Home Assistant integration for [Karlstads Energi](https://www.karlstadsenergi.
 
 1. Go to **Settings -> Devices & Services -> Add Integration**.
 2. Search for `Karlstadsenergi`.
-3. Choose your authentication method:
+3. Choose your authentication method (see below).
 
-### BankID
+### Authentication methods
+
+The integration supports two login methods. **Customer number & password is strongly recommended.**
+
+| | Customer number & password | Mobile BankID |
+|---|---|---|
+| **Recommended** | **Yes** | No |
+| Auto-reconnect on HA restart | **Yes** -- seamless | **No** -- requires manual re-scan |
+| Session handling | Automatic re-login | Heartbeat keep-alive only |
+| Setup complexity | Simple | Requires QR scan within 30s |
+| Multi-account | Logs in directly | Must select account each time |
+
+#### Customer number & password (recommended)
+
+1. Select **Kundnummer & lösenord**.
+2. Enter your Karlstads Energi customer number and password.
+
+> **Don't have a password yet?** Go to [Karlstadsenergi Password Reset](https://minasidor.karlstadsenergi.se/Customer/PasswordReset.aspx). Have your customer number ready (found on your invoice). Enter the customer number and a password reset link will be sent to the email address Karlstads Energi has on file for your account. Then you're good to go!
+
+#### Mobile BankID
+
+> **Note:** BankID works for initial setup but has significant limitations. When Home Assistant restarts, the session expires and **you must scan a new QR code manually** to reconnect. There is no way to automate BankID re-authentication. For a hassle-free experience, set up password login instead.
 
 1. Select **Mobilt BankID**.
 2. Enter your personnummer (Swedish personal identity number).
 3. A QR code will be displayed -- scan it with your BankID app and sign.
 4. If your personnummer is linked to multiple accounts, select which one to use.
-
-### Customer number & password
-
-1. Select **Kundnummer & losenord**.
-2. Enter your Karlstads Energi customer number and password.
 
 ### Options
 
@@ -90,6 +107,24 @@ One sensor is created per active waste collection service at your address.
 | `days_until_pickup` | int | Days remaining until next pickup |
 | `pickup_is_today` | bool | `true` if pickup is today |
 | `pickup_is_tomorrow` | bool | `true` if pickup is tomorrow |
+
+### Waste collection calendar
+
+One calendar entity per waste type, compatible with [TrashCard](https://github.com/idaho/hassio-trash-card) and HA's built-in Calendar card.
+
+| Calendar | Entity ID example | Event |
+|----------|-------------------|-------|
+| Food & residual waste | `calendar.karlstadsenergi_food_and_residual_waste_calendar` | All-day event on pickup date |
+| Glass/Metal | `calendar.karlstadsenergi_glass_metal_calendar` | All-day event on pickup date |
+| Plastic & paper packaging | `calendar.karlstadsenergi_plastic_paper_packaging_calendar` | All-day event on pickup date |
+
+### Pickup tomorrow binary sensors
+
+| Binary sensor | Entity ID example | State |
+|---------------|-------------------|-------|
+| Food & residual waste | `binary_sensor.karlstadsenergi_food_and_residual_waste_pickup_tomorrow` | `on` if pickup is tomorrow |
+| Glass/Metal | `binary_sensor.karlstadsenergi_glass_metal_pickup_tomorrow` | `on` if pickup is tomorrow |
+| Plastic & paper packaging | `binary_sensor.karlstadsenergi_plastic_paper_packaging_pickup_tomorrow` | `on` if pickup is tomorrow |
 
 ### Electricity consumption sensor
 
