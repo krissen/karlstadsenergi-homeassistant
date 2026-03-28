@@ -1,5 +1,7 @@
 {
   "name": "Karlstadsenergi",
   "render_readme": true,
+  "zip_release": true,
+  "filename": "karlstadsenergi.zip",
   "country": ["SE"]
 }
