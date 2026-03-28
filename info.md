@@ -4,10 +4,12 @@ A Home Assistant integration for [Karlstads Energi](https://www.karlstadsenergi.
 
 ## Features
 
-- **Waste collection** -- Next pickup date per waste type with computed attributes like `days_until_pickup` and `pickup_is_tomorrow`.
-- **Electricity consumption** -- Daily and hourly consumption data with year-over-year comparison.
-- **BankID and password login** -- Choose the authentication method that suits you.
-- **Session persistence** -- Automatic keepalive and cookie persistence across HA restarts.
+- **Waste collection** -- Next pickup date per waste type, calendar entities, and "pickup tomorrow" binary sensors.
+- **Electricity consumption** -- Daily and hourly kWh with year-over-year comparison. Energy Dashboard compatible.
+- **Electricity price** -- Effective energy price (SEK/kWh) derived from your invoice fee breakdown. Energy Dashboard compatible.
+- **Spot price** -- Current Nord Pool SE3 spot price (15-minute intervals). Energy Dashboard compatible.
+- **Contracts** -- Overview of your grid, trading, and waste contracts with dates and identifiers.
+- **Password and BankID login** -- Password is recommended for automatic reconnection.
 
 ## Installation
 
@@ -21,15 +23,6 @@ A Home Assistant integration for [Karlstads Energi](https://www.karlstadsenergi.
 1. Go to **Settings -> Devices & Services -> Add Integration**.
 2. Search for `Karlstadsenergi`.
 3. Choose **Kundnummer & lösenord** (recommended) or **Mobilt BankID** and follow the prompts.
-
-## Sensors
-
-| Sensor | State | Attributes |
-|--------|-------|------------|
-| Food & residual waste | Next pickup date | address, container_size, frequency, days_until_pickup, pickup_is_today, pickup_is_tomorrow |
-| Glass/Metal | Next pickup date | (same as above) |
-| Plastic & paper packaging | Next pickup date | (same as above) |
-| Electricity consumption | Latest day (kWh) | meter_number, total_this_period, monthly_consumption, hourly_consumption, and more |
 
 ## Notes
 
