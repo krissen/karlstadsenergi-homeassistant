@@ -7,15 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-03-28
+
 ### Added
 - **Electricity price sensor** -- effective energy price (SEK/kWh) derived from fee breakdown, Energy Dashboard compatible
 - **Spot price sensor** -- current Nord Pool SE3 spot price from Evado public API (15-min intervals), Energy Dashboard compatible
 - **Contract sensors** -- one per contract (Elnät, Elhandel, Renhållning) showing contract type, dates, GSRN, and net area
-- Calendar entities for waste collection (TrashCard compatible)
+- Calendar entities for waste collection
 - Binary sensors for "pickup tomorrow" per waste type
 - Diagnostics support (Settings > Devices > Download Diagnostics)
 - Hourly electricity consumption data in sensor attributes
 - Detailed waste service data via GetFlexServices (with fallback)
+- Dashboard card examples (Mushroom, Button Card, built-in HA cards)
 
 ### Fixed
 - Electricity sensor now compatible with HA Energy Dashboard (`last_reset` added)
@@ -50,5 +53,6 @@ First working release.
 - Two DataUpdateCoordinators (waste: 6h, consumption: 1h intervals)
 - HACS compatible (custom repository)
 
-[Unreleased]: https://github.com/krissen/karlstadsenergi-homeassistant/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/krissen/karlstadsenergi-homeassistant/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/krissen/karlstadsenergi-homeassistant/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/krissen/karlstadsenergi-homeassistant/releases/tag/v0.1.0
