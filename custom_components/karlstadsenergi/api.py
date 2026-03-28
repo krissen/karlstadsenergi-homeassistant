@@ -146,6 +146,10 @@ class KarlstadsenergiApi:
 
     async def authenticate_password(self) -> bool:
         """Authenticate with customer number and password."""
+        # Clear any stale cookies before fresh login
+        session = await self._ensure_session()
+        session.cookie_jar.clear()
+
         resp = await self._post(
             URL_LOGIN,
             {"user": self._personnummer, "password": self._password, "captcha": ""},
@@ -436,22 +440,47 @@ class KarlstadsenergiApi:
     async def async_get_consumption(self) -> dict[str, Any]:
         """Get electricity consumption data.
 
-        Requires visiting the consumption page first to initialize server state.
+        Visits start.aspx + consumption.aspx to initialize server state,
+        then calls GetConsumptionViewModelOnLoad.
         """
+        # Ensure authenticated first
+        if not self._authenticated:
+            await self.authenticate()
+
         session = await self._ensure_session()
-        # Visit consumption page to initialize server-side state
+        # Visit pages to initialize server-side state (same session)
+        async with asyncio.timeout(REQUEST_TIMEOUT):
+            resp = await session.get(f"{BASE_URL}/start.aspx")
+            _LOGGER.debug("start.aspx: %s", resp.status)
+            resp = await session.get(f"{BASE_URL}/consumption/consumption.aspx")
+            _LOGGER.debug("consumption.aspx: %s", resp.status)
+
+        # Log cookies for debugging
+        cookies = {c.key: c.value[:20] + "..." for c in session.cookie_jar}
+        _LOGGER.debug("Cookies before consumption API: %s", cookies)
+
+        url = f"{BASE_URL}/Consumption/Consumption.aspx/GetConsumptionViewModelOnLoad"
         try:
             async with asyncio.timeout(REQUEST_TIMEOUT):
-                await session.get(
-                    f"{BASE_URL}/consumption/consumption.aspx",
-                    headers={"X-Requested-With": "XMLHttpRequest"},
+                resp = await session.post(
+                    url,
+                    json={},
+                    headers=REQUEST_HEADERS,
+                    allow_redirects=False,
                 )
-        except Exception:
-            _LOGGER.debug("Failed to visit consumption page")
+        except Exception as err:
+            _LOGGER.error("Consumption POST failed: %s", err)
+            raise KarlstadsenergiConnectionError(str(err)) from err
 
-        # Use the OnLoad endpoint (works after page visit)
-        url = f"{BASE_URL}/Consumption/Consumption.aspx/GetConsumptionViewModelOnLoad"
-        result = await self._request(url)
+        _LOGGER.debug("Consumption API: status=%s, content-type=%s", resp.status, resp.headers.get("Content-Type"))
+        if resp.status != 200:
+            text = await resp.text()
+            _LOGGER.debug("Consumption failed body: %s", text[:300])
+            raise KarlstadsenergiApiError(
+                f"GetConsumptionViewModelOnLoad returned {resp.status}"
+            )
+        data = await resp.json()
+        result = _parse_aspnet_response(data)
         if not isinstance(result, dict):
             return {}
         return result

@@ -1,0 +1,1 @@
+- Säkerställ att kundnummer/personnummer och lösenord etc känsliga uppgifter inte sparas i klartext i config

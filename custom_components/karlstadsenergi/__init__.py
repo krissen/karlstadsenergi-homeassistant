@@ -135,7 +135,11 @@ class KarlstadsenergiConsumptionCoordinator(_CookieSavingCoordinator):
         """Fetch electricity consumption data."""
         try:
             consumption = await self.api.async_get_consumption()
-            service_info = await self.api.async_get_service_info()
+            service_info = {}
+            try:
+                service_info = await self.api.async_get_service_info()
+            except Exception:
+                _LOGGER.debug("GetServiceInfo failed, continuing without it")
             self._save_cookies()
             return {
                 "consumption": consumption,
