@@ -411,7 +411,19 @@ class KarlstadsenergiApi:
         return result
 
     async def async_get_flex_services(self) -> list[dict[str, Any]]:
-        """Get all waste collection services."""
+        """Get all waste collection services.
+
+        Requires visiting the flex page first to initialize server state.
+        """
+        if not self._authenticated:
+            await self.authenticate()
+        session = await self._ensure_session()
+        try:
+            async with asyncio.timeout(REQUEST_TIMEOUT):
+                await session.get(f"{BASE_URL}/flex/flexservices.aspx")
+        except Exception:
+            _LOGGER.debug("Failed to visit flex page")
+
         result = await self._request(URL_FLEX_SERVICES)
         if not isinstance(result, list):
             return []
@@ -478,6 +490,35 @@ class KarlstadsenergiApi:
             _LOGGER.debug("Consumption failed body: %s", text[:300])
             raise KarlstadsenergiApiError(
                 f"GetConsumptionViewModelOnLoad returned {resp.status}"
+            )
+        data = await resp.json()
+        result = _parse_aspnet_response(data)
+        if not isinstance(result, dict):
+            return {}
+        return result
+
+    async def async_get_hourly_consumption(
+        self, consumption_model: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Get hourly consumption using the consumption model from OnLoad.
+
+        Modifies the model to request hourly interval.
+        """
+        model = {**consumption_model}
+        model["Interval"] = "HOUR"
+        model["IntervalEnum"] = 4
+        model["IsPageLoad"] = False
+
+        url = f"{BASE_URL}/Consumption/Consumption.aspx/GetConsumption"
+        session = await self._ensure_session()
+        resp = await self._post(
+            url,
+            json_data={"data": json.dumps(model)},
+            allow_redirects=False,
+        )
+        if resp.status != 200:
+            raise KarlstadsenergiApiError(
+                f"GetConsumption (hourly) returned {resp.status}"
             )
         data = await resp.json()
         result = _parse_aspnet_response(data)

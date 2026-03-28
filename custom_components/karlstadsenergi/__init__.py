@@ -83,24 +83,28 @@ class KarlstadsenergiWasteCoordinator(_CookieSavingCoordinator):
     async def _async_update_data(self) -> dict:
         """Fetch waste collection data."""
         try:
-            next_dates = await self.api.async_get_next_flex_dates()
-            _LOGGER.debug("Next flex dates: %s", next_dates)
-
+            # Primary: detailed services (requires flex page visit)
             services = []
             dates = {}
             try:
-                services = await self.api.async_get_flex_services()
-                active = [
-                    s for s in services
+                all_services = await self.api.async_get_flex_services()
+                services = [
+                    s for s in all_services
                     if s.get("FSStatusName") == "Aktiv"
                     and s.get("FlexServiceGroupName") not in SKIP_GROUP_NAMES
                 ]
-                if active:
-                    service_ids = [s["FlexServiceId"] for s in active]
+                if services:
+                    service_ids = [s["FlexServiceId"] for s in services]
                     dates = await self.api.async_get_flex_dates(service_ids)
-                    services = active
+                _LOGGER.debug("Flex services: %d active, dates=%s", len(services), dates)
             except Exception:
-                _LOGGER.debug("Detailed flex services unavailable, using summary")
+                _LOGGER.debug("Detailed flex services unavailable", exc_info=True)
+
+            # Fallback: simple summary from start page
+            next_dates = []
+            if not services:
+                next_dates = await self.api.async_get_next_flex_dates()
+                _LOGGER.debug("Fallback next_dates: %d items", len(next_dates))
 
             self._save_cookies()
             return {
@@ -135,14 +139,26 @@ class KarlstadsenergiConsumptionCoordinator(_CookieSavingCoordinator):
         """Fetch electricity consumption data."""
         try:
             consumption = await self.api.async_get_consumption()
+
+            # Get hourly data using the model from the default response
+            hourly = {}
+            model = consumption.get("ConsumptionModel")
+            if model:
+                try:
+                    hourly = await self.api.async_get_hourly_consumption(model)
+                except Exception:
+                    _LOGGER.debug("Hourly consumption unavailable")
+
             service_info = {}
             try:
                 service_info = await self.api.async_get_service_info()
             except Exception:
                 _LOGGER.debug("GetServiceInfo failed, continuing without it")
+
             self._save_cookies()
             return {
                 "consumption": consumption,
+                "hourly": hourly,
                 "service_info": service_info,
             }
         except KarlstadsenergiAuthError as err:

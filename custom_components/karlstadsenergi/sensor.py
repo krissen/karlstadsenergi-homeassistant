@@ -358,4 +358,22 @@ class ElectricityConsumptionSensor(
                     "dateInterval", "",
                 )
 
+        # Hourly data (last 24h for today)
+        hourly = (
+            self.coordinator.data.get("hourly", {})
+            if self.coordinator.data
+            else {}
+        )
+        hourly_chart = hourly.get("DetailedConsumptionChart", {})
+        hourly_series = hourly_chart.get("SeriesList", [])
+        if hourly_series:
+            hourly_points = hourly_series[0].get("data", [])
+            # Last 24 points
+            recent = hourly_points[-24:] if len(hourly_points) >= 24 else hourly_points
+            attrs["hourly_consumption"] = [
+                {"time": p.get("dateInterval", ""), "kWh": p.get("y", 0)}
+                for p in recent
+            ]
+            attrs["hourly_data_points"] = len(hourly_points)
+
         return attrs
