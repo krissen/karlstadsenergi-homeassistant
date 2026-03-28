@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
 import logging
 import uuid
 from typing import Any
 
 import aiohttp
+from yarl import URL
 
 from .const import (
     BASE_URL,
@@ -89,13 +91,11 @@ class KarlstadsenergiApi:
     async def _ensure_session(self) -> aiohttp.ClientSession:
         """Create session if needed."""
         if self._session is None or self._session.closed:
-            jar = aiohttp.CookieJar(unsafe=True)
+            jar = aiohttp.CookieJar()
             self._session = aiohttp.ClientSession(cookie_jar=jar)
             self._authenticated = False
             # Restore saved cookies if available
             if self._saved_cookies:
-                from yarl import URL
-
                 for name, value in self._saved_cookies.items():
                     jar.update_cookies(
                         {name: value},
@@ -241,6 +241,10 @@ class KarlstadsenergiApi:
 
         Returns a combined list of accounts to choose from, each with:
         - FullName, CustomerCode, CustomerId, SubUserId (optional)
+
+        Note: The upstream API requires personnummer in the URL path.
+        This is a design decision in the Karlstadsenergi portal, not ours.
+        All requests use HTTPS so the path is encrypted in transit.
         """
         # Get main customers
         url = (
@@ -296,8 +300,6 @@ class KarlstadsenergiApi:
         sub_user_id: str = "",
     ) -> bool:
         """Complete BankID login for a selected account."""
-        import base64
-
         b64_customer_id = base64.b64encode(
             customer_id.encode("utf-8"),
         ).decode("ascii")
