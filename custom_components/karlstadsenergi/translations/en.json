@@ -3,9 +3,12 @@
     "step": {
       "user": {
         "title": "Karlstadsenergi",
-        "description": "Choose how to log in.",
+        "description": "Log in to your Karlstadsenergi account. Customer number and password is recommended for most users.",
         "data": {
           "auth_method": "Authentication method"
+        },
+        "data_description": {
+          "auth_method": "Choose customer number & password for the simplest setup. BankID is available as an alternative but requires scanning a QR code."
         }
       },
       "bankid_personnummer": {
@@ -25,7 +28,7 @@
       },
       "bankid": {
         "title": "Karlstadsenergi - BankID",
-        "description": "Scan this QR code with BankID on your phone:\n\n![BankID QR](data:image/png;base64,{qr_code})\n\nOr on your phone: [Open BankID app](bankid:///?autostarttoken={auto_start_token}&redirect=null)\n\nAfter signing, click **Submit**.",
+        "description": "Open BankID on your phone and sign in.\n\nOn your phone: [Open BankID app](bankid:///?autostarttoken={auto_start_token}&redirect=null)\n\nAfter signing, click **Submit**.",
         "data": {}
       },
       "select_account": {
@@ -37,7 +40,7 @@
       },
       "reauth_confirm": {
         "title": "Karlstadsenergi - Re-authenticate",
-        "description": "Session expired for {personnummer}. Click Submit to start BankID sign-in.",
+        "description": "Session expired for account {personnummer}. Click Submit to re-authenticate.",
         "data": {}
       }
     },
@@ -59,8 +62,12 @@
     "step": {
       "init": {
         "title": "Karlstadsenergi Options",
+        "description": "Configure update settings for the Karlstadsenergi integration.",
         "data": {
           "update_interval": "Update interval (hours)"
+        },
+        "data_description": {
+          "update_interval": "How often to fetch new data from Karlstadsenergi (1-24 hours)."
         }
       }
     }
