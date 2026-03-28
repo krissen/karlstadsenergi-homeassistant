@@ -17,7 +17,7 @@ A Home Assistant integration for [Karlstads Energi](https://www.karlstadsenergi.
 ## Features
 
 - **Waste collection sensors** -- Next pickup date for each waste type (food & residual waste, glass/metal, plastic & paper packaging)
-- **Waste collection calendar** -- Calendar entities compatible with [TrashCard](https://github.com/idaho/hassio-trash-card) and HA's built-in Calendar card
+- **Waste collection calendar** -- Calendar entities for HA's built-in Calendar card, [Mushroom Cards](https://github.com/piitaya/lovelace-mushroom), and other dashboard cards
 - **Pickup reminders** -- Binary sensors for "pickup tomorrow" per waste type
 - **Electricity consumption** -- Daily and hourly consumption data with year-over-year comparison, Energy Dashboard compatible
 - **Electricity price** -- Effective energy price (SEK/kWh) derived from your invoice fee breakdown, Energy Dashboard compatible
@@ -115,7 +115,7 @@ One sensor is created per active waste collection service at your address.
 
 ### Waste collection calendar
 
-One calendar entity per waste type, compatible with [TrashCard](https://github.com/idaho/hassio-trash-card) and HA's built-in Calendar card.
+One calendar entity per waste type, compatible with HA's built-in Calendar card and custom cards like Mushroom or TrashCard.
 
 | Calendar | Entity ID example | Event |
 |----------|-------------------|-------|
@@ -218,6 +218,12 @@ One sensor per contract (grid, trading, waste).
 | `gsrn_number` | string | Metering point identifier (GSRN) |
 | `net_area_code` | string | Network area code |
 | `electricity_region` | string | Electricity price region |
+
+---
+
+## Dashboard examples
+
+See **[Dashboard examples](docs/user/dashboard-examples.md)** for card configurations using Mushroom Cards, Custom Button Card, the built-in Calendar card, and more.
 
 ---
 
