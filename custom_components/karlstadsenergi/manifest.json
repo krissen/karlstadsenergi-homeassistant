@@ -5,6 +5,7 @@
   "config_flow": true,
   "dependencies": [],
   "documentation": "https://github.com/krissen/karlstadsenergi-homeassistant",
+  "integration_type": "hub",
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/krissen/karlstadsenergi-homeassistant/issues",
   "requirements": [],

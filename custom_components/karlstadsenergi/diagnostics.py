@@ -46,12 +46,14 @@ async def async_get_config_entry_diagnostics(
 
     return {
         "config_entry": async_redact_data(entry.as_dict(), TO_REDACT_CONFIG),
-        "waste_data": async_redact_data(runtime.waste_coordinator.data, TO_REDACT_DATA),
+        "waste_data": async_redact_data(
+            runtime.waste_coordinator.data or {}, TO_REDACT_DATA
+        ),
         "consumption_data": async_redact_data(
-            runtime.consumption_coordinator.data, TO_REDACT_DATA
+            runtime.consumption_coordinator.data or {}, TO_REDACT_DATA
         ),
         "contract_data": async_redact_data(
-            runtime.contract_coordinator.data, TO_REDACT_DATA
+            runtime.contract_coordinator.data or {}, TO_REDACT_DATA
         ),
-        "spot_price_data": runtime.spot_price_coordinator.data,
+        "spot_price_data": runtime.spot_price_coordinator.data or {},
     }

@@ -22,7 +22,7 @@ async def async_setup_entry(
 ) -> None:
     """Set up Karlstadsenergi calendar entities."""
     waste_coordinator = entry.runtime_data.waste_coordinator
-    customer_number = entry.data[CONF_PERSONNUMMER]
+    customer_id = entry.data.get("customer_code") or entry.data[CONF_PERSONNUMMER]
 
     entities: list[CalendarEntity] = []
 
@@ -38,7 +38,7 @@ async def async_setup_entry(
                 entities.append(
                     WasteCollectionCalendar(
                         coordinator=waste_coordinator,
-                        customer_number=customer_number,
+                        customer_id=customer_id,
                         service=service,
                     )
                 )
@@ -50,7 +50,7 @@ async def async_setup_entry(
                 entities.append(
                     WasteCollectionSummaryCalendar(
                         coordinator=waste_coordinator,
-                        customer_number=customer_number,
+                        customer_id=customer_id,
                         item=item,
                     )
                 )
@@ -69,11 +69,11 @@ class WasteCollectionCalendar(
     def __init__(
         self,
         coordinator: KarlstadsenergiWasteCoordinator,
-        customer_number: str,
+        customer_id: str,
         service: dict[str, Any],
     ) -> None:
         super().__init__(coordinator)
-        self._customer_number = customer_number
+        self._customer_id = customer_id
         self._service_id = service["FlexServiceId"]
         self._waste_type = service.get("FlexServiceContainTypeValue", "")
         self._slug = slug_for_waste_type(self._waste_type)
@@ -82,14 +82,14 @@ class WasteCollectionCalendar(
         self._place_id = service.get("FlexServicePlaceId", "")
 
         self._attr_unique_id = (
-            f"{DOMAIN}_{customer_number}_{self._place_id}_{self._slug}_calendar"
+            f"{DOMAIN}_{customer_id}_{self._place_id}_{self._slug}_calendar"
         )
         self._attr_name = self._waste_type
 
     @property
     def device_info(self) -> DeviceInfo:
         return DeviceInfo(
-            identifiers={(DOMAIN, f"{self._customer_number}_{self._place_id}")},
+            identifiers={(DOMAIN, f"{self._customer_id}_{self._place_id}")},
             name=f"Karlstadsenergi ({self._address})",
             manufacturer="Karlstads Energi",
         )
@@ -154,22 +154,22 @@ class WasteCollectionSummaryCalendar(
     def __init__(
         self,
         coordinator: KarlstadsenergiWasteCoordinator,
-        customer_number: str,
+        customer_id: str,
         item: dict[str, Any],
     ) -> None:
         super().__init__(coordinator)
-        self._customer_number = customer_number
+        self._customer_id = customer_id
         self._waste_type = item.get("Type", "")
         self._slug = slug_for_waste_type(self._waste_type)
         self._address = item.get("Address", "").strip()
 
-        self._attr_unique_id = f"{DOMAIN}_{customer_number}_{self._slug}_calendar"
+        self._attr_unique_id = f"{DOMAIN}_{customer_id}_{self._slug}_calendar"
         self._attr_name = self._waste_type
 
     @property
     def device_info(self) -> DeviceInfo:
         return DeviceInfo(
-            identifiers={(DOMAIN, f"{self._customer_number}")},
+            identifiers={(DOMAIN, f"{self._customer_id}")},
             name=f"Karlstadsenergi ({self._address})",
             manufacturer="Karlstads Energi",
         )

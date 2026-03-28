@@ -45,7 +45,7 @@ async def async_setup_entry(
 ) -> None:
     """Set up Karlstadsenergi sensors."""
     runtime = entry.runtime_data
-    customer_number = entry.data[CONF_PERSONNUMMER]
+    customer_id = entry.data.get("customer_code") or entry.data[CONF_PERSONNUMMER]
 
     entities: list[SensorEntity] = []
 
@@ -63,7 +63,7 @@ async def async_setup_entry(
                 entities.append(
                     WasteCollectionSensor(
                         coordinator=runtime.waste_coordinator,
-                        customer_number=customer_number,
+                        customer_id=customer_id,
                         service=service,
                     )
                 )
@@ -76,7 +76,7 @@ async def async_setup_entry(
                 entities.append(
                     WasteCollectionSummary(
                         coordinator=runtime.waste_coordinator,
-                        customer_number=customer_number,
+                        customer_id=customer_id,
                         item=item,
                     )
                 )
@@ -98,7 +98,7 @@ async def async_setup_entry(
             entities.append(
                 ElectricityConsumptionSensor(
                     coordinator=runtime.consumption_coordinator,
-                    customer_number=customer_number,
+                    customer_id=customer_id,
                 )
             )
 
@@ -108,7 +108,7 @@ async def async_setup_entry(
             entities.append(
                 ElectricityPriceSensor(
                     coordinator=runtime.consumption_coordinator,
-                    customer_number=customer_number,
+                    customer_id=customer_id,
                 )
             )
 
@@ -116,7 +116,7 @@ async def async_setup_entry(
     entities.append(
         SpotPriceSensor(
             coordinator=runtime.spot_price_coordinator,
-            customer_number=customer_number,
+            customer_id=customer_id,
             address=site_address,
             place_id=site_place_id,
         )
@@ -130,7 +130,7 @@ async def async_setup_entry(
                 entities.append(
                     ContractSensor(
                         coordinator=runtime.contract_coordinator,
-                        customer_number=customer_number,
+                        customer_id=customer_id,
                         contract=contract,
                         address=site_address,
                         place_id=site_place_id,
@@ -153,11 +153,11 @@ class WasteCollectionSensor(
     def __init__(
         self,
         coordinator: KarlstadsenergiWasteCoordinator,
-        customer_number: str,
+        customer_id: str,
         service: dict[str, Any],
     ) -> None:
         super().__init__(coordinator)
-        self._customer_number = customer_number
+        self._customer_id = customer_id
         self._service_id = service["FlexServiceId"]
         self._waste_type = service.get("FlexServiceContainTypeValue", "")
         self._slug = slug_for_waste_type(self._waste_type)
@@ -167,15 +167,14 @@ class WasteCollectionSensor(
         self._place_id = service.get("FlexServicePlaceId", "")
 
         self._attr_unique_id = (
-            f"{DOMAIN}_{customer_number}_{self._place_id}_{self._slug}"
+            f"{DOMAIN}_{customer_id}_{self._place_id}_{self._slug}"
         )
         self._attr_name = self._waste_type
-        self._attr_translation_key = self._slug
 
     @property
     def device_info(self) -> DeviceInfo:
         return DeviceInfo(
-            identifiers={(DOMAIN, f"{self._customer_number}_{self._place_id}")},
+            identifiers={(DOMAIN, f"{self._customer_id}_{self._place_id}")},
             name=f"Karlstadsenergi ({self._address})",
             manufacturer="Karlstads Energi",
         )
@@ -225,23 +224,23 @@ class WasteCollectionSummary(
     def __init__(
         self,
         coordinator: KarlstadsenergiWasteCoordinator,
-        customer_number: str,
+        customer_id: str,
         item: dict[str, Any],
     ) -> None:
         super().__init__(coordinator)
-        self._customer_number = customer_number
+        self._customer_id = customer_id
         self._waste_type = item.get("Type", "")
         self._slug = slug_for_waste_type(self._waste_type)
         self._address = item.get("Address", "").strip()
         self._container_size = item.get("Size", "")
 
-        self._attr_unique_id = f"{DOMAIN}_{customer_number}_{self._slug}"
+        self._attr_unique_id = f"{DOMAIN}_{customer_id}_{self._slug}"
         self._attr_name = self._waste_type
 
     @property
     def device_info(self) -> DeviceInfo:
         return DeviceInfo(
-            identifiers={(DOMAIN, f"{self._customer_number}")},
+            identifiers={(DOMAIN, f"{self._customer_id}")},
             name=f"Karlstadsenergi ({self._address})",
             manufacturer="Karlstads Energi",
         )
@@ -283,27 +282,26 @@ class ElectricityConsumptionSensor(
     _attr_has_entity_name = True
     _attr_device_class = SensorDeviceClass.ENERGY
     _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
-    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_state_class = SensorStateClass.TOTAL
     _attr_icon = "mdi:flash"
     _attr_suggested_display_precision = 1
 
     def __init__(
         self,
         coordinator: KarlstadsenergiConsumptionCoordinator,
-        customer_number: str,
+        customer_id: str,
     ) -> None:
         super().__init__(coordinator)
-        self._customer_number = customer_number
-        self._attr_unique_id = f"{DOMAIN}_{customer_number}_electricity"
+        self._customer_id = customer_id
+        self._attr_unique_id = f"{DOMAIN}_{customer_id}_electricity"
         self._attr_name = "Electricity consumption"
-        self._attr_translation_key = "electricity_consumption"
 
     @property
     def device_info(self) -> DeviceInfo:
         address = self._get_address()
         place_id = self._get_site_id()
         return DeviceInfo(
-            identifiers={(DOMAIN, f"{self._customer_number}_{place_id}")},
+            identifiers={(DOMAIN, f"{self._customer_id}_{place_id}")},
             name=f"Karlstadsenergi ({address})",
             manufacturer="Karlstads Energi",
         )
@@ -348,20 +346,6 @@ class ElectricityConsumptionSensor(
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         attrs: dict[str, Any] = {}
-
-        # Service info
-        service_info = (
-            self.coordinator.data.get("service_info", {})
-            if self.coordinator.data
-            else {}
-        )
-        if service_info:
-            attrs["meter_number"] = service_info.get("MeterNumber", "")
-            attrs["service_identifier"] = service_info.get(
-                "ServiceIdentifier",
-                "",
-            )
-            attrs["net_area"] = service_info.get("NetAreaId", "")
 
         # Comparison data
         consumption = (
@@ -485,20 +469,19 @@ class ElectricityPriceSensor(
     def __init__(
         self,
         coordinator: KarlstadsenergiConsumptionCoordinator,
-        customer_number: str,
+        customer_id: str,
     ) -> None:
         super().__init__(coordinator)
-        self._customer_number = customer_number
-        self._attr_unique_id = f"{DOMAIN}_{customer_number}_electricity_price"
+        self._customer_id = customer_id
+        self._attr_unique_id = f"{DOMAIN}_{customer_id}_electricity_price"
         self._attr_name = "Electricity price"
-        self._attr_translation_key = "electricity_price"
 
     @property
     def device_info(self) -> DeviceInfo:
         address = self._get_address()
         place_id = self._get_site_id()
         return DeviceInfo(
-            identifiers={(DOMAIN, f"{self._customer_number}_{place_id}")},
+            identifiers={(DOMAIN, f"{self._customer_id}_{place_id}")},
             name=f"Karlstadsenergi ({address})",
             manufacturer="Karlstads Energi",
         )
@@ -599,24 +582,23 @@ class SpotPriceSensor(
     def __init__(
         self,
         coordinator: KarlstadsenergiSpotPriceCoordinator,
-        customer_number: str,
+        customer_id: str,
         address: str = "",
         place_id: str = "",
     ) -> None:
         super().__init__(coordinator)
-        self._customer_number = customer_number
+        self._customer_id = customer_id
         self._address = address
         self._place_id = place_id
-        self._attr_unique_id = f"{DOMAIN}_{customer_number}_spot_price"
+        self._attr_unique_id = f"{DOMAIN}_{customer_id}_spot_price"
         self._attr_name = "Spot price"
-        self._attr_translation_key = "spot_price"
 
     @property
     def device_info(self) -> DeviceInfo:
         identifier = (
-            f"{self._customer_number}_{self._place_id}"
+            f"{self._customer_id}_{self._place_id}"
             if self._place_id
-            else self._customer_number
+            else self._customer_id
         )
         name = (
             f"Karlstadsenergi ({self._address})" if self._address else "Karlstadsenergi"
@@ -689,13 +671,13 @@ class ContractSensor(
     def __init__(
         self,
         coordinator: KarlstadsenergiContractCoordinator,
-        customer_number: str,
+        customer_id: str,
         contract: dict[str, Any],
         address: str = "",
         place_id: str = "",
     ) -> None:
         super().__init__(coordinator)
-        self._customer_number = customer_number
+        self._customer_id = customer_id
         self._address = address
         self._place_id = place_id
         self._utility_name = contract.get("UtilityName", "")
@@ -703,17 +685,16 @@ class ContractSensor(
         self._contract_id = contract.get("ContractId", "")
 
         self._attr_unique_id = (
-            f"{DOMAIN}_{customer_number}_contract_{self._contract_id}"
+            f"{DOMAIN}_{customer_id}_contract_{self._contract_id}"
         )
         self._attr_name = f"Contract {self._utility_name}"
-        self._attr_translation_key = f"contract_{self._slug}"
 
     @property
     def device_info(self) -> DeviceInfo:
         identifier = (
-            f"{self._customer_number}_{self._place_id}"
+            f"{self._customer_id}_{self._place_id}"
             if self._place_id
-            else self._customer_number
+            else self._customer_id
         )
         name = (
             f"Karlstadsenergi ({self._address})" if self._address else "Karlstadsenergi"
@@ -746,7 +727,6 @@ class ContractSensor(
             return {}
         return {
             "contract_id": contract.get("ContractId"),
-            "contract_code": contract.get("ContractCode"),
             "contract_start_date": contract.get("ContractStartDate"),
             "contract_end_date": contract.get("ContractEndDate"),
             "utility_name": contract.get("UtilityName"),
