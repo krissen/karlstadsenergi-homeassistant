@@ -426,15 +426,32 @@ class KarlstadsenergiApi:
         return result
 
     async def async_get_consumption(self) -> dict[str, Any]:
-        """Get electricity consumption data."""
-        result = await self._request(URL_CONSUMPTION)
+        """Get electricity consumption data.
+
+        Requires visiting the consumption page first to initialize server state.
+        """
+        session = await self._ensure_session()
+        # Visit consumption page to initialize server-side state
+        try:
+            async with asyncio.timeout(REQUEST_TIMEOUT):
+                await session.get(
+                    f"{BASE_URL}/consumption/consumption.aspx",
+                    headers={"X-Requested-With": "XMLHttpRequest"},
+                )
+        except Exception:
+            _LOGGER.debug("Failed to visit consumption page")
+
+        # Use the OnLoad endpoint (works after page visit)
+        url = f"{BASE_URL}/Consumption/Consumption.aspx/GetConsumptionViewModelOnLoad"
+        result = await self._request(url)
         if not isinstance(result, dict):
             return {}
         return result
 
     async def async_get_service_info(self) -> dict[str, Any]:
         """Get service/meter info."""
-        result = await self._request(URL_SERVICE_INFO)
+        url = f"{BASE_URL}/consumption/consumption.aspx/GetServiceInfo"
+        result = await self._request(url)
         if not isinstance(result, dict):
             return {}
         return result
