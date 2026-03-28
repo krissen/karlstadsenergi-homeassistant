@@ -154,11 +154,19 @@ class KarlstadsenergiApi:
         data = await resp.json()
 
         result = _parse_aspnet_response(data)
-        status = result.get("Result", "") if isinstance(result, dict) else str(result)
+        if isinstance(result, dict):
+            # Result can be True (boolean) or "OK" (string)
+            status = result.get("Result")
+            login_status = result.get("LoginResultStatus")
+        else:
+            status = result
+            login_status = None
 
-        if status != "OK":
+        if status is not True and status != "OK":
             self._authenticated = False
-            raise KarlstadsenergiAuthError(f"Authentication failed: {status}")
+            raise KarlstadsenergiAuthError(
+                f"Authentication failed: Result={status}, LoginResultStatus={login_status}"
+            )
 
         self._authenticated = True
         _LOGGER.debug("Password authentication successful")
