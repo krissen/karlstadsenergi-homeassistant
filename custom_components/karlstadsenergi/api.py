@@ -12,6 +12,7 @@ import aiohttp
 
 from .const import (
     BASE_URL,
+    URL_CONTRACT_DETAILS,
     URL_FLEX_DATES,
     URL_FLEX_SERVICES,
     URL_LOGIN,
@@ -94,6 +95,7 @@ class KarlstadsenergiApi:
             # Restore saved cookies if available
             if self._saved_cookies:
                 from yarl import URL
+
                 for name, value in self._saved_cookies.items():
                     jar.update_cookies(
                         {name: value},
@@ -118,7 +120,10 @@ class KarlstadsenergiApi:
         self._saved_cookies = cookies
 
     async def _post(
-        self, url: str, json_data: Any = None, **kwargs: Any,
+        self,
+        url: str,
+        json_data: Any = None,
+        **kwargs: Any,
     ) -> aiohttp.ClientResponse:
         """POST with timeout and error handling."""
         session = await self._ensure_session()
@@ -135,9 +140,7 @@ class KarlstadsenergiApi:
                 "Timeout connecting to Karlstadsenergi"
             ) from err
         except aiohttp.ClientError as err:
-            raise KarlstadsenergiConnectionError(
-                f"Connection error: {err}"
-            ) from err
+            raise KarlstadsenergiConnectionError(f"Connection error: {err}") from err
 
     # ── Password authentication ──────────────────────────────
 
@@ -212,9 +215,7 @@ class KarlstadsenergiApi:
 
         if data.get("HasError"):
             fault = data.get("GrpFault", {})
-            raise KarlstadsenergiAuthError(
-                f"BankID error: {fault}"
-            )
+            raise KarlstadsenergiAuthError(f"BankID error: {fault}")
 
         return {"status": status, "data": data}
 
@@ -232,7 +233,9 @@ class KarlstadsenergiApi:
         return data
 
     async def bankid_get_customers(
-        self, personnummer: str, transaction_id: str,
+        self,
+        personnummer: str,
+        transaction_id: str,
     ) -> list[dict[str, Any]]:
         """Get customers and sub-users for the authenticated person.
 
@@ -241,8 +244,7 @@ class KarlstadsenergiApi:
         """
         # Get main customers
         url = (
-            f"{BASE_URL}/api/grp2/GetCustomerByPinCode"
-            f"/{personnummer}/{transaction_id}"
+            f"{BASE_URL}/api/grp2/GetCustomerByPinCode/{personnummer}/{transaction_id}"
         )
         resp = await self._post(url)
         resp.raise_for_status()
@@ -261,24 +263,28 @@ class KarlstadsenergiApi:
         # Build unified account list
         accounts: list[dict[str, Any]] = []
         for c in customers:
-            accounts.append({
-                "full_name": c.get("FullName", ""),
-                "customer_code": c.get("CustomerCode", ""),
-                "customer_id": c.get("CustomerId", ""),
-                "sub_user_id": "",
-            })
+            accounts.append(
+                {
+                    "full_name": c.get("FullName", ""),
+                    "customer_code": c.get("CustomerCode", ""),
+                    "customer_id": c.get("CustomerId", ""),
+                    "sub_user_id": "",
+                }
+            )
 
         # Add sub-users (other people's accounts you have access to)
         for su in sub_users:
             first = su.get("ParentFirstName", "")
             last = su.get("ParentLastName", "")
             name = f"{first} {last}".strip() if first else last
-            accounts.append({
-                "full_name": name,
-                "customer_code": su.get("ParentCode", ""),
-                "customer_id": su.get("ParentIdEncrypted", ""),
-                "sub_user_id": str(su.get("UserId", "")),
-            })
+            accounts.append(
+                {
+                    "full_name": name,
+                    "customer_code": su.get("ParentCode", ""),
+                    "customer_id": su.get("ParentIdEncrypted", ""),
+                    "sub_user_id": str(su.get("UserId", "")),
+                }
+            )
 
         return accounts
 
@@ -291,6 +297,7 @@ class KarlstadsenergiApi:
     ) -> bool:
         """Complete BankID login for a selected account."""
         import base64
+
         b64_customer_id = base64.b64encode(
             customer_id.encode("utf-8"),
         ).decode("ascii")
@@ -370,9 +377,7 @@ class KarlstadsenergiApi:
             raise KarlstadsenergiAuthError("Session expired and re-auth failed")
 
         if resp.status != 200:
-            raise KarlstadsenergiApiError(
-                f"API returned status {resp.status}"
-            )
+            raise KarlstadsenergiApiError(f"API returned status {resp.status}")
 
         content_type = resp.headers.get("Content-Type", "")
         if "json" not in content_type:
@@ -420,7 +425,8 @@ class KarlstadsenergiApi:
         return result
 
     async def async_get_flex_dates(
-        self, service_ids: list[int],
+        self,
+        service_ids: list[int],
     ) -> dict[str, str]:
         """Get next planned pickup dates for given service IDs."""
         if not service_ids:
@@ -479,7 +485,8 @@ class KarlstadsenergiApi:
         return result
 
     async def async_get_hourly_consumption(
-        self, consumption_model: dict[str, Any],
+        self,
+        consumption_model: dict[str, Any],
     ) -> dict[str, Any]:
         """Get hourly consumption using the consumption model from OnLoad.
 
@@ -491,7 +498,7 @@ class KarlstadsenergiApi:
         model["IsPageLoad"] = False
 
         url = f"{BASE_URL}/Consumption/Consumption.aspx/GetConsumption"
-        session = await self._ensure_session()
+        await self._ensure_session()
         resp = await self._post(
             url,
             json_data={"data": json.dumps(model)},
@@ -511,6 +518,64 @@ class KarlstadsenergiApi:
         """Get service/meter info."""
         url = f"{BASE_URL}/consumption/consumption.aspx/GetServiceInfo"
         result = await self._request(url)
+        if not isinstance(result, dict):
+            return {}
+        return result
+
+    async def async_get_contract_details(
+        self,
+        site_ids: list[str],
+    ) -> list[dict[str, Any]]:
+        """Get contract details for given site/use-place IDs.
+
+        Visits the contracts page first to initialize server-side state.
+        """
+        if not self._authenticated:
+            await self.authenticate()
+        session = await self._ensure_session()
+        try:
+            async with asyncio.timeout(REQUEST_TIMEOUT):
+                await session.get(f"{BASE_URL}/contract/contracts.aspx")
+        except Exception:
+            _LOGGER.debug("Failed to visit contracts page")
+
+        result = await self._request(
+            URL_CONTRACT_DETAILS,
+            {"usePlaces": site_ids},
+        )
+        if not isinstance(result, list):
+            return []
+        return result
+
+    async def async_get_fee_consumption(
+        self,
+        consumption_model: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Get fee-type consumption breakdown (SEK by month).
+
+        Modifies the consumption model to request invoice/fee data.
+        """
+        model = {**consumption_model}
+        model["IsFeeTypeRequest"] = True
+        model["Loadoptions"] = ["Invoice"]
+        model["TargetUnit"] = "SEK"
+        model["Interval"] = "MONTH"
+        model["IntervalEnum"] = 2
+        model["IsPageLoad"] = False
+
+        url = f"{BASE_URL}/Consumption/Consumption.aspx/GetConsumption"
+        await self._ensure_session()
+        resp = await self._post(
+            url,
+            json_data={"data": json.dumps(model)},
+            allow_redirects=False,
+        )
+        if resp.status != 200:
+            raise KarlstadsenergiApiError(
+                f"GetConsumption (fee) returned {resp.status}"
+            )
+        data = await resp.json()
+        result = _parse_aspnet_response(data)
         if not isinstance(result, dict):
             return {}
         return result

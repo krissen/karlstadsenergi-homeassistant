@@ -18,6 +18,7 @@ TO_REDACT_CONFIG = {
     "customer_id",
     "sub_user_id",
     "customer_code",
+    "GsrnNumber",
 }
 
 
@@ -29,9 +30,15 @@ async def async_get_config_entry_diagnostics(
     data = hass.data[DOMAIN][entry.entry_id]
     waste_coordinator = data["waste_coordinator"]
     consumption_coordinator = data["consumption_coordinator"]
+    contract_coordinator = data.get("contract_coordinator")
+    spot_price_coordinator = data.get("spot_price_coordinator")
 
     return {
         "config_entry": async_redact_data(entry.as_dict(), TO_REDACT_CONFIG),
         "waste_data": waste_coordinator.data,
         "consumption_data": consumption_coordinator.data,
+        "contract_data": (contract_coordinator.data if contract_coordinator else None),
+        "spot_price_data": (
+            spot_price_coordinator.data if spot_price_coordinator else None
+        ),
     }
