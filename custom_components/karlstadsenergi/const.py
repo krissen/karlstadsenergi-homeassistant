@@ -2,7 +2,7 @@
 
 DOMAIN = "karlstadsenergi"
 NAME = "Karlstadsenergi"
-VERSION = "0.1.0"
+VERSION = "0.2.0"
 
 PLATFORMS = ["sensor", "calendar", "binary_sensor"]
 
@@ -42,6 +42,7 @@ WASTE_TYPE_SLUG: dict[str, str] = {
 }
 
 # Skip these service groups (billing only, no pickup dates)
+# NOTE: "Grundavgft" matches the exact API response (not a typo for "Grundavgift")
 SKIP_GROUP_NAMES = {"Grundavgft"}
 
 # Contract type slug mapping (Swedish UtilityName -> English entity slug)
