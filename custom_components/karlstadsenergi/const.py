@@ -4,7 +4,7 @@ DOMAIN = "karlstadsenergi"
 NAME = "Karlstadsenergi"
 VERSION = "0.1.0"
 
-PLATFORMS = ["sensor"]
+PLATFORMS = ["sensor", "calendar", "binary_sensor"]
 
 # URLs
 BASE_URL = "https://minasidor.karlstadsenergi.se"
