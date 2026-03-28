@@ -53,27 +53,30 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
 
         if user_input is not None:
-            self._personnummer = user_input[CONF_PERSONNUMMER]
             self._auth_method = user_input.get(CONF_AUTH_METHOD, AUTH_BANKID)
-
-            await self.async_set_unique_id(self._personnummer)
-            self._abort_if_unique_id_configured()
 
             if self._auth_method == AUTH_PASSWORD:
                 return await self.async_step_password()
-            return await self.async_step_bankid()
+
+            self._personnummer = user_input.get(CONF_PERSONNUMMER, "")
+            if not self._personnummer:
+                errors[CONF_PERSONNUMMER] = "invalid_auth"
+            else:
+                await self.async_set_unique_id(self._personnummer)
+                self._abort_if_unique_id_configured()
+                return await self.async_step_bankid()
 
         return self.async_show_form(
             step_id="user",
             data_schema=vol.Schema(
                 {
-                    vol.Required(CONF_PERSONNUMMER): str,
                     vol.Required(CONF_AUTH_METHOD, default=AUTH_BANKID): vol.In(
                         {
                             AUTH_BANKID: "Mobilt BankID",
                             AUTH_PASSWORD: "Kundnummer & lösenord",
                         }
                     ),
+                    vol.Optional(CONF_PERSONNUMMER): str,
                 }
             ),
             errors=errors,
@@ -86,13 +89,14 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
 
         if user_input is not None:
+            customer_number = user_input["customer_number"]
             password = user_input[CONF_PASSWORD]
             api = KarlstadsenergiApi(
-                self._personnummer, AUTH_PASSWORD, password,
+                customer_number, AUTH_PASSWORD, password,
             )
             try:
                 await api.authenticate_password()
-                await api.async_get_flex_services()
+                await api.async_get_next_flex_dates()
                 cookies = api.get_session_cookies()
             except KarlstadsenergiAuthError:
                 errors["base"] = "invalid_auth"
@@ -105,10 +109,13 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
                 await api.async_close()
 
             if not errors:
+                # Pass API to setup_entry
+                self.hass.data.setdefault(DOMAIN, {})
+
                 return self.async_create_entry(
-                    title=f"Karlstadsenergi ({self._personnummer})",
+                    title=f"Karlstadsenergi ({customer_number})",
                     data={
-                        CONF_PERSONNUMMER: self._personnummer,
+                        CONF_PERSONNUMMER: customer_number,
                         CONF_AUTH_METHOD: AUTH_PASSWORD,
                         CONF_PASSWORD: password,
                         "session_cookies": cookies,
@@ -118,7 +125,10 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="password",
             data_schema=vol.Schema(
-                {vol.Required(CONF_PASSWORD): str}
+                {
+                    vol.Required("customer_number"): str,
+                    vol.Required(CONF_PASSWORD): str,
+                }
             ),
             errors=errors,
         )
