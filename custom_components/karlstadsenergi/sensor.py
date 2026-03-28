@@ -16,6 +16,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.util import dt as dt_util
 
 from . import (
     KarlstadsenergiConsumptionCoordinator,
@@ -289,6 +290,33 @@ class ElectricityConsumptionSensor(
         if value is not None:
             return round(float(value), 3)
         return None
+
+    @property
+    def last_reset(self) -> datetime.datetime | None:
+        """Return the start of the day the consumption value corresponds to."""
+        consumption = (
+            self.coordinator.data.get("consumption", {})
+            if self.coordinator.data
+            else {}
+        )
+        chart = consumption.get("DetailedConsumptionChart", {})
+        series_list = chart.get("SeriesList", [])
+        if not series_list:
+            return None
+        data_points = series_list[0].get("data", [])
+        if not data_points:
+            return None
+        date_str = data_points[-1].get("dateInterval", "")
+        if not date_str:
+            return None
+        try:
+            naive_date = datetime.date.fromisoformat(date_str[:10])
+            midnight = datetime.datetime.combine(
+                naive_date, datetime.time.min,
+            )
+            return midnight.replace(tzinfo=dt_util.get_default_time_zone())
+        except (ValueError, TypeError):
+            return None
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
