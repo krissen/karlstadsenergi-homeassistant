@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from datetime import timedelta
 
-from homeassistant.config_entries import ConfigEntry, ConfigEntryState
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_PASSWORD
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
@@ -96,7 +95,6 @@ class KarlstadsenergiWasteCoordinator(_CookieSavingCoordinator):
                 if services:
                     service_ids = [s["FlexServiceId"] for s in services]
                     dates = await self.api.async_get_flex_dates(service_ids)
-                _LOGGER.debug("Flex services: %d active, dates=%s", len(services), dates)
             except Exception:
                 _LOGGER.debug("Detailed flex services unavailable", exc_info=True)
 
@@ -104,7 +102,6 @@ class KarlstadsenergiWasteCoordinator(_CookieSavingCoordinator):
             next_dates = []
             if not services:
                 next_dates = await self.api.async_get_next_flex_dates()
-                _LOGGER.debug("Fallback next_dates: %d items", len(next_dates))
 
             self._save_cookies()
             return {
@@ -191,7 +188,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     pending = hass.data[DOMAIN].pop("pending_api", None)
     if pending is not None and pending._authenticated:
         api = pending
-        _LOGGER.debug("Reusing authenticated API session from config flow")
 
     if api is None:
         api = KarlstadsenergiApi(personnummer, auth_method, password)
@@ -199,7 +195,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         saved_cookies = entry.data.get("session_cookies")
         if saved_cookies:
             api.set_session_cookies(saved_cookies)
-            _LOGGER.debug("Restored session cookies from config entry")
         elif auth_method == AUTH_PASSWORD:
             try:
                 await api.authenticate()
@@ -244,9 +239,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     async def _heartbeat(_now=None) -> None:
         try:
             await api.async_heartbeat()
-            _LOGGER.debug("Heartbeat sent")
         except Exception:
-            _LOGGER.debug("Heartbeat failed (session may have expired)")
+            pass
 
     cancel_heartbeat = async_track_time_interval(
         hass, _heartbeat, HEARTBEAT_INTERVAL,

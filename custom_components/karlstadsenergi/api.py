@@ -12,11 +12,9 @@ import aiohttp
 
 from .const import (
     BASE_URL,
-    URL_CONSUMPTION,
     URL_FLEX_DATES,
     URL_FLEX_SERVICES,
     URL_LOGIN,
-    URL_SERVICE_INFO,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -103,7 +101,6 @@ class KarlstadsenergiApi:
                     )
                 self._authenticated = True
                 self._saved_cookies = None
-                _LOGGER.debug("Restored session from saved cookies")
         return self._session
 
     def get_session_cookies(self) -> dict[str, str]:
@@ -173,7 +170,7 @@ class KarlstadsenergiApi:
             )
 
         self._authenticated = True
-        _LOGGER.debug("Password authentication successful")
+        _LOGGER.info("Password authentication successful")
         return True
 
     # ── BankID authentication ────────────────────────────────
@@ -252,7 +249,6 @@ class KarlstadsenergiApi:
         customers = await self._parse_grp2_json(resp)
         if not isinstance(customers, list):
             customers = []
-        _LOGGER.debug("Customers: %s", str(customers)[:300])
 
         # Get sub-users
         url_sub = f"{BASE_URL}/api/subuser/GetSubUsersByPinCode/{personnummer}"
@@ -261,7 +257,6 @@ class KarlstadsenergiApi:
         sub_users = await self._parse_grp2_json(resp)
         if not isinstance(sub_users, list):
             sub_users = []
-        _LOGGER.debug("SubUsers: %s", str(sub_users)[:500])
 
         # Build unified account list
         accounts: list[dict[str, Any]] = []
@@ -308,7 +303,6 @@ class KarlstadsenergiApi:
         resp = await self._post(url_login)
         resp.raise_for_status()
         result = await resp.json()
-        _LOGGER.debug("Login response: %s", result)
 
         if result.get("Key") is True:
             # Navigate to start page to initialize the session view
@@ -318,10 +312,9 @@ class KarlstadsenergiApi:
                 f"{BASE_URL}/start.aspx",
                 headers={"X-Requested-With": "XMLHttpRequest"},
             )
-            _LOGGER.debug("Visited start.aspx to initialize session")
 
             self._authenticated = True
-            _LOGGER.debug("BankID authentication successful")
+            _LOGGER.info("BankID authentication successful")
             return True
 
         raise KarlstadsenergiAuthError(
@@ -371,7 +364,6 @@ class KarlstadsenergiApi:
         # 302 redirect or 401 = session expired
         if resp.status in (301, 302, 401, 403):
             if retry_auth:
-                _LOGGER.debug("Session expired, re-authenticating")
                 self._authenticated = False
                 await self.authenticate()
                 return await self._request(url, json_data, retry_auth=False)
@@ -384,8 +376,6 @@ class KarlstadsenergiApi:
 
         content_type = resp.headers.get("Content-Type", "")
         if "json" not in content_type:
-            text = await resp.text()
-            _LOGGER.debug("Non-JSON response from %s: %s", url, text[:200])
             raise KarlstadsenergiAuthError(
                 f"Expected JSON, got {content_type} (likely session expired)"
             )
@@ -462,14 +452,8 @@ class KarlstadsenergiApi:
         session = await self._ensure_session()
         # Visit pages to initialize server-side state (same session)
         async with asyncio.timeout(REQUEST_TIMEOUT):
-            resp = await session.get(f"{BASE_URL}/start.aspx")
-            _LOGGER.debug("start.aspx: %s", resp.status)
-            resp = await session.get(f"{BASE_URL}/consumption/consumption.aspx")
-            _LOGGER.debug("consumption.aspx: %s", resp.status)
-
-        # Log cookies for debugging
-        cookies = {c.key: c.value[:20] + "..." for c in session.cookie_jar}
-        _LOGGER.debug("Cookies before consumption API: %s", cookies)
+            await session.get(f"{BASE_URL}/start.aspx")
+            await session.get(f"{BASE_URL}/consumption/consumption.aspx")
 
         url = f"{BASE_URL}/Consumption/Consumption.aspx/GetConsumptionViewModelOnLoad"
         try:
@@ -484,10 +468,7 @@ class KarlstadsenergiApi:
             _LOGGER.error("Consumption POST failed: %s", err)
             raise KarlstadsenergiConnectionError(str(err)) from err
 
-        _LOGGER.debug("Consumption API: status=%s, content-type=%s", resp.status, resp.headers.get("Content-Type"))
         if resp.status != 200:
-            text = await resp.text()
-            _LOGGER.debug("Consumption failed body: %s", text[:300])
             raise KarlstadsenergiApiError(
                 f"GetConsumptionViewModelOnLoad returned {resp.status}"
             )

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import datetime
-import logging
 from typing import Any
 
 from homeassistant.components.sensor import (
@@ -23,8 +22,6 @@ from . import (
     KarlstadsenergiWasteCoordinator,
 )
 from .const import CONF_PERSONNUMMER, DOMAIN, WASTE_TYPE_SLUG
-
-_LOGGER = logging.getLogger(__name__)
 
 
 def _slug_for_waste_type(waste_type: str) -> str:
@@ -51,17 +48,10 @@ async def async_setup_entry(
 
     entities: list[SensorEntity] = []
 
-    _LOGGER.debug(
-        "Setting up sensors: waste_data=%s, consumption_data=%s",
-        bool(waste_coordinator.data),
-        bool(consumption_coordinator.data),
-    )
-
     # Waste collection sensors
     if waste_coordinator.data:
         services = waste_coordinator.data.get("services", [])
         next_dates = waste_coordinator.data.get("next_dates", [])
-        _LOGGER.debug("Waste services: %d, next_dates: %d", len(services), len(next_dates))
 
         if services:
             # Detailed mode: one sensor per service
@@ -102,7 +92,6 @@ async def async_setup_entry(
                 )
             )
 
-    _LOGGER.debug("Adding %d entities", len(entities))
     async_add_entities(entities, update_before_add=False)
 
 
