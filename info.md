@@ -20,7 +20,7 @@ A Home Assistant integration for [Karlstads Energi](https://www.karlstadsenergi.
 
 1. Go to **Settings -> Devices & Services -> Add Integration**.
 2. Search for `Karlstadsenergi`.
-3. Choose **Mobilt BankID** or **Kundnummer & losenord** and follow the prompts.
+3. Choose **Kundnummer & lösenord** (recommended) or **Mobilt BankID** and follow the prompts.
 
 ## Sensors
 
