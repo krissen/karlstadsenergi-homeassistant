@@ -54,7 +54,7 @@ The integration supports two login methods. **Customer number & password is stro
 
 | | Customer number & password | Mobile BankID |
 |---|---|---|
-| **Recommended** | **Yes** | No |
+| **Recommended** | **Yes** | **No** -- avoid if possible |
 | Auto-reconnect on HA restart | **Yes** -- seamless | **No** -- requires manual re-scan |
 | Session handling | Automatic re-login | Heartbeat keep-alive only |
 | Setup complexity | Simple | Requires QR scan within 30s |
@@ -67,9 +67,9 @@ The integration supports two login methods. **Customer number & password is stro
 
 > **Don't have a password yet?** Go to [Karlstadsenergi Password Reset](https://minasidor.karlstadsenergi.se/Customer/PasswordReset.aspx). Have your customer number ready (found on your invoice). Enter the customer number and a password reset link will be sent to the email address Karlstads Energi has on file for your account. Then you're good to go!
 
-#### Mobile BankID
+#### Mobile BankID (not recommended)
 
-> **Note:** BankID works for initial setup but has significant limitations. When Home Assistant restarts, the session expires and **you must scan a new QR code manually** to reconnect. There is no way to automate BankID re-authentication. For a hassle-free experience, set up password login instead.
+> **Warning:** BankID is available but **we do not recommend using it.** When Home Assistant restarts, the session expires and **you must scan a new QR code manually** every time to reconnect. There is no way to automate BankID re-authentication. It is only included as a fallback for users who cannot set up password login. If at all possible, set up customer number & password instead.
 
 1. Select **Mobilt BankID**.
 2. Enter your personnummer (Swedish personal identity number).
