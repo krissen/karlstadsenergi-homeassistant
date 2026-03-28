@@ -34,17 +34,8 @@ from .const import (
     FEE_POWER,
     FEE_SUM,
     FEE_VAT,
-    WASTE_TYPE_SLUG,
+    slug_for_waste_type,
 )
-
-
-def _slug_for_waste_type(waste_type: str) -> str:
-    """Get English slug for a Swedish waste type name."""
-    slug = WASTE_TYPE_SLUG.get(waste_type)
-    if slug:
-        return slug
-    # Fallback: lowercase, replace non-alphanumeric with underscore
-    return "".join(c if c.isalnum() else "_" for c in waste_type.lower()).strip("_")
 
 
 async def async_setup_entry(
@@ -169,13 +160,15 @@ class WasteCollectionSensor(
         self._customer_number = customer_number
         self._service_id = service["FlexServiceId"]
         self._waste_type = service.get("FlexServiceContainTypeValue", "")
-        self._slug = _slug_for_waste_type(self._waste_type)
+        self._slug = slug_for_waste_type(self._waste_type)
         self._address = service.get("FlexServicePlaceAddress", "")
         self._container_size = service.get("SizeOfFlexIndividual", "")
         self._frequency = service.get("FetchFrequency", "")
         self._place_id = service.get("FlexServicePlaceId", "")
 
-        self._attr_unique_id = f"{DOMAIN}_{customer_number}_{self._slug}"
+        self._attr_unique_id = (
+            f"{DOMAIN}_{customer_number}_{self._place_id}_{self._slug}"
+        )
         self._attr_name = self._waste_type
         self._attr_translation_key = self._slug
 
@@ -238,7 +231,7 @@ class WasteCollectionSummary(
         super().__init__(coordinator)
         self._customer_number = customer_number
         self._waste_type = item.get("Type", "")
-        self._slug = _slug_for_waste_type(self._waste_type)
+        self._slug = slug_for_waste_type(self._waste_type)
         self._address = item.get("Address", "").strip()
         self._container_size = item.get("Size", "")
 
@@ -761,5 +754,6 @@ class ContractSensor(
             # identifier for Swedish electricity customers and must not be exposed
             # as a default entity attribute.
             "net_area_code": contract.get("NetAreaCode"),
+            # API key is misspelled upstream ("ElecticityRegion" not "ElectricityRegion")
             "electricity_region": contract.get("ElecticityRegion"),
         }

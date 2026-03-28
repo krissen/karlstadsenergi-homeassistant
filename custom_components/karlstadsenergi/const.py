@@ -1,23 +1,21 @@
 """Constants for the Karlstadsenergi integration."""
 
+from homeassistant.const import Platform
+
 DOMAIN = "karlstadsenergi"
 NAME = "Karlstadsenergi"
 VERSION = "0.2.0"
 
-PLATFORMS = ["sensor", "calendar", "binary_sensor"]
+PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.CALENDAR, Platform.BINARY_SENSOR]
 
 # URLs
 BASE_URL = "https://minasidor.karlstadsenergi.se"
 URL_LOGIN = f"{BASE_URL}/default.aspx/Authenticate"
-URL_HEARTBEAT = f"{BASE_URL}/heart.beat"
 URL_FLEX_SERVICES = f"{BASE_URL}/Flex/FlexServices.aspx/GetFlexServices"
 URL_FLEX_DATES = (
     f"{BASE_URL}/Flex/FlexServices.aspx"
     "/GetNextPlannedFetchDatesOrPrintNameByFlexServiceIds"
 )
-URL_FLEX_NEXT = f"{BASE_URL}/Start.aspx/GetNextFlexFetchDate"
-URL_CONSUMPTION = f"{BASE_URL}/consumption/consumption.aspx/GetConsumption"
-URL_SERVICE_INFO = f"{BASE_URL}/consumption/consumption.aspx/GetServiceInfo"
 URL_CONTRACT_DETAILS = f"{BASE_URL}/Contract/Contracts.aspx/GetContractDetails"
 URL_SPOT_PRICES = (
     "https://emc.evado.se/web/spotprices/find_spotprices.json"
@@ -51,6 +49,15 @@ CONTRACT_TYPE_SLUG: dict[str, str] = {
     "Elhandel - Handelsavtal": "trading",
     "Renhållning - Hushållsavfall": "waste",
 }
+
+
+def slug_for_waste_type(waste_type: str) -> str:
+    """Get English slug for a Swedish waste type name."""
+    slug = WASTE_TYPE_SLUG.get(waste_type)
+    if slug:
+        return slug
+    return "".join(c if c.isalnum() else "_" for c in waste_type.lower()).strip("_")
+
 
 # Fee series IDs from GetConsumption IsFeeTypeRequest response
 FEE_CONSUMPTION = "ConsumptionFee"

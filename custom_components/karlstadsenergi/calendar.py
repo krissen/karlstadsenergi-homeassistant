@@ -12,15 +12,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import KarlstadsenergiConfigEntry, KarlstadsenergiWasteCoordinator
-from .const import CONF_PERSONNUMMER, DOMAIN, WASTE_TYPE_SLUG
-
-
-def _slug_for_waste_type(waste_type: str) -> str:
-    """Get English slug for a Swedish waste type name."""
-    slug = WASTE_TYPE_SLUG.get(waste_type)
-    if slug:
-        return slug
-    return "".join(c if c.isalnum() else "_" for c in waste_type.lower()).strip("_")
+from .const import CONF_PERSONNUMMER, DOMAIN, slug_for_waste_type
 
 
 async def async_setup_entry(
@@ -84,12 +76,14 @@ class WasteCollectionCalendar(
         self._customer_number = customer_number
         self._service_id = service["FlexServiceId"]
         self._waste_type = service.get("FlexServiceContainTypeValue", "")
-        self._slug = _slug_for_waste_type(self._waste_type)
+        self._slug = slug_for_waste_type(self._waste_type)
         self._address = service.get("FlexServicePlaceAddress", "")
         self._frequency = service.get("FetchFrequency", "")
         self._place_id = service.get("FlexServicePlaceId", "")
 
-        self._attr_unique_id = f"{DOMAIN}_{customer_number}_{self._slug}_calendar"
+        self._attr_unique_id = (
+            f"{DOMAIN}_{customer_number}_{self._place_id}_{self._slug}_calendar"
+        )
         self._attr_name = self._waste_type
 
     @property
@@ -166,7 +160,7 @@ class WasteCollectionSummaryCalendar(
         super().__init__(coordinator)
         self._customer_number = customer_number
         self._waste_type = item.get("Type", "")
-        self._slug = _slug_for_waste_type(self._waste_type)
+        self._slug = slug_for_waste_type(self._waste_type)
         self._address = item.get("Address", "").strip()
 
         self._attr_unique_id = f"{DOMAIN}_{customer_number}_{self._slug}_calendar"
