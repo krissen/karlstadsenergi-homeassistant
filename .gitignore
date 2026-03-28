@@ -11,3 +11,5 @@ build/
 .pytest_cache/
 .ruff_cache/
 research/
+CLAUDE.md
+_decisions/
