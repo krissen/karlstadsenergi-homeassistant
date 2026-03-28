@@ -6,13 +6,13 @@ import datetime
 from typing import Any
 
 from homeassistant.components.binary_sensor import BinarySensorEntity
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.util import dt as dt_util
 
-from . import KarlstadsenergiWasteCoordinator
+from . import KarlstadsenergiConfigEntry, KarlstadsenergiWasteCoordinator
 from .const import CONF_PERSONNUMMER, DOMAIN, WASTE_TYPE_SLUG
 
 
@@ -26,12 +26,11 @@ def _slug_for_waste_type(waste_type: str) -> str:
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: KarlstadsenergiConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Karlstadsenergi binary sensors."""
-    data = hass.data[DOMAIN][entry.entry_id]
-    waste_coordinator: KarlstadsenergiWasteCoordinator = data["waste_coordinator"]
+    waste_coordinator = entry.runtime_data.waste_coordinator
     customer_number = entry.data[CONF_PERSONNUMMER]
 
     entities: list[BinarySensorEntity] = []
@@ -122,7 +121,7 @@ class WastePickupTomorrowSensor(
         pickup_date = self._next_pickup_date()
         if pickup_date is None:
             return None
-        return pickup_date == datetime.date.today() + datetime.timedelta(days=1)
+        return pickup_date == dt_util.now().date() + datetime.timedelta(days=1)
 
     @property
     def icon(self) -> str:
@@ -183,7 +182,7 @@ class WastePickupTomorrowSummarySensor(
         pickup_date = self._next_pickup_date()
         if pickup_date is None:
             return None
-        return pickup_date == datetime.date.today() + datetime.timedelta(days=1)
+        return pickup_date == dt_util.now().date() + datetime.timedelta(days=1)
 
     @property
     def icon(self) -> str:
