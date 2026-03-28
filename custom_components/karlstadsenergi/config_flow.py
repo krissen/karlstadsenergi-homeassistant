@@ -351,10 +351,7 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
             await self._api.async_get_next_flex_dates()
 
             cookies = self._api.get_session_cookies()
-
-            # Pass API to setup_entry
-            self.hass.data.setdefault(DOMAIN, {})
-            self.hass.data[DOMAIN]["pending_api"] = self._api
+            await self._api.async_close()
             self._api = None
 
             customer_code = account.get("customer_code", "")

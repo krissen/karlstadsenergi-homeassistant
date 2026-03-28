@@ -286,7 +286,7 @@ class KarlstadsenergiSpotPriceCoordinator(DataUpdateCoordinator[dict]):
 
         prices.sort(key=lambda p: p["start"])
 
-        # Find current price
+        # Find current price (fall back to most recent known price if stale)
         now = datetime.now(tz=prices[0]["start"].tzinfo) if prices else None
         current_price = None
         if now and prices:
@@ -296,6 +296,9 @@ class KarlstadsenergiSpotPriceCoordinator(DataUpdateCoordinator[dict]):
                     if now >= p["start"]:
                         current_price = p["price_sek"]
                     break
+            # If no interval matches (data is stale), use the last known price
+            if current_price is None:
+                current_price = prices[-1]["price_sek"]
 
         return {
             "current_price": current_price,
@@ -320,25 +323,16 @@ async def async_setup_entry(
         MAX_UPDATE_INTERVAL,
     )
 
-    # Try to reuse API instance from config flow (BankID session handoff)
-    api = None
-    hass.data.setdefault(DOMAIN, {})
-    pending = hass.data[DOMAIN].pop("pending_api", None)
-    if pending is not None and pending._authenticated:
-        api = pending
-
-    if api is None:
-        api = KarlstadsenergiApi(personnummer, auth_method, password)
-        # Restore session cookies if available
-        saved_cookies = entry.data.get("session_cookies")
-        if saved_cookies:
-            api.set_session_cookies(saved_cookies)
-        elif auth_method == AUTH_PASSWORD:
-            try:
-                await api.authenticate()
-            except KarlstadsenergiApiError as err:
-                await api.async_close()
-                raise ConfigEntryNotReady(f"Could not authenticate: {err}") from err
+    api = KarlstadsenergiApi(personnummer, auth_method, password)
+    saved_cookies = entry.data.get("session_cookies")
+    if saved_cookies:
+        api.set_session_cookies(saved_cookies)
+    elif auth_method == AUTH_PASSWORD:
+        try:
+            await api.authenticate()
+        except KarlstadsenergiApiError as err:
+            await api.async_close()
+            raise ConfigEntryNotReady(f"Could not authenticate: {err}") from err
 
     waste_coordinator = KarlstadsenergiWasteCoordinator(
         hass,
@@ -420,6 +414,15 @@ async def async_setup_entry(
     entry.async_on_unload(cancel_heartbeat)
     entry.async_on_unload(entry.add_update_listener(_async_reload_entry))
 
+    return True
+
+
+async def async_migrate_entry(
+    hass: HomeAssistant, entry: KarlstadsenergiConfigEntry
+) -> bool:
+    """Migrate config entry to a new version."""
+    _LOGGER.debug("Migrating config entry from version %s", entry.version)
+    # Currently at VERSION=1, no migrations needed
     return True
 
 
