@@ -8,10 +8,14 @@ from typing import Any
 
 import voluptuous as vol
 
-from homeassistant.config_entries import ConfigEntry, ConfigFlow, OptionsFlow
+from homeassistant.config_entries import (
+    ConfigEntry,
+    ConfigFlow,
+    ConfigFlowResult,
+    OptionsFlow,
+)
 from homeassistant.const import CONF_PASSWORD
 from homeassistant.core import callback
-from homeassistant.data_entry_flow import FlowResult
 
 from .api import (
     AUTH_BANKID,
@@ -49,7 +53,7 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
     async def async_step_user(
         self,
         user_input: dict[str, Any] | None = None,
-    ) -> FlowResult:
+    ) -> ConfigFlowResult:
         """Step 1: Choose auth method and enter personnummer."""
         errors: dict[str, str] = {}
 
@@ -78,7 +82,7 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
     async def async_step_bankid_personnummer(
         self,
         user_input: dict[str, Any] | None = None,
-    ) -> FlowResult:
+    ) -> ConfigFlowResult:
         """Step for entering personnummer before BankID."""
         errors: dict[str, str] = {}
 
@@ -99,7 +103,7 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
     async def async_step_password(
         self,
         user_input: dict[str, Any] | None = None,
-    ) -> FlowResult:
+    ) -> ConfigFlowResult:
         """Handle password authentication."""
         errors: dict[str, str] = {}
 
@@ -126,17 +130,26 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
                 await api.async_close()
 
             if not errors:
-                # Pass API to setup_entry
-                self.hass.data.setdefault(DOMAIN, {})
+                new_data = {
+                    CONF_PERSONNUMMER: customer_number,
+                    CONF_AUTH_METHOD: AUTH_PASSWORD,
+                    CONF_PASSWORD: password,
+                    "session_cookies": cookies,
+                }
+
+                # Check if this is a reauth
+                reauth_entry = self.hass.config_entries.async_get_entry(
+                    self.context.get("entry_id", ""),
+                )
+                if reauth_entry:
+                    return self.async_update_reload_and_abort(
+                        reauth_entry,
+                        data=new_data,
+                    )
 
                 return self.async_create_entry(
                     title=f"Karlstadsenergi ({customer_number})",
-                    data={
-                        CONF_PERSONNUMMER: customer_number,
-                        CONF_AUTH_METHOD: AUTH_PASSWORD,
-                        CONF_PASSWORD: password,
-                        "session_cookies": cookies,
-                    },
+                    data=new_data,
                 )
 
         return self.async_show_form(
@@ -153,7 +166,7 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
     async def async_step_bankid(
         self,
         user_input: dict[str, Any] | None = None,
-    ) -> FlowResult:
+    ) -> ConfigFlowResult:
         """Step 2 (BankID): Show QR code and wait for signing."""
         errors: dict[str, str] = {}
 
@@ -237,7 +250,7 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
     async def async_step_select_account(
         self,
         user_input: dict[str, Any] | None = None,
-    ) -> FlowResult:
+    ) -> ConfigFlowResult:
         """Step 3: Select which account/contract to use."""
         errors: dict[str, str] = {}
 
@@ -273,16 +286,12 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
             return f"{name} ({code})"
         return name or code or "Unknown"
 
-    def _show_user_form(self, errors: dict) -> FlowResult:
+    def _show_user_form(self, errors: dict) -> ConfigFlowResult:
         return self.async_show_form(
             step_id="user",
             data_schema=vol.Schema(
                 {
-                    vol.Required(CONF_PERSONNUMMER): str,
-                    vol.Required(
-                        CONF_AUTH_METHOD,
-                        default=AUTH_BANKID,
-                    ): vol.In(
+                    vol.Required(CONF_AUTH_METHOD, default=AUTH_BANKID): vol.In(
                         {
                             AUTH_BANKID: "Mobilt BankID",
                             AUTH_PASSWORD: "Kundnummer & lösenord",
@@ -301,7 +310,7 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
     async def async_step_reauth(
         self,
         entry_data: dict[str, Any],
-    ) -> FlowResult:
+    ) -> ConfigFlowResult:
         """Handle re-authentication when session expires."""
         self._personnummer = entry_data.get(CONF_PERSONNUMMER, "")
         self._auth_method = entry_data.get(CONF_AUTH_METHOD, AUTH_BANKID)
@@ -310,10 +319,11 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
     async def async_step_reauth_confirm(
         self,
         user_input: dict[str, Any] | None = None,
-    ) -> FlowResult:
-        """Show reauth confirmation and start BankID."""
+    ) -> ConfigFlowResult:
+        """Show reauth confirmation and route to the correct auth flow."""
         if user_input is not None:
-            # Start BankID flow (reuses bankid step)
+            if self._auth_method == AUTH_PASSWORD:
+                return await self.async_step_password()
             return await self.async_step_bankid()
 
         return self.async_show_form(
@@ -327,7 +337,7 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
     async def _do_bankid_login(
         self,
         account: dict[str, Any],
-    ) -> FlowResult:
+    ) -> ConfigFlowResult:
         """Login with selected account and create/update entry."""
         try:
             await self._api.bankid_login(
@@ -369,14 +379,10 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
                 self.context.get("entry_id", ""),
             )
             if reauth_entry:
-                self.hass.config_entries.async_update_entry(
+                return self.async_update_reload_and_abort(
                     reauth_entry,
                     data=new_data,
                 )
-                await self.hass.config_entries.async_reload(
-                    reauth_entry.entry_id,
-                )
-                return self.async_abort(reason="reauth_successful")
 
             return self.async_create_entry(title=title, data=new_data)
 
@@ -406,7 +412,7 @@ class KarlstadsenergiOptionsFlow(OptionsFlow):
     async def async_step_init(
         self,
         user_input: dict[str, Any] | None = None,
-    ) -> FlowResult:
+    ) -> ConfigFlowResult:
         if user_input is not None:
             return self.async_create_entry(title="", data=user_input)
 
