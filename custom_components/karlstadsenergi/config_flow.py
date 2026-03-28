@@ -47,7 +47,8 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
         self._accounts: list[dict[str, Any]] = []
 
     async def async_step_user(
-        self, user_input: dict[str, Any] | None = None,
+        self,
+        user_input: dict[str, Any] | None = None,
     ) -> FlowResult:
         """Step 1: Choose auth method and enter personnummer."""
         errors: dict[str, str] = {}
@@ -75,7 +76,8 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
         )
 
     async def async_step_bankid_personnummer(
-        self, user_input: dict[str, Any] | None = None,
+        self,
+        user_input: dict[str, Any] | None = None,
     ) -> FlowResult:
         """Step for entering personnummer before BankID."""
         errors: dict[str, str] = {}
@@ -90,14 +92,13 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
 
         return self.async_show_form(
             step_id="bankid_personnummer",
-            data_schema=vol.Schema(
-                {vol.Required(CONF_PERSONNUMMER): str}
-            ),
+            data_schema=vol.Schema({vol.Required(CONF_PERSONNUMMER): str}),
             errors=errors,
         )
 
     async def async_step_password(
-        self, user_input: dict[str, Any] | None = None,
+        self,
+        user_input: dict[str, Any] | None = None,
     ) -> FlowResult:
         """Handle password authentication."""
         errors: dict[str, str] = {}
@@ -106,7 +107,9 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
             customer_number = user_input["customer_number"]
             password = user_input[CONF_PASSWORD]
             api = KarlstadsenergiApi(
-                customer_number, AUTH_PASSWORD, password,
+                customer_number,
+                AUTH_PASSWORD,
+                password,
             )
             try:
                 await api.authenticate_password()
@@ -148,7 +151,8 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
         )
 
     async def async_step_bankid(
-        self, user_input: dict[str, Any] | None = None,
+        self,
+        user_input: dict[str, Any] | None = None,
     ) -> FlowResult:
         """Step 2 (BankID): Show QR code and wait for signing."""
         errors: dict[str, str] = {}
@@ -156,7 +160,8 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
         # Initiate BankID on first entry
         if self._api is None:
             self._api = KarlstadsenergiApi(
-                self._personnummer, AUTH_BANKID,
+                self._personnummer,
+                AUTH_BANKID,
             )
             try:
                 self._bankid_init = await self._api.bankid_initiate()
@@ -198,9 +203,7 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
                     errors["base"] = "bankid_pending"
                     # Re-initiate for next attempt
                     try:
-                        self._bankid_init = (
-                            await self._api.bankid_initiate()
-                        )
+                        self._bankid_init = await self._api.bankid_initiate()
                     except KarlstadsenergiConnectionError:
                         errors["base"] = "cannot_connect"
                         await self._cleanup_api()
@@ -232,7 +235,8 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
         )
 
     async def async_step_select_account(
-        self, user_input: dict[str, Any] | None = None,
+        self,
+        user_input: dict[str, Any] | None = None,
     ) -> FlowResult:
         """Step 3: Select which account/contract to use."""
         errors: dict[str, str] = {}
@@ -276,7 +280,8 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
                 {
                     vol.Required(CONF_PERSONNUMMER): str,
                     vol.Required(
-                        CONF_AUTH_METHOD, default=AUTH_BANKID,
+                        CONF_AUTH_METHOD,
+                        default=AUTH_BANKID,
                     ): vol.In(
                         {
                             AUTH_BANKID: "Mobilt BankID",
@@ -294,7 +299,8 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
             self._api = None
 
     async def async_step_reauth(
-        self, entry_data: dict[str, Any],
+        self,
+        entry_data: dict[str, Any],
     ) -> FlowResult:
         """Handle re-authentication when session expires."""
         self._personnummer = entry_data.get(CONF_PERSONNUMMER, "")
@@ -302,7 +308,8 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
         return await self.async_step_reauth_confirm()
 
     async def async_step_reauth_confirm(
-        self, user_input: dict[str, Any] | None = None,
+        self,
+        user_input: dict[str, Any] | None = None,
     ) -> FlowResult:
         """Show reauth confirmation and start BankID."""
         if user_input is not None:
@@ -318,7 +325,8 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
         )
 
     async def _do_bankid_login(
-        self, account: dict[str, Any],
+        self,
+        account: dict[str, Any],
     ) -> FlowResult:
         """Login with selected account and create/update entry."""
         try:
@@ -362,7 +370,8 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
             )
             if reauth_entry:
                 self.hass.config_entries.async_update_entry(
-                    reauth_entry, data=new_data,
+                    reauth_entry,
+                    data=new_data,
                 )
                 await self.hass.config_entries.async_reload(
                     reauth_entry.entry_id,
@@ -395,13 +404,15 @@ class KarlstadsenergiOptionsFlow(OptionsFlow):
         self._config_entry = config_entry
 
     async def async_step_init(
-        self, user_input: dict[str, Any] | None = None,
+        self,
+        user_input: dict[str, Any] | None = None,
     ) -> FlowResult:
         if user_input is not None:
             return self.async_create_entry(title="", data=user_input)
 
         current_interval = self._config_entry.options.get(
-            CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL,
+            CONF_UPDATE_INTERVAL,
+            DEFAULT_UPDATE_INTERVAL,
         )
 
         return self.async_show_form(
