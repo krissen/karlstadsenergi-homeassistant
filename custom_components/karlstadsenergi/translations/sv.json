@@ -45,14 +45,14 @@
       }
     },
     "error": {
-      "invalid_auth": "Fel personnummer eller lösenord",
+      "invalid_auth": "Felaktiga inloggningsuppgifter",
       "cannot_connect": "Kunde inte ansluta till Karlstadsenergi",
       "bankid_pending": "BankID inte signerat ännu. Öppna BankID-appen och försök igen.",
       "bankid_failed": "BankID-inloggning misslyckades",
       "unknown": "Oväntat fel"
     },
     "abort": {
-      "already_configured": "Denna person är redan konfigurerad",
+      "already_configured": "Detta konto är redan konfigurerat",
       "reauth_successful": "Omautentisering lyckades",
       "bankid_failed": "BankID-inloggning misslyckades",
       "unknown": "Oväntat fel"

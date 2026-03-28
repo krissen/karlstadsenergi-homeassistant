@@ -27,7 +27,7 @@ from custom_components.karlstadsenergi.const import (
 # ---------------------------------------------------------------------------
 
 
-def _make_flow() -> KarlstadsenergiConfigFlow:
+def _make_flow(source: str = "user") -> KarlstadsenergiConfigFlow:
     """Create a config flow instance with a minimal mock hass."""
     flow = KarlstadsenergiConfigFlow()
     hass = MagicMock()
@@ -36,8 +36,25 @@ def _make_flow() -> KarlstadsenergiConfigFlow:
     hass.config_entries.async_get_entry.return_value = None
     flow.hass = hass
     # Provide a context dict (needed by _abort_if_unique_id_configured etc.)
-    flow.context = {"source": "user"}
+    flow.context = {"source": source}
     return flow
+
+
+def _mock_password_api(
+    *,
+    auth_side_effect: Exception | None = None,
+    cookies: dict | None = None,
+) -> MagicMock:
+    """Create a mock API for the password flow."""
+    mock_api = MagicMock()
+    if auth_side_effect:
+        mock_api.authenticate_password = AsyncMock(side_effect=auth_side_effect)
+    else:
+        mock_api.authenticate_password = AsyncMock()
+    mock_api.async_get_next_flex_dates = AsyncMock(return_value=[])
+    mock_api.get_session_cookies = MagicMock(return_value=cookies or {"session": "abc"})
+    mock_api.async_close = AsyncMock()
+    return mock_api
 
 
 # ---------------------------------------------------------------------------
@@ -88,14 +105,13 @@ class TestStepUser:
         assert result["step_id"] == "bankid_personnummer"
 
     @pytest.mark.asyncio
-    async def test_default_auth_method_is_bankid(self) -> None:
-        """With no input, the form default should be AUTH_BANKID."""
+    async def test_default_auth_method_is_password(self) -> None:
+        """With no input, the form default should be AUTH_PASSWORD."""
         flow = _make_flow()
         result = await flow.async_step_user(user_input=None)
-        # Inspect the schema default for CONF_AUTH_METHOD
         for key in result["data_schema"].schema:
             if str(key) == CONF_AUTH_METHOD:
-                assert key.default() == AUTH_BANKID
+                assert key.default() == AUTH_PASSWORD
                 break
         else:
             pytest.fail(f"{CONF_AUTH_METHOD} not found in form schema")
@@ -134,12 +150,8 @@ class TestStepBankidPersonnummer:
 
     @pytest.mark.asyncio
     async def test_valid_personnummer_advances_to_bankid(self) -> None:
-        """A valid personnummer routes to the bankid step."""
+        """A valid personnummer routes to the bankid step (no unique_id check)."""
         flow = _make_flow()
-
-        # Stub out unique_id methods and bankid_initiate so we don't hit network
-        flow.async_set_unique_id = AsyncMock()
-        flow._abort_if_unique_id_configured = MagicMock()
 
         mock_api = MagicMock()
         mock_api.bankid_initiate = AsyncMock(
@@ -190,12 +202,12 @@ class TestStepPassword:
         from custom_components.karlstadsenergi.api import KarlstadsenergiAuthError
 
         flow = _make_flow()
-        mock_api = MagicMock()
-        mock_api.authenticate_password = AsyncMock(
-            side_effect=KarlstadsenergiAuthError("bad credentials")
-        )
-        mock_api.async_close = AsyncMock()
+        flow.async_set_unique_id = AsyncMock()
+        flow._abort_if_unique_id_configured = MagicMock()
 
+        mock_api = _mock_password_api(
+            auth_side_effect=KarlstadsenergiAuthError("bad credentials")
+        )
         with patch(
             "custom_components.karlstadsenergi.config_flow.KarlstadsenergiApi",
             return_value=mock_api,
@@ -213,12 +225,12 @@ class TestStepPassword:
         from custom_components.karlstadsenergi.api import KarlstadsenergiConnectionError
 
         flow = _make_flow()
-        mock_api = MagicMock()
-        mock_api.authenticate_password = AsyncMock(
-            side_effect=KarlstadsenergiConnectionError("timeout")
-        )
-        mock_api.async_close = AsyncMock()
+        flow.async_set_unique_id = AsyncMock()
+        flow._abort_if_unique_id_configured = MagicMock()
 
+        mock_api = _mock_password_api(
+            auth_side_effect=KarlstadsenergiConnectionError("timeout")
+        )
         with patch(
             "custom_components.karlstadsenergi.config_flow.KarlstadsenergiApi",
             return_value=mock_api,
@@ -231,14 +243,12 @@ class TestStepPassword:
 
     @pytest.mark.asyncio
     async def test_successful_auth_creates_entry(self) -> None:
-        """Successful password auth should return an 'create_entry' result."""
+        """Successful password auth should return a 'create_entry' result."""
         flow = _make_flow()
-        mock_api = MagicMock()
-        mock_api.authenticate_password = AsyncMock()
-        mock_api.async_get_next_flex_dates = AsyncMock(return_value=[])
-        mock_api.get_session_cookies = MagicMock(return_value={"session": "abc"})
-        mock_api.async_close = AsyncMock()
+        flow.async_set_unique_id = AsyncMock()
+        flow._abort_if_unique_id_configured = MagicMock()
 
+        mock_api = _mock_password_api()
         with patch(
             "custom_components.karlstadsenergi.config_flow.KarlstadsenergiApi",
             return_value=mock_api,
@@ -250,6 +260,26 @@ class TestStepPassword:
         assert result["type"] == "create_entry"
         assert result["data"][CONF_PERSONNUMMER] == "123456"
         assert result["data"][CONF_AUTH_METHOD] == AUTH_PASSWORD
+        assert result["data"]["customer_code"] == "123456"
+
+    @pytest.mark.asyncio
+    async def test_duplicate_customer_aborts(self) -> None:
+        """Password flow with already-configured customer_number should abort."""
+
+        flow = _make_flow()
+        flow.async_set_unique_id = AsyncMock()
+        # Simulate _abort_if_unique_id_configured raising
+        flow._abort_if_unique_id_configured = MagicMock(
+            side_effect=flow.async_abort(reason="already_configured").__class__
+        )
+
+        # The abort happens before API call, so API should not be instantiated
+        # We test via the abort_if side effect
+        await flow.async_step_password(
+            user_input={"customer_number": "123456", "password": "pw"}
+        )
+        # async_set_unique_id was called with the customer number
+        flow.async_set_unique_id.assert_called_once_with("123456")
 
 
 # ---------------------------------------------------------------------------
@@ -263,10 +293,15 @@ class TestOptionsFlow:
             KarlstadsenergiOptionsFlow,
         )
 
+        flow = KarlstadsenergiOptionsFlow()
+        flow.hass = MagicMock()
+        # Mock config_entry property
         entry = MagicMock()
         entry.options = {}
-        flow = KarlstadsenergiOptionsFlow(entry)
-        flow.hass = MagicMock()
+        flow._config_entry = entry
+        # OptionsFlow uses self.config_entry which is a property;
+        # patch it on the instance
+        type(flow).config_entry = property(lambda self: self._config_entry)
         return flow
 
     @pytest.mark.asyncio

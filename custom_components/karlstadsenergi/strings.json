@@ -52,7 +52,7 @@
       "unknown": "Unexpected error"
     },
     "abort": {
-      "already_configured": "This person is already configured",
+      "already_configured": "This account is already configured",
       "reauth_successful": "Re-authentication successful",
       "bankid_failed": "BankID authentication failed",
       "unknown": "Unexpected error"

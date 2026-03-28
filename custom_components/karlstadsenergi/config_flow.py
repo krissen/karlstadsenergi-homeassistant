@@ -257,10 +257,7 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
                 return await self._do_bankid_login(self._accounts[selected_idx])
             errors["base"] = "unknown"
 
-        options = {
-            i: self._account_label(acc)
-            for i, acc in enumerate(self._accounts)
-        }
+        options = {i: self._account_label(acc) for i, acc in enumerate(self._accounts)}
 
         return self.async_show_form(
             step_id="select_account",

@@ -185,9 +185,8 @@ class TestCurrentPriceSelection:
         # For the last bucket there is no next_start, so if now >= last start it
         # returns that price. Stale data thus returns the last known price.
         # This documents the current behavior for the second opinion reviewer.
-        assert result["current_price"] is not None or result["current_price"] is None
-        # More specifically: because now (2026) > last start (2020-01-01T00:15), and
-        # last bucket has no next_start, the algorithm returns the last bucket's price.
+        # Because now (2026) > last start (2020-01-01T00:15), and the last
+        # bucket has no next_start, the algorithm returns the last bucket's price.
         assert result["current_price"] == pytest.approx(0.85, abs=1e-4)
 
     def test_day_boundary_correct_bucket(self) -> None:

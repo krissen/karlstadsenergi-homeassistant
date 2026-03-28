@@ -166,9 +166,7 @@ class WasteCollectionSensor(
         self._frequency = service.get("FetchFrequency", "")
         self._place_id = service.get("FlexServicePlaceId", "")
 
-        self._attr_unique_id = (
-            f"{DOMAIN}_{customer_id}_{self._place_id}_{self._slug}"
-        )
+        self._attr_unique_id = f"{DOMAIN}_{customer_id}_{self._place_id}_{self._slug}"
         self._attr_name = self._waste_type
 
     @property
@@ -684,9 +682,7 @@ class ContractSensor(
         self._slug = _slug_for_contract(self._utility_name)
         self._contract_id = contract.get("ContractId", "")
 
-        self._attr_unique_id = (
-            f"{DOMAIN}_{customer_id}_contract_{self._contract_id}"
-        )
+        self._attr_unique_id = f"{DOMAIN}_{customer_id}_contract_{self._contract_id}"
         self._attr_name = f"Contract {self._utility_name}"
 
     @property

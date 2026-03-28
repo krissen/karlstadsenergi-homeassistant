@@ -143,9 +143,7 @@ class WastePickupTomorrowSummarySensor(
         self._slug = slug_for_waste_type(self._waste_type)
         self._address = item.get("Address", "").strip()
 
-        self._attr_unique_id = (
-            f"{DOMAIN}_{customer_id}_{self._slug}_pickup_tomorrow"
-        )
+        self._attr_unique_id = f"{DOMAIN}_{customer_id}_{self._slug}_pickup_tomorrow"
         self._attr_name = f"{self._waste_type} pickup tomorrow"
 
     @property
