@@ -45,7 +45,7 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
 
     def __init__(self) -> None:
         self._personnummer: str = ""
-        self._auth_method: str = AUTH_BANKID
+        self._auth_method: str = AUTH_PASSWORD
         self._api: KarlstadsenergiApi | None = None
         self._bankid_init: dict[str, str] = {}
         self._accounts: list[dict[str, Any]] = []
@@ -58,7 +58,7 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
 
         if user_input is not None:
-            self._auth_method = user_input.get(CONF_AUTH_METHOD, AUTH_BANKID)
+            self._auth_method = user_input.get(CONF_AUTH_METHOD, AUTH_PASSWORD)
 
             if self._auth_method == AUTH_PASSWORD:
                 return await self.async_step_password()
@@ -68,10 +68,10 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
             step_id="user",
             data_schema=vol.Schema(
                 {
-                    vol.Required(CONF_AUTH_METHOD, default=AUTH_BANKID): vol.In(
+                    vol.Required(CONF_AUTH_METHOD, default=AUTH_PASSWORD): vol.In(
                         {
-                            AUTH_BANKID: "Mobilt BankID",
-                            AUTH_PASSWORD: "Kundnummer & lösenord",
+                            AUTH_PASSWORD: "Customer number & password (recommended)",
+                            AUTH_BANKID: "Mobile BankID",
                         }
                     ),
                 }
@@ -89,8 +89,6 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             self._personnummer = user_input.get(CONF_PERSONNUMMER, "")
             if self._personnummer:
-                await self.async_set_unique_id(self._personnummer)
-                self._abort_if_unique_id_configured()
                 return await self.async_step_bankid()
             errors["base"] = "invalid_auth"
 
@@ -110,6 +108,10 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             customer_number = user_input["customer_number"]
             password = user_input[CONF_PASSWORD]
+
+            await self.async_set_unique_id(customer_number)
+            self._abort_if_unique_id_configured()
+
             api = KarlstadsenergiApi(
                 customer_number,
                 AUTH_PASSWORD,
@@ -134,16 +136,13 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
                     CONF_PERSONNUMMER: customer_number,
                     CONF_AUTH_METHOD: AUTH_PASSWORD,
                     CONF_PASSWORD: password,
+                    "customer_code": customer_number,
                     "session_cookies": cookies,
                 }
 
-                # Check if this is a reauth
-                reauth_entry = self.hass.config_entries.async_get_entry(
-                    self.context.get("entry_id", ""),
-                )
-                if reauth_entry:
+                if self.source == "reauth":
                     return self.async_update_reload_and_abort(
-                        reauth_entry,
+                        self._get_reauth_entry(),
                         data=new_data,
                     )
 
@@ -234,14 +233,12 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
                 await self._cleanup_api()
 
         auto_start_token = self._bankid_init.get("auto_start_token", "")
-        qr_base64 = self._bankid_init.get("qr_code_base64", "")
 
         return self.async_show_form(
             step_id="bankid",
             description_placeholders={
                 "personnummer": self._personnummer,
                 "auto_start_token": auto_start_token,
-                "qr_code": qr_base64,
             },
             data_schema=vol.Schema({}),
             errors=errors,
@@ -255,19 +252,15 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
 
         if user_input is not None:
-            selected = user_input.get("account")
-            # Find selected account
-            for account in self._accounts:
-                label = self._account_label(account)
-                if label == selected:
-                    return await self._do_bankid_login(account)
+            selected_idx = user_input.get("account")
+            if selected_idx is not None and 0 <= selected_idx < len(self._accounts):
+                return await self._do_bankid_login(self._accounts[selected_idx])
             errors["base"] = "unknown"
 
-        # Build selection options
-        options = {}
-        for account in self._accounts:
-            label = self._account_label(account)
-            options[label] = label
+        options = {
+            i: self._account_label(acc)
+            for i, acc in enumerate(self._accounts)
+        }
 
         return self.async_show_form(
             step_id="select_account",
@@ -291,10 +284,10 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
             step_id="user",
             data_schema=vol.Schema(
                 {
-                    vol.Required(CONF_AUTH_METHOD, default=AUTH_BANKID): vol.In(
+                    vol.Required(CONF_AUTH_METHOD, default=AUTH_PASSWORD): vol.In(
                         {
-                            AUTH_BANKID: "Mobilt BankID",
-                            AUTH_PASSWORD: "Kundnummer & lösenord",
+                            AUTH_PASSWORD: "Customer number & password (recommended)",
+                            AUTH_BANKID: "Mobile BankID",
                         }
                     ),
                 }
@@ -355,6 +348,9 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
             self._api = None
 
             customer_code = account.get("customer_code", "")
+            await self.async_set_unique_id(customer_code)
+            self._abort_if_unique_id_configured()
+
             full_name = account.get("full_name", "")
             title = (
                 f"Karlstadsenergi {full_name} ({customer_code})"
@@ -371,13 +367,9 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
                 "session_cookies": cookies,
             }
 
-            # Check if this is a reauth
-            reauth_entry = self.hass.config_entries.async_get_entry(
-                self.context.get("entry_id", ""),
-            )
-            if reauth_entry:
+            if self.source == "reauth":
                 return self.async_update_reload_and_abort(
-                    reauth_entry,
+                    self._get_reauth_entry(),
                     data=new_data,
                 )
 
@@ -397,14 +389,11 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
     def async_get_options_flow(
         config_entry: ConfigEntry,
     ) -> OptionsFlow:
-        return KarlstadsenergiOptionsFlow(config_entry)
+        return KarlstadsenergiOptionsFlow()
 
 
 class KarlstadsenergiOptionsFlow(OptionsFlow):
     """Handle options for Karlstadsenergi."""
-
-    def __init__(self, config_entry: ConfigEntry) -> None:
-        self._config_entry = config_entry
 
     async def async_step_init(
         self,
@@ -413,7 +402,7 @@ class KarlstadsenergiOptionsFlow(OptionsFlow):
         if user_input is not None:
             return self.async_create_entry(title="", data=user_input)
 
-        current_interval = self._config_entry.options.get(
+        current_interval = self.config_entry.options.get(
             CONF_UPDATE_INTERVAL,
             DEFAULT_UPDATE_INTERVAL,
         )

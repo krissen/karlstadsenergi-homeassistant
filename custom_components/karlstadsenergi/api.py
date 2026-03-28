@@ -73,7 +73,13 @@ def _parse_aspnet_response(data: dict[str, Any]) -> Any:
 
 
 class KarlstadsenergiApi:
-    """API client for Karlstadsenergi customer portal."""
+    """API client for Karlstadsenergi customer portal.
+
+    # This integration uses its own aiohttp.ClientSession rather than
+    # async_get_clientsession(hass) because it needs a dedicated CookieJar
+    # for session-based authentication (ASP.NET_SessionId + .PORTALAUTH).
+    # HA's shared session does not support per-integration cookie state.
+    """
 
     def __init__(
         self,
@@ -317,10 +323,14 @@ class KarlstadsenergiApi:
             # Navigate to start page to initialize the session view
             # (server requires this before API calls work)
             session = await self._ensure_session()
-            await session.get(
+            start_resp = await session.get(
                 f"{BASE_URL}/start.aspx",
                 headers={"X-Requested-With": "XMLHttpRequest"},
             )
+            if start_resp.status in (301, 302, 401, 403):
+                raise KarlstadsenergiAuthError(
+                    f"Session initialization failed (status {start_resp.status})"
+                )
 
             self._authenticated = True
             _LOGGER.info("BankID authentication successful")
@@ -557,7 +567,10 @@ class KarlstadsenergiApi:
         session = await self._ensure_session()
         try:
             async with asyncio.timeout(10):
-                resp = await session.get(f"{BASE_URL}/heart.beat")
+                resp = await session.get(
+                    f"{BASE_URL}/heart.beat",
+                    headers=REQUEST_HEADERS,
+                )
                 return resp.status == 200
         except Exception:
             return False
