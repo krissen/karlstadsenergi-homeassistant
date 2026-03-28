@@ -8,7 +8,7 @@
 
 A Home Assistant integration for [Karlstads Energi](https://www.karlstadsenergi.se/) customers. Track your waste collection pickup dates and monitor electricity consumption -- all from within Home Assistant.
 
-> **Note:** This integration communicates with the Karlstads Energi customer portal ("Mina sidor") and requires a valid customer account.
+> **Disclaimer:** This is an unofficial, reverse-engineered integration with no affiliation to Karlstads Energi AB. We honestly cannot recommend that anyone use it. It exists because [@krissen](https://github.com/krissen) got new waste bins with a new pickup schedule and kept dragging the wrong ones to the curb. If you, too, find yourself standing in your driveway on a cold Värmland morning wondering which bin goes out today -- well, here we are.
 
 ---
 
