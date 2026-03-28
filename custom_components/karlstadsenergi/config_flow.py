@@ -57,14 +57,7 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
 
             if self._auth_method == AUTH_PASSWORD:
                 return await self.async_step_password()
-
-            self._personnummer = user_input.get(CONF_PERSONNUMMER, "")
-            if not self._personnummer:
-                errors[CONF_PERSONNUMMER] = "invalid_auth"
-            else:
-                await self.async_set_unique_id(self._personnummer)
-                self._abort_if_unique_id_configured()
-                return await self.async_step_bankid()
+            return await self.async_step_bankid_personnummer()
 
         return self.async_show_form(
             step_id="user",
@@ -76,8 +69,29 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
                             AUTH_PASSWORD: "Kundnummer & lösenord",
                         }
                     ),
-                    vol.Optional(CONF_PERSONNUMMER): str,
                 }
+            ),
+            errors=errors,
+        )
+
+    async def async_step_bankid_personnummer(
+        self, user_input: dict[str, Any] | None = None,
+    ) -> FlowResult:
+        """Step for entering personnummer before BankID."""
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            self._personnummer = user_input.get(CONF_PERSONNUMMER, "")
+            if self._personnummer:
+                await self.async_set_unique_id(self._personnummer)
+                self._abort_if_unique_id_configured()
+                return await self.async_step_bankid()
+            errors["base"] = "invalid_auth"
+
+        return self.async_show_form(
+            step_id="bankid_personnummer",
+            data_schema=vol.Schema(
+                {vol.Required(CONF_PERSONNUMMER): str}
             ),
             errors=errors,
         )

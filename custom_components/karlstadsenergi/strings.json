@@ -3,10 +3,16 @@
     "step": {
       "user": {
         "title": "Karlstadsenergi",
-        "description": "Choose authentication method. Personnummer is only needed for BankID.",
+        "description": "Choose how to log in.",
         "data": {
-          "auth_method": "Authentication method",
-          "personnummer": "Personnummer (only for BankID)"
+          "auth_method": "Authentication method"
+        }
+      },
+      "bankid_personnummer": {
+        "title": "Karlstadsenergi - BankID",
+        "description": "Enter your personnummer to start BankID authentication.",
+        "data": {
+          "personnummer": "Personnummer"
         }
       },
       "password": {
