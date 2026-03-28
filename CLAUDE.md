@@ -83,6 +83,7 @@ This project uses Claude Code's built-in subagent system. Agents are defined in
 | QA Tester | `.claude/agents/qa-tester.md` | Integration testing, entity validation |
 | Security Specialist | `.claude/agents/security-specialist.md` | Auth handling, credential security |
 | Technical Writer | `.claude/agents/technical-writer.md` | README, HACS docs, installation guide |
+| HA Expert | `.claude/agents/ha-expert.md` | HA architecture, best practices, entity/flow design |
 
 ### Permissions
 
