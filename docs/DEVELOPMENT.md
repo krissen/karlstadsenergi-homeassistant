@@ -68,6 +68,15 @@ ruff format custom_components/karlstadsenergi/
 ruff check custom_components/karlstadsenergi/ --fix
 ```
 
+### Translations
+
+`strings.json` is the source of truth. `translations/en.json` must be an exact copy. After editing `strings.json`, copy it:
+
+```bash
+cp custom_components/karlstadsenergi/strings.json \
+   custom_components/karlstadsenergi/translations/en.json
+```
+
 ### Validating
 
 ```bash

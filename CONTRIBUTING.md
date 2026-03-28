@@ -75,14 +75,9 @@ The project uses a dedicated Home Assistant test instance at `../hass-test/confi
 This project uses [ruff](https://docs.astral.sh/ruff/) for linting and formatting.
 
 ```bash
-# Check
-ruff check custom_components/karlstadsenergi/
-
-# Auto-fix
-ruff check --fix custom_components/karlstadsenergi/
-
-# Format
+# Format then lint (always format first)
 ruff format custom_components/karlstadsenergi/
+ruff check custom_components/karlstadsenergi/ --fix
 ```
 
 ### General conventions
