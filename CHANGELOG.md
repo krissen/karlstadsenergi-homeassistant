@@ -7,12 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.2.0] - 2026-03-28
+## [0.2.0] - 2026-03-29
 
 ### Added
 - **Electricity price sensor** -- effective energy price (SEK/kWh) derived from fee breakdown, Energy Dashboard compatible
 - **Spot price sensor** -- current Nord Pool SE3 spot price from Evado public API (15-min intervals), Energy Dashboard compatible
-- **Contract sensors** -- one per contract (Elnät, Elhandel, Renhållning) showing contract type, dates, GSRN, and net area
+- **Contract sensors** -- one per contract (Elnät, Elhandel, Renhållning) showing contract type, dates, and net area
 - Calendar entities for waste collection
 - Binary sensors for "pickup tomorrow" per waste type
 - Diagnostics support (Settings > Devices > Download Diagnostics)

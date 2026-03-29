@@ -264,7 +264,12 @@ class KarlstadsenergiSpotPriceCoordinator(DataUpdateCoordinator[dict]):
         """
         spotprices = data.get("spotprices", [])
         if not spotprices:
-            return {"current_price": None, "prices": []}
+            return {
+                "current_price": None,
+                "prices": [],
+                "region": "SE3",
+                "stale": False,
+            }
 
         # Parse all price points
         prices = []
@@ -292,6 +297,7 @@ class KarlstadsenergiSpotPriceCoordinator(DataUpdateCoordinator[dict]):
         # Find current price (fall back to most recent known price if stale)
         now = datetime.now(tz=timezone.utc) if prices else None
         current_price = None
+        stale = False
         if now and prices:
             for i, p in enumerate(prices):
                 next_start = prices[i + 1]["start"] if i + 1 < len(prices) else None
@@ -299,14 +305,21 @@ class KarlstadsenergiSpotPriceCoordinator(DataUpdateCoordinator[dict]):
                     if now >= p["start"]:
                         current_price = p["price_sek"]
                     break
-            # If stale (now is past all known prices), use the last known price
+            # If stale (now is past all known prices), use the last known price.
+            # A price is considered stale when now has gone past the last bucket's
+            # nominal 15-minute window (last_start + 15 min), meaning we no longer
+            # have fresh data but are reusing the most recent known value.
             if current_price is None and now >= prices[-1]["start"]:
                 current_price = prices[-1]["price_sek"]
+            if current_price is not None:
+                last_bucket_end = prices[-1]["start"] + timedelta(minutes=15)
+                stale = now >= last_bucket_end
 
         return {
             "current_price": current_price,
             "prices": prices,
             "region": "SE3",
+            "stale": stale,
         }
 
 

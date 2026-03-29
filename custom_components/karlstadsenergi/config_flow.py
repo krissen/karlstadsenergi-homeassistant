@@ -166,7 +166,7 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
             step_id="password",
             data_schema=vol.Schema(
                 {
-                    vol.Required("customer_number"): str,
+                    vol.Required("customer_number", default=self._personnummer): str,
                     vol.Required(CONF_PASSWORD): str,
                 }
             ),

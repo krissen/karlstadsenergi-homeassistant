@@ -327,14 +327,14 @@ class KarlstadsenergiApi:
             # Navigate to start page to initialize the session view
             # (server requires this before API calls work)
             session = await self._ensure_session()
-            start_resp = await session.get(
+            async with session.get(
                 f"{BASE_URL}/start.aspx",
                 headers={"X-Requested-With": "XMLHttpRequest"},
-            )
-            if start_resp.status in (301, 302, 401, 403):
-                raise KarlstadsenergiAuthError(
-                    f"Session initialization failed (status {start_resp.status})"
-                )
+            ) as start_resp:
+                if start_resp.status in (301, 302, 401, 403):
+                    raise KarlstadsenergiAuthError(
+                        f"Session initialization failed (status {start_resp.status})"
+                    )
 
             self._authenticated = True
             _LOGGER.info("BankID authentication successful")
@@ -402,6 +402,7 @@ class KarlstadsenergiApi:
             raise KarlstadsenergiAuthError("Session expired and re-auth failed")
 
         if resp.status != 200:
+            await resp.release()
             raise KarlstadsenergiApiError(f"API returned status {resp.status}")
 
         content_type = resp.headers.get("Content-Type", "")
@@ -441,7 +442,8 @@ class KarlstadsenergiApi:
         session = await self._ensure_session()
         try:
             async with asyncio.timeout(REQUEST_TIMEOUT):
-                await session.get(f"{BASE_URL}/flex/flexservices.aspx")
+                async with session.get(f"{BASE_URL}/flex/flexservices.aspx"):
+                    pass
         except KarlstadsenergiAuthError:
             raise
         except Exception:
@@ -487,8 +489,10 @@ class KarlstadsenergiApi:
         # Visit pages to initialize server-side state (same session)
         try:
             async with asyncio.timeout(REQUEST_TIMEOUT):
-                await session.get(f"{BASE_URL}/start.aspx")
-                await session.get(f"{BASE_URL}/consumption/consumption.aspx")
+                async with session.get(f"{BASE_URL}/start.aspx"):
+                    pass
+                async with session.get(f"{BASE_URL}/consumption/consumption.aspx"):
+                    pass
         except asyncio.TimeoutError as err:
             raise KarlstadsenergiConnectionError(
                 "Timeout visiting consumption pages"
@@ -544,7 +548,8 @@ class KarlstadsenergiApi:
         session = await self._ensure_session()
         try:
             async with asyncio.timeout(REQUEST_TIMEOUT):
-                await session.get(f"{BASE_URL}/contract/contracts.aspx")
+                async with session.get(f"{BASE_URL}/contract/contracts.aspx"):
+                    pass
         except Exception:
             _LOGGER.debug("Failed to visit contracts page")
 
@@ -583,11 +588,11 @@ class KarlstadsenergiApi:
         session = await self._ensure_session()
         try:
             async with asyncio.timeout(10):
-                resp = await session.get(
+                async with session.get(
                     f"{BASE_URL}/heart.beat",
                     headers=REQUEST_HEADERS,
-                )
-                return resp.status == 200
+                ) as resp:
+                    return resp.status == 200
         except Exception:
             return False
 

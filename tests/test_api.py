@@ -358,6 +358,22 @@ class TestAsyncClose:
 # ---------------------------------------------------------------------------
 
 
+def _make_cm_session_get(mock_resp: MagicMock) -> MagicMock:
+    """Return a session mock whose .get() works as an async context manager.
+
+    aiohttp uses ``async with session.get(...) as resp``, so session.get must
+    return an object that supports __aenter__ / __aexit__.
+    """
+    cm = MagicMock()
+    cm.__aenter__ = AsyncMock(return_value=mock_resp)
+    cm.__aexit__ = AsyncMock(return_value=False)
+
+    mock_session = MagicMock()
+    mock_session.get = MagicMock(return_value=cm)
+    mock_session.closed = False
+    return mock_session
+
+
 class TestAsyncHeartbeat:
     @pytest.mark.asyncio
     async def test_returns_true_on_200(self) -> None:
@@ -365,11 +381,7 @@ class TestAsyncHeartbeat:
         mock_resp = MagicMock()
         mock_resp.status = 200
 
-        mock_session = MagicMock()
-        # aiohttp session.get() can be awaited directly (returns _RequestContextManager)
-        mock_session.get = AsyncMock(return_value=mock_resp)
-        mock_session.closed = False
-        api._session = mock_session
+        api._session = _make_cm_session_get(mock_resp)
 
         result = await api.async_heartbeat()
         assert result is True
@@ -377,8 +389,13 @@ class TestAsyncHeartbeat:
     @pytest.mark.asyncio
     async def test_returns_false_on_exception(self) -> None:
         api = KarlstadsenergiApi("1234567890", AUTH_PASSWORD, "pass")
+
+        cm = MagicMock()
+        cm.__aenter__ = AsyncMock(side_effect=Exception("timeout"))
+        cm.__aexit__ = AsyncMock(return_value=False)
+
         mock_session = MagicMock()
-        mock_session.get = AsyncMock(side_effect=Exception("timeout"))
+        mock_session.get = MagicMock(return_value=cm)
         mock_session.closed = False
         api._session = mock_session
 
@@ -391,10 +408,7 @@ class TestAsyncHeartbeat:
         mock_resp = MagicMock()
         mock_resp.status = 503
 
-        mock_session = MagicMock()
-        mock_session.get = AsyncMock(return_value=mock_resp)
-        mock_session.closed = False
-        api._session = mock_session
+        api._session = _make_cm_session_get(mock_resp)
 
         result = await api.async_heartbeat()
         assert result is False
@@ -557,6 +571,7 @@ class TestRequest:
 
         bad_resp = MagicMock()
         bad_resp.status = 500
+        bad_resp.release = AsyncMock()  # _request awaits resp.release() on non-200
         api._post = AsyncMock(return_value=bad_resp)
 
         with pytest.raises(KarlstadsenergiApiError, match="API returned status 500"):

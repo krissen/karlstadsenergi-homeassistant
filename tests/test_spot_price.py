@@ -180,6 +180,7 @@ class TestCurrentPriceSelection:
         # Because now (2026) > last start (2020-01-01T00:15), and the last
         # bucket has no next_start, the algorithm returns the last bucket's price.
         assert result["current_price"] == pytest.approx(0.85, abs=1e-4)
+        assert result["stale"] is True
 
     def test_day_boundary_correct_bucket(self) -> None:
         """Price straddling midnight: 23:45 and 00:00 next day."""
@@ -209,3 +210,41 @@ class TestCurrentPriceSelection:
             result = parse(data)
 
         assert result["current_price"] is None
+
+
+# ---------------------------------------------------------------------------
+# Stale flag
+# ---------------------------------------------------------------------------
+
+
+class TestStaleFlag:
+    def test_stale_false_for_current_data(self) -> None:
+        """Prices include 'now'; stale must be False."""
+        data = _response(
+            _make_spotprice_entry("2026-03-28T10:00:00+0000", 100.0),
+            _make_spotprice_entry("2026-03-28T10:15:00+0000", 110.0),
+        )
+        fake_now = datetime(2026, 3, 28, 10, 5, 0, tzinfo=timezone.utc)
+        with patch("custom_components.karlstadsenergi.datetime") as mock_dt:
+            mock_dt.now.return_value = fake_now
+            mock_dt.fromisoformat = datetime.fromisoformat
+            result = parse(data)
+
+        assert result["stale"] is False
+
+    def test_stale_false_when_no_prices(self) -> None:
+        """Empty price list: no data at all, not stale data."""
+        result = parse({"timezone": "Europe/Stockholm", "spotprices": []})
+        assert result["stale"] is False
+
+    def test_stale_true_when_all_prices_in_past(self) -> None:
+        """Every price point is older than 'now'; fallback path sets stale=True."""
+        data = _response(
+            _make_spotprice_entry("2020-06-01T12:00:00+0000", 50.0),
+            _make_spotprice_entry("2020-06-01T12:15:00+0000", 55.0),
+        )
+        # Real datetime.now() is in 2026 -- well past both entries.
+        result = parse(data)
+        assert result["stale"] is True
+        # Price is still returned (last known value).
+        assert result["current_price"] == pytest.approx(0.55, abs=1e-4)

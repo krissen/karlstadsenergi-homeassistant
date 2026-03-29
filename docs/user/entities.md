@@ -56,20 +56,19 @@ One calendar entity per waste type, compatible with HA's built-in Calendar card 
 |--------|-------------------|-------|------|--------------|
 | Electricity consumption | `sensor.karlstadsenergi_electricity_consumption` | Latest day's kWh | kWh | `energy` |
 
+Note: the portal API provides historical data only. Consumption data may lag days or weeks behind real-time. The `latest_date` attribute shows the actual date of the most recent data point.
+
 ### Electricity sensor attributes
 
 | Attribute | Type | Description |
 |-----------|------|-------------|
-| `meter_number` | string | Electricity meter number |
-| `service_identifier` | string | Service/contract identifier |
-| `net_area` | string | Network area ID |
-| `total_this_period` | float | Total consumption this period |
 | `total_last_year_period` | float | Same period last year |
 | `difference_percentage` | float | Year-over-year change (%) |
 | `average_daily` | float | Average daily consumption (current) |
 | `average_daily_last_year` | float | Average daily consumption (last year) |
 | `monthly_consumption` | dict | Monthly breakdown (`{"2026-01": 450.2, ...}`) |
-| `latest_date` | string | Date of the latest data point |
+| `latest_date` | string | Date of the most recent data point |
+| `latest_daily_kwh` | float | kWh value for the most recent data point |
 | `hourly_consumption` | list | Last 24 hours (`[{"time": "...", "kWh": 1.2}, ...]`) |
 | `hourly_data_points` | int | Total number of hourly data points |
 
@@ -77,7 +76,7 @@ One calendar entity per waste type, compatible with HA's built-in Calendar card 
 
 ## Electricity price sensor
 
-Derived from your invoice fee breakdown. Use this or the spot price sensor as the price entity in the **Energy Dashboard**.
+Derived from your invoice fee breakdown. This is a historical/retrospective price calculated from past invoices, not a real-time price. Use this or the spot price sensor as the price entity in the **Energy Dashboard**.
 
 | Sensor | Entity ID example | State | Unit |
 |--------|-------------------|-------|------|
@@ -95,6 +94,7 @@ Derived from your invoice fee breakdown. Use this or the spot price sensor as th
 | `total_invoice_sek` | float | Total invoice amount (SEK) |
 | `total_consumption_kwh` | float | Consumption for the fee period (kWh) |
 | `total_variable_price_sek_kwh` | float | All variable costs per kWh (energy + grid + tax, ex VAT) |
+| `fee_period_months` | list | Months covered by the fee data (e.g. `["2026-01", "2026-02"]`) |
 
 ---
 
@@ -118,6 +118,7 @@ Current Nord Pool electricity spot price for SE3 (Karlstad region), fetched from
 | `tomorrow_min` | float | Tomorrow's lowest price (if available) |
 | `tomorrow_max` | float | Tomorrow's highest price (if available) |
 | `tomorrow_average` | float | Tomorrow's average price (if available) |
+| `stale` | bool | `true` if the current price is past its validity window (Evado API may be down) |
 
 ---
 
@@ -136,11 +137,9 @@ One sensor per contract (grid, trading, waste).
 | Attribute | Type | Description |
 |-----------|------|-------------|
 | `contract_id` | string | Internal contract ID |
-| `contract_code` | string | Contract number |
 | `contract_start_date` | string | Contract start date |
 | `contract_end_date` | string | Contract end date (or "Tillsvidare") |
 | `utility_name` | string | Utility type (e.g. "Elhandel - Handelsavtal") |
-| `gsrn_number` | string | Metering point identifier (GSRN) |
 | `net_area_code` | string | Network area code |
 | `electricity_region` | string | Electricity price region |
 

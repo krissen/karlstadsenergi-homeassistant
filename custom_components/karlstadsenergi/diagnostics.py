@@ -19,6 +19,7 @@ TO_REDACT_CONFIG = {
     "sub_user_id",
     "customer_code",
     "GsrnNumber",
+    "title",
 }
 
 # Keys to redact from coordinator data payloads. These fields contain personally

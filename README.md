@@ -130,6 +130,22 @@ See **[Dashboard examples](docs/user/dashboard-examples.md)** for card configura
 
 ---
 
+## Known limitations
+
+### Electricity consumption data lag
+
+The portal API provides historical consumption data only. Depending on your meter and billing cycle, data may lag days or weeks behind real-time. The `latest_date` attribute on the electricity consumption sensor shows the actual date of the most recent data point -- use this to judge how current the data is. The sensor uses `state_class: total_increasing`, which is correct: the cumulative value increases monotonically within a year and resets in January.
+
+### Orphaned entity registry entries
+
+The integration creates waste entities in one of two modes -- detailed (one entity per service line) or summary (one entity per waste type) -- depending on what data the API returns at startup. If the mode changes between restarts (for example, the detailed Flex API becomes available after initially being unreachable), both sets of entities may appear in the entity registry and the old set will show as "unavailable". To remove the stale entries: go to **Settings -> Devices & Services -> Entities**, filter by "unavailable", and delete them manually.
+
+### Personnummer in API URLs
+
+The upstream Karlstadsenergi portal API requires the personnummer in URL paths when authenticating via BankID. All communication with the portal uses HTTPS, so the URL path (including the personnummer) is encrypted in transit. This is an upstream API design decision that this integration cannot change.
+
+---
+
 ## Data source
 
 All data is retrieved from the [Karlstads Energi customer portal](https://minasidor.karlstadsenergi.se). This integration is not affiliated with or endorsed by Karlstads Energi AB.
