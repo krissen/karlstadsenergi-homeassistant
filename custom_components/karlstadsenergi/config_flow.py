@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Mapping
 from typing import Any
 
 import voluptuous as vol
@@ -16,6 +17,13 @@ from homeassistant.config_entries import (
 )
 from homeassistant.const import CONF_PASSWORD
 from homeassistant.core import callback
+from homeassistant.helpers.selector import (
+    NumberSelector,
+    NumberSelectorConfig,
+    NumberSelectorMode,
+    SelectSelector,
+    SelectSelectorConfig,
+)
 
 from .api import (
     AUTH_BANKID,
@@ -68,11 +76,13 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
             step_id="user",
             data_schema=vol.Schema(
                 {
-                    vol.Required(CONF_AUTH_METHOD, default=AUTH_PASSWORD): vol.In(
-                        {
-                            AUTH_PASSWORD: "Customer number & password (recommended)",
-                            AUTH_BANKID: "Mobile BankID",
-                        }
+                    vol.Required(
+                        CONF_AUTH_METHOD, default=AUTH_PASSWORD
+                    ): SelectSelector(
+                        SelectSelectorConfig(
+                            options=[AUTH_PASSWORD, AUTH_BANKID],
+                            translation_key=CONF_AUTH_METHOD,
+                        )
                     ),
                 }
             ),
@@ -110,7 +120,8 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
             password = user_input[CONF_PASSWORD]
 
             await self.async_set_unique_id(customer_number)
-            self._abort_if_unique_id_configured()
+            if self.source != "reauth":
+                self._abort_if_unique_id_configured()
 
             api = KarlstadsenergiApi(
                 customer_number,
@@ -176,6 +187,10 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
                 AUTH_BANKID,
             )
             try:
+                # QR code (qr_code_base64) is available from the API but cannot be
+                # displayed in HA's config flow UI -- the frontend sanitizes data URIs
+                # and <img> tags in description markdown. Users authenticate via the
+                # bankid:// deep link shown in the description instead.
                 self._bankid_init = await self._api.bankid_initiate()
             except KarlstadsenergiConnectionError:
                 errors["base"] = "cannot_connect"
@@ -255,12 +270,19 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
 
         if user_input is not None:
-            selected_idx = user_input.get("account")
-            if selected_idx is not None and 0 <= selected_idx < len(self._accounts):
-                return await self._do_bankid_login(self._accounts[selected_idx])
+            selected_str = user_input.get("account")
+            if selected_str is not None:
+                try:
+                    selected_idx = int(selected_str)
+                except (ValueError, TypeError):
+                    selected_idx = -1
+                if 0 <= selected_idx < len(self._accounts):
+                    return await self._do_bankid_login(self._accounts[selected_idx])
             errors["base"] = "unknown"
 
-        options = {i: self._account_label(acc) for i, acc in enumerate(self._accounts)}
+        options = {
+            str(i): self._account_label(acc) for i, acc in enumerate(self._accounts)
+        }
 
         return self.async_show_form(
             step_id="select_account",
@@ -284,11 +306,13 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
             step_id="user",
             data_schema=vol.Schema(
                 {
-                    vol.Required(CONF_AUTH_METHOD, default=AUTH_PASSWORD): vol.In(
-                        {
-                            AUTH_PASSWORD: "Customer number & password (recommended)",
-                            AUTH_BANKID: "Mobile BankID",
-                        }
+                    vol.Required(
+                        CONF_AUTH_METHOD, default=AUTH_PASSWORD
+                    ): SelectSelector(
+                        SelectSelectorConfig(
+                            options=[AUTH_PASSWORD, AUTH_BANKID],
+                            translation_key=CONF_AUTH_METHOD,
+                        )
                     ),
                 }
             ),
@@ -302,11 +326,11 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
 
     async def async_step_reauth(
         self,
-        entry_data: dict[str, Any],
+        entry_data: Mapping[str, Any],
     ) -> ConfigFlowResult:
         """Handle re-authentication when session expires."""
         self._personnummer = entry_data.get(CONF_PERSONNUMMER, "")
-        self._auth_method = entry_data.get(CONF_AUTH_METHOD, AUTH_BANKID)
+        self._auth_method = entry_data.get(CONF_AUTH_METHOD, AUTH_PASSWORD)
         return await self.async_step_reauth_confirm()
 
     async def async_step_reauth_confirm(
@@ -349,7 +373,8 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
 
             customer_code = account.get("customer_code", "")
             await self.async_set_unique_id(customer_code)
-            self._abort_if_unique_id_configured()
+            if self.source != "reauth":
+                self._abort_if_unique_id_configured()
 
             full_name = account.get("full_name", "")
             title = (
@@ -414,12 +439,14 @@ class KarlstadsenergiOptionsFlow(OptionsFlow):
                     vol.Required(
                         CONF_UPDATE_INTERVAL,
                         default=current_interval,
-                    ): vol.All(
-                        vol.Coerce(int),
-                        vol.Range(
+                    ): NumberSelector(
+                        NumberSelectorConfig(
                             min=MIN_UPDATE_INTERVAL,
                             max=MAX_UPDATE_INTERVAL,
-                        ),
+                            step=1,
+                            mode=NumberSelectorMode.SLIDER,
+                            unit_of_measurement="hours",
+                        )
                     ),
                 }
             ),

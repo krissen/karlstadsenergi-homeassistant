@@ -31,6 +31,7 @@ TO_REDACT_DATA = {
     "MeterNumber",
     "ServiceIdentifier",
     "NetAreaId",
+    "NetAreaCode",
     "Address",
     "SiteId",
     "ContractCode",
@@ -55,5 +56,13 @@ async def async_get_config_entry_diagnostics(
         "contract_data": async_redact_data(
             runtime.contract_coordinator.data or {}, TO_REDACT_DATA
         ),
-        "spot_price_data": runtime.spot_price_coordinator.data or {},
+        "spot_price_data": {
+            "current_price": (runtime.spot_price_coordinator.data or {}).get(
+                "current_price"
+            ),
+            "region": (runtime.spot_price_coordinator.data or {}).get("region"),
+            "price_count": len(
+                (runtime.spot_price_coordinator.data or {}).get("prices", [])
+            ),
+        },
     }

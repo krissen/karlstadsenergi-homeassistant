@@ -93,6 +93,7 @@ class KarlstadsenergiApi:
         self._session: aiohttp.ClientSession | None = None
         self._authenticated = False
         self._saved_cookies: dict[str, str] | None = None
+        self._auth_lock = asyncio.Lock()
 
     async def _ensure_session(self) -> aiohttp.ClientSession:
         """Create session if needed."""
@@ -112,7 +113,6 @@ class KarlstadsenergiApi:
                         URL(BASE_URL),
                     )
                 self._authenticated = True
-                self._saved_cookies = None
         return self._session
 
     def get_session_cookies(self) -> dict[str, str]:
@@ -358,10 +358,18 @@ class KarlstadsenergiApi:
     # ── Unified authenticate ─────────────────────────────────
 
     async def authenticate(self) -> bool:
-        """Authenticate using configured method."""
-        if self._auth_method == AUTH_PASSWORD:
-            return await self.authenticate_password()
-        return await self.bankid_authenticate()
+        """Authenticate using configured method.
+
+        Serialized with a lock to prevent concurrent calls from
+        overwriting cookies mid-sequence when multiple coordinators
+        share this API instance.
+        """
+        async with self._auth_lock:
+            if self._authenticated:
+                return True
+            if self._auth_method == AUTH_PASSWORD:
+                return await self.authenticate_password()
+            return await self.bankid_authenticate()
 
     # ── Authenticated API requests ───────────────────────────
 
@@ -386,6 +394,7 @@ class KarlstadsenergiApi:
 
         # 302 redirect or 401 = session expired
         if resp.status in (301, 302, 401, 403):
+            await resp.release()
             if retry_auth:
                 self._authenticated = False
                 await self.authenticate()
@@ -397,6 +406,7 @@ class KarlstadsenergiApi:
 
         content_type = resp.headers.get("Content-Type", "")
         if "json" not in content_type:
+            await resp.release()
             raise KarlstadsenergiAuthError(
                 f"Expected JSON, got {content_type} (likely session expired)"
             )
@@ -432,6 +442,8 @@ class KarlstadsenergiApi:
         try:
             async with asyncio.timeout(REQUEST_TIMEOUT):
                 await session.get(f"{BASE_URL}/flex/flexservices.aspx")
+        except KarlstadsenergiAuthError:
+            raise
         except Exception:
             _LOGGER.debug("Failed to visit flex page")
 
