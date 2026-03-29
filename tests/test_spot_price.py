@@ -15,24 +15,16 @@ import pytest
 # sys.path manipulation is not required because pytest is run from the repo root.
 from custom_components.karlstadsenergi import KarlstadsenergiSpotPriceCoordinator
 
+# M3: _make_spotprice_entry is consolidated in conftest.py to avoid duplication.
+# Import directly since it is a plain function, not a pytest fixture.
+from tests.conftest import _make_spotprice_entry
+
 parse = KarlstadsenergiSpotPriceCoordinator._parse_spot_data
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
-
-def _make_spotprice_entry(start_utc: str, price: float) -> dict[str, Any]:
-    return {
-        "Spotprice": {
-            "region": "SE3",
-            "start_time": start_utc,
-            "end_time": "",
-            "price": price,
-            "modified": "",
-        }
-    }
 
 
 def _response(*entries) -> dict[str, Any]:
