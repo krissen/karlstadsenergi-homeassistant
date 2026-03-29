@@ -1,4 +1,12 @@
 {
+  "selector": {
+    "auth_method": {
+      "options": {
+        "password": "Customer number & password (recommended)",
+        "bankid": "Mobile BankID"
+      }
+    }
+  },
   "config": {
     "step": {
       "user": {
@@ -56,6 +64,19 @@
       "reauth_successful": "Re-authentication successful",
       "bankid_failed": "BankID authentication failed",
       "unknown": "Unexpected error"
+    }
+  },
+  "entity": {
+    "sensor": {
+      "electricity_consumption": {
+        "name": "Electricity consumption"
+      },
+      "electricity_price": {
+        "name": "Electricity price"
+      },
+      "spot_price": {
+        "name": "Spot price"
+      }
     }
   },
   "options": {

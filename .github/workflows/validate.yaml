@@ -16,8 +16,8 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install ruff
-      - run: ruff format --check custom_components/karlstadsenergi/
-      - run: ruff check custom_components/karlstadsenergi/
+      - run: ruff format --check .
+      - run: ruff check .
 
   pytest:
     name: Tests
@@ -35,7 +35,7 @@ jobs:
     runs-on: "ubuntu-latest"
     steps:
       - uses: "actions/checkout@v4"
-      - uses: "home-assistant/actions/hassfest@master"
+      - uses: "home-assistant/actions/hassfest@d56d093b9ab8d2105bc0cb6ee9bcc0ef4ec8b96d"  # master 2026-03-18
 
   hacs:
     name: HACS Validation
@@ -43,6 +43,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: HACS validation
-        uses: hacs/action@main
+        uses: hacs/action@dcb30e72781db3f207d5236b861172774ab0b485  # main 2026-01-26
         with:
           category: integration

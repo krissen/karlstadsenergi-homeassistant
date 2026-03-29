@@ -265,20 +265,18 @@ class TestStepPassword:
     @pytest.mark.asyncio
     async def test_duplicate_customer_aborts(self) -> None:
         """Password flow with already-configured customer_number should abort."""
+        from homeassistant.data_entry_flow import AbortFlow
 
         flow = _make_flow()
         flow.async_set_unique_id = AsyncMock()
-        # Simulate _abort_if_unique_id_configured raising
         flow._abort_if_unique_id_configured = MagicMock(
-            side_effect=flow.async_abort(reason="already_configured").__class__
+            side_effect=AbortFlow("already_configured")
         )
 
-        # The abort happens before API call, so API should not be instantiated
-        # We test via the abort_if side effect
-        await flow.async_step_password(
-            user_input={"customer_number": "123456", "password": "pw"}
-        )
-        # async_set_unique_id was called with the customer number
+        with pytest.raises(AbortFlow, match="already_configured"):
+            await flow.async_step_password(
+                user_input={"customer_number": "123456", "password": "pw"}
+            )
         flow.async_set_unique_id.assert_called_once_with("123456")
 
 

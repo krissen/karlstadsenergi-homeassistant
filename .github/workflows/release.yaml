@@ -17,7 +17,7 @@ jobs:
 
       - name: Get version
         id: version
-        uses: home-assistant/actions/helpers/version@master
+        uses: home-assistant/actions/helpers/version@d56d093b9ab8d2105bc0cb6ee9bcc0ef4ec8b96d  # master 2026-03-18
 
       - name: Set version number
         run: |
@@ -29,7 +29,7 @@ jobs:
           zip karlstadsenergi.zip -r ./
 
       - name: Upload zip to release
-        uses: svenstaro/upload-release-action@v1-release
+        uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: ./custom_components/karlstadsenergi/karlstadsenergi.zip

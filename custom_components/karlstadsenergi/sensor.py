@@ -34,6 +34,9 @@ from .const import (
     FEE_POWER,
     FEE_SUM,
     FEE_VAT,
+    VERSION,
+    pickup_date_for_service,
+    pickup_date_for_type,
     slug_for_waste_type,
 )
 
@@ -49,39 +52,8 @@ async def async_setup_entry(
 
     entities: list[SensorEntity] = []
 
-    # Waste collection sensors
-    if runtime.waste_coordinator.data:
-        services = runtime.waste_coordinator.data.get("services", [])
-        next_dates = runtime.waste_coordinator.data.get("next_dates", [])
-
-        if services:
-            # Detailed mode: one sensor per service
-            for service in services:
-                waste_type = service.get("FlexServiceContainTypeValue", "")
-                if not waste_type:
-                    continue
-                entities.append(
-                    WasteCollectionSensor(
-                        coordinator=runtime.waste_coordinator,
-                        customer_id=customer_id,
-                        service=service,
-                    )
-                )
-        elif next_dates:
-            # Summary mode: create sensors from start page data
-            for item in next_dates:
-                waste_type = item.get("Type", "")
-                if not waste_type:
-                    continue
-                entities.append(
-                    WasteCollectionSummary(
-                        coordinator=runtime.waste_coordinator,
-                        customer_id=customer_id,
-                        item=item,
-                    )
-                )
-
-    # Extract address/place_id from consumption data for device grouping
+    # Extract address/place_id from consumption data for device grouping.
+    # These are captured at setup time for stable device identifiers (Blocker B).
     site_address = ""
     site_place_id = ""
     if runtime.consumption_coordinator.data:
@@ -90,27 +62,74 @@ async def async_setup_entry(
         site_address = model.get("SiteName", "")
         site_place_id = model.get("SiteId", "")
 
-    # Electricity consumption sensor
-    if runtime.consumption_coordinator.data:
-        consumption = runtime.consumption_coordinator.data.get("consumption", {})
-        model = consumption.get("ConsumptionModel", {})
-        if model:
-            entities.append(
-                ElectricityConsumptionSensor(
-                    coordinator=runtime.consumption_coordinator,
-                    customer_id=customer_id,
-                )
-            )
+    # Waste collection sensors.
+    # If data has both empty services and empty next_dates at startup (first
+    # fetch failed), register a coordinator listener so entities are created
+    # when data becomes available.
+    waste_entities_added = False
 
-        # Electricity price sensor (from fee breakdown)
-        fee_data = runtime.consumption_coordinator.data.get("fee_data", {})
-        if fee_data:
-            entities.append(
-                ElectricityPriceSensor(
-                    coordinator=runtime.consumption_coordinator,
-                    customer_id=customer_id,
+    def _add_waste_entities() -> None:
+        nonlocal waste_entities_added
+        if waste_entities_added or not runtime.waste_coordinator.data:
+            return
+        data = runtime.waste_coordinator.data
+        services = data.get("services", [])
+        next_dates = data.get("next_dates", [])
+        new_entities: list[SensorEntity] = []
+        if services:
+            for service in services:
+                waste_type = service.get("FlexServiceContainTypeValue", "")
+                if not waste_type:
+                    continue
+                new_entities.append(
+                    WasteCollectionSensor(
+                        coordinator=runtime.waste_coordinator,
+                        customer_id=customer_id,
+                        service=service,
+                    )
                 )
-            )
+        elif next_dates:
+            for item in next_dates:
+                waste_type = item.get("Type", "")
+                if not waste_type:
+                    continue
+                new_entities.append(
+                    WasteCollectionSummary(
+                        coordinator=runtime.waste_coordinator,
+                        customer_id=customer_id,
+                        item=item,
+                    )
+                )
+        if new_entities:
+            async_add_entities(new_entities)
+        waste_entities_added = True
+
+    waste_data = runtime.waste_coordinator.data
+    if waste_data and (waste_data.get("services") or waste_data.get("next_dates")):
+        _add_waste_entities()
+    else:
+        unsub_waste = runtime.waste_coordinator.async_add_listener(_add_waste_entities)
+        entry.async_on_unload(unsub_waste)
+
+    # Electricity consumption + price sensors: always created so entities
+    # don't disappear permanently after a transient startup failure.
+    # CoordinatorEntity handles unavailability when coordinator.data is None.
+    entities.append(
+        ElectricityConsumptionSensor(
+            coordinator=runtime.consumption_coordinator,
+            customer_id=customer_id,
+            address=site_address,
+            place_id=site_place_id,
+        )
+    )
+    entities.append(
+        ElectricityPriceSensor(
+            coordinator=runtime.consumption_coordinator,
+            customer_id=customer_id,
+            address=site_address,
+            place_id=site_place_id,
+        )
+    )
 
     # Spot price sensor (always created -- shows unavailable if API is down)
     entities.append(
@@ -122,12 +141,20 @@ async def async_setup_entry(
         )
     )
 
-    # Contract sensors (one per contract)
-    if runtime.contract_coordinator.data:
+    # Contract sensors (one per contract).
+    # If contract_coordinator.data is None at setup (first fetch failed),
+    # register a listener so contract sensors are created when data arrives.
+    contract_entities_added = False
+
+    def _add_contracts() -> None:
+        nonlocal contract_entities_added
+        if contract_entities_added or not runtime.contract_coordinator.data:
+            return
+        new_entities: list[SensorEntity] = []
         for contract in runtime.contract_coordinator.data.get("contracts", []):
             utility = contract.get("UtilityName", "")
             if utility:
-                entities.append(
+                new_entities.append(
                     ContractSensor(
                         coordinator=runtime.contract_coordinator,
                         customer_id=customer_id,
@@ -136,6 +163,17 @@ async def async_setup_entry(
                         place_id=site_place_id,
                     )
                 )
+        if new_entities:
+            async_add_entities(new_entities)
+        contract_entities_added = True
+
+    if runtime.contract_coordinator.data:
+        _add_contracts()
+    else:
+        unsub_contracts = runtime.contract_coordinator.async_add_listener(
+            _add_contracts
+        )
+        entry.async_on_unload(unsub_contracts)
 
     async_add_entities(entities, update_before_add=False)
 
@@ -179,21 +217,14 @@ class WasteCollectionSensor(
             identifiers={(DOMAIN, f"{self._customer_id}_{self._place_id}")},
             name=f"Karlstadsenergi ({self._address})",
             manufacturer="Karlstads Energi",
+            model="Waste Collection",
+            sw_version=VERSION,
         )
 
     @property
     def native_value(self) -> datetime.date | None:
         """Return next pickup date."""
-        if not self.coordinator.data:
-            return None
-        dates = self.coordinator.data.get("dates", {})
-        date_str = dates.get(str(self._service_id))
-        if not date_str:
-            return None
-        try:
-            return datetime.date.fromisoformat(date_str)
-        except (ValueError, TypeError):
-            return None
+        return pickup_date_for_service(self.coordinator.data, self._service_id)
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
@@ -248,19 +279,13 @@ class WasteCollectionSummary(
             identifiers={(DOMAIN, f"{self._customer_id}")},
             name=f"Karlstadsenergi ({self._address})",
             manufacturer="Karlstads Energi",
+            model="Waste Collection",
+            sw_version=VERSION,
         )
 
     @property
     def native_value(self) -> datetime.date | None:
-        if not self.coordinator.data:
-            return None
-        for item in self.coordinator.data.get("next_dates", []):
-            if item.get("Type") == self._waste_type:
-                try:
-                    return datetime.date.fromisoformat(item["Date"])
-                except (ValueError, TypeError, KeyError):
-                    return None
-        return None
+        return pickup_date_for_type(self.coordinator.data, self._waste_type)
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
@@ -282,52 +307,60 @@ class ElectricityConsumptionSensor(
     CoordinatorEntity[KarlstadsenergiConsumptionCoordinator],
     SensorEntity,
 ):
-    """Sensor for electricity consumption."""
+    """Sensor for electricity consumption.
+
+    Uses TOTAL_INCREASING state_class so it is compatible with HA's Energy
+    Dashboard. The native_value is the cumulative period total (CurrYearValue
+    from CompareModel, or sum of all daily chart points as fallback). HA
+    detects meter resets automatically with TOTAL_INCREASING.
+    """
 
     _attr_has_entity_name = True
     _attr_device_class = SensorDeviceClass.ENERGY
     _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
-    _attr_state_class = SensorStateClass.TOTAL
+    _attr_state_class = SensorStateClass.TOTAL_INCREASING
     _attr_icon = "mdi:flash"
     _attr_suggested_display_precision = 1
+    _attr_translation_key = "electricity_consumption"
 
     def __init__(
         self,
         coordinator: KarlstadsenergiConsumptionCoordinator,
         customer_id: str,
+        address: str = "",
+        place_id: str = "",
     ) -> None:
         super().__init__(coordinator)
         self._customer_id = customer_id
+        self._address = address
+        self._place_id = place_id
         self._attr_unique_id = f"{DOMAIN}_{customer_id}_electricity"
-        self._attr_name = "Electricity consumption"
 
     @property
     def device_info(self) -> DeviceInfo:
-        address = self._get_address()
-        place_id = self._get_site_id()
-        return DeviceInfo(
-            identifiers={(DOMAIN, f"{self._customer_id}_{place_id}")},
-            name=f"Karlstadsenergi ({address})",
-            manufacturer="Karlstads Energi",
+        identifier = (
+            f"{self._customer_id}_{self._place_id}"
+            if self._place_id
+            else self._customer_id
         )
-
-    def _get_model(self) -> dict[str, Any]:
-        if not self.coordinator.data:
-            return {}
-        consumption = self.coordinator.data.get("consumption", {})
-        return consumption.get("ConsumptionModel", {})
-
-    def _get_address(self) -> str:
-        model = self._get_model()
-        return model.get("SiteName", "")
-
-    def _get_site_id(self) -> str:
-        model = self._get_model()
-        return model.get("SiteId", "")
+        name = (
+            f"Karlstadsenergi ({self._address})" if self._address else "Karlstadsenergi"
+        )
+        return DeviceInfo(
+            identifiers={(DOMAIN, identifier)},
+            name=name,
+            manufacturer="Karlstads Energi",
+            model="Electricity",
+            sw_version=VERSION,
+        )
 
     @property
     def native_value(self) -> float | None:
-        """Return latest day's consumption in kWh.
+        """Return cumulative total kWh for the current period.
+
+        Uses CurrYearValue from CompareModel (the official period total from
+        the API) when available. Falls back to summing all data[].y values
+        from SeriesList[0].
 
         Review note (V3): This value may lag days/weeks behind real-time
         because the portal API only provides historical data. The
@@ -339,34 +372,36 @@ class ElectricityConsumptionSensor(
             if self.coordinator.data
             else {}
         )
+        # Primary: use official period total from CompareModel
+        compare = consumption.get("CompareModel", {})
+        curr_year_value = compare.get("CurrYearValue")
+        if curr_year_value is not None:
+            return round(float(curr_year_value), 3)
+
+        # Fallback: sum all daily chart points
         chart = consumption.get("DetailedConsumptionChart", {})
         series_list = chart.get("SeriesList", [])
         if not series_list:
             return None
-        series = series_list[0]
-        data_points = series.get("data", [])
+        data_points = series_list[0].get("data", [])
         if not data_points:
             return None
-        # Return the last data point's value
-        last = data_points[-1]
-        value = last.get("y")
-        if value is not None:
-            return round(float(value), 3)
-        return None
+        total = sum(p.get("y", 0) for p in data_points if p.get("y") is not None)
+        return round(float(total), 3) if total else None
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         attrs: dict[str, Any] = {}
 
-        # Comparison data
         consumption = (
             self.coordinator.data.get("consumption", {})
             if self.coordinator.data
             else {}
         )
+
+        # Comparison data
         compare = consumption.get("CompareModel", {})
         if compare:
-            attrs["total_this_period"] = compare.get("CurrYearValue")
             attrs["total_last_year_period"] = compare.get("LastYearValue")
             attrs["difference_percentage"] = compare.get(
                 "DifferencePercentage",
@@ -392,12 +427,13 @@ class ElectricityConsumptionSensor(
                     k: round(v, 1) for k, v in monthly.items()
                 }
 
-            # Latest date
+            # Latest date and latest daily value
             if data_points:
-                attrs["latest_date"] = data_points[-1].get(
-                    "dateInterval",
-                    "",
-                )
+                last = data_points[-1]
+                attrs["latest_date"] = last.get("dateInterval", "")
+                last_value = last.get("y")
+                if last_value is not None:
+                    attrs["latest_daily_kwh"] = round(float(last_value), 3)
 
         # Hourly data (last 24h for today)
         hourly = (
@@ -476,38 +512,38 @@ class ElectricityPriceSensor(
     _attr_native_unit_of_measurement = "SEK/kWh"
     _attr_icon = "mdi:cash"
     _attr_suggested_display_precision = 4
+    _attr_translation_key = "electricity_price"
 
     def __init__(
         self,
         coordinator: KarlstadsenergiConsumptionCoordinator,
         customer_id: str,
+        address: str = "",
+        place_id: str = "",
     ) -> None:
         super().__init__(coordinator)
         self._customer_id = customer_id
+        self._address = address
+        self._place_id = place_id
         self._attr_unique_id = f"{DOMAIN}_{customer_id}_electricity_price"
-        self._attr_name = "Electricity price"
 
     @property
     def device_info(self) -> DeviceInfo:
-        address = self._get_address()
-        place_id = self._get_site_id()
-        return DeviceInfo(
-            identifiers={(DOMAIN, f"{self._customer_id}_{place_id}")},
-            name=f"Karlstadsenergi ({address})",
-            manufacturer="Karlstads Energi",
+        identifier = (
+            f"{self._customer_id}_{self._place_id}"
+            if self._place_id
+            else self._customer_id
         )
-
-    def _get_model(self) -> dict[str, Any]:
-        if not self.coordinator.data:
-            return {}
-        consumption = self.coordinator.data.get("consumption", {})
-        return consumption.get("ConsumptionModel", {})
-
-    def _get_address(self) -> str:
-        return self._get_model().get("SiteName", "")
-
-    def _get_site_id(self) -> str:
-        return self._get_model().get("SiteId", "")
+        name = (
+            f"Karlstadsenergi ({self._address})" if self._address else "Karlstadsenergi"
+        )
+        return DeviceInfo(
+            identifiers={(DOMAIN, identifier)},
+            name=name,
+            manufacturer="Karlstads Energi",
+            model="Electricity",
+            sw_version=VERSION,
+        )
 
     def _get_total_kwh_for_fee_period(self) -> float:
         """Get total kWh consumption matching the fee data's months only."""
@@ -571,6 +607,11 @@ class ElectricityPriceSensor(
         )
         if total_kwh and variable_fees:
             attrs["total_variable_price_sek_kwh"] = round(variable_fees / total_kwh, 4)
+        # Expose the fee data's time period so users can see if the price
+        # calculation might be inaccurate due to partial month coverage (M8).
+        fee_months = _extract_fee_months(fee_data)
+        if fee_months:
+            attrs["fee_period_months"] = sorted(fee_months)
         return attrs
 
 
@@ -589,6 +630,7 @@ class SpotPriceSensor(
     _attr_native_unit_of_measurement = "SEK/kWh"
     _attr_icon = "mdi:flash"
     _attr_suggested_display_precision = 4
+    _attr_translation_key = "spot_price"
 
     def __init__(
         self,
@@ -602,7 +644,6 @@ class SpotPriceSensor(
         self._address = address
         self._place_id = place_id
         self._attr_unique_id = f"{DOMAIN}_{customer_id}_spot_price"
-        self._attr_name = "Spot price"
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -618,6 +659,8 @@ class SpotPriceSensor(
             identifiers={(DOMAIN, identifier)},
             name=name,
             manufacturer="Karlstads Energi",
+            model="Spot Price",
+            sw_version=VERSION,
         )
 
     @property
@@ -712,6 +755,8 @@ class ContractSensor(
             identifiers={(DOMAIN, identifier)},
             name=name,
             manufacturer="Karlstads Energi",
+            model="Contract",
+            sw_version=VERSION,
         )
 
     def _get_contract(self) -> dict[str, Any]:

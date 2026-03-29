@@ -1,4 +1,25 @@
 {
+  "selector": {
+    "auth_method": {
+      "options": {
+        "password": "Customer number & password (recommended)",
+        "bankid": "Mobile BankID"
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "electricity_consumption": {
+        "name": "Electricity consumption"
+      },
+      "electricity_price": {
+        "name": "Electricity price"
+      },
+      "spot_price": {
+        "name": "Spot price"
+      }
+    }
+  },
   "config": {
     "step": {
       "user": {

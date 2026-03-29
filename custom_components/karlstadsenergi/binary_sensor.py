@@ -13,7 +13,14 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
 from . import KarlstadsenergiConfigEntry, KarlstadsenergiWasteCoordinator
-from .const import CONF_PERSONNUMMER, DOMAIN, slug_for_waste_type
+from .const import (
+    CONF_PERSONNUMMER,
+    DOMAIN,
+    VERSION,
+    pickup_date_for_service,
+    pickup_date_for_type,
+    slug_for_waste_type,
+)
 
 
 async def async_setup_entry(
@@ -25,18 +32,25 @@ async def async_setup_entry(
     waste_coordinator = entry.runtime_data.waste_coordinator
     customer_id = entry.data.get("customer_code") or entry.data[CONF_PERSONNUMMER]
 
-    entities: list[BinarySensorEntity] = []
+    # If waste data has both empty services and empty next_dates at startup
+    # (first fetch failed), register a coordinator listener so entities are
+    # created when data becomes available.
+    waste_entities_added = False
 
-    if waste_coordinator.data:
-        services = waste_coordinator.data.get("services", [])
-        next_dates = waste_coordinator.data.get("next_dates", [])
-
+    def _add_waste_entities() -> None:
+        nonlocal waste_entities_added
+        if waste_entities_added or not waste_coordinator.data:
+            return
+        data = waste_coordinator.data
+        services = data.get("services", [])
+        next_dates = data.get("next_dates", [])
+        new_entities: list[BinarySensorEntity] = []
         if services:
             for service in services:
                 waste_type = service.get("FlexServiceContainTypeValue", "")
                 if not waste_type:
                     continue
-                entities.append(
+                new_entities.append(
                     WastePickupTomorrowSensor(
                         coordinator=waste_coordinator,
                         customer_id=customer_id,
@@ -48,15 +62,23 @@ async def async_setup_entry(
                 waste_type = item.get("Type", "")
                 if not waste_type:
                     continue
-                entities.append(
+                new_entities.append(
                     WastePickupTomorrowSummarySensor(
                         coordinator=waste_coordinator,
                         customer_id=customer_id,
                         item=item,
                     )
                 )
+        if new_entities:
+            async_add_entities(new_entities)
+        waste_entities_added = True
 
-    async_add_entities(entities, update_before_add=False)
+    waste_data = waste_coordinator.data
+    if waste_data and (waste_data.get("services") or waste_data.get("next_dates")):
+        _add_waste_entities()
+    else:
+        unsub = waste_coordinator.async_add_listener(_add_waste_entities)
+        entry.async_on_unload(unsub)
 
 
 class WastePickupTomorrowSensor(
@@ -66,6 +88,8 @@ class WastePickupTomorrowSensor(
     """Binary sensor: on when waste pickup is tomorrow (detailed mode)."""
 
     _attr_has_entity_name = True
+    # device_class intentionally omitted: no BinarySensorDeviceClass
+    # matches "upcoming scheduled event" semantics
 
     def __init__(
         self,
@@ -92,25 +116,14 @@ class WastePickupTomorrowSensor(
             identifiers={(DOMAIN, f"{self._customer_id}_{self._place_id}")},
             name=f"Karlstadsenergi ({self._address})",
             manufacturer="Karlstads Energi",
+            model="Waste Collection",
+            sw_version=VERSION,
         )
-
-    def _next_pickup_date(self) -> datetime.date | None:
-        """Return the next pickup date from coordinator data."""
-        if not self.coordinator.data:
-            return None
-        dates = self.coordinator.data.get("dates", {})
-        date_str = dates.get(str(self._service_id))
-        if not date_str:
-            return None
-        try:
-            return datetime.date.fromisoformat(date_str)
-        except (ValueError, TypeError):
-            return None
 
     @property
     def is_on(self) -> bool | None:
         """Return True if pickup is tomorrow."""
-        pickup_date = self._next_pickup_date()
+        pickup_date = pickup_date_for_service(self.coordinator.data, self._service_id)
         if pickup_date is None:
             return None
         return pickup_date == dt_util.now().date() + datetime.timedelta(days=1)
@@ -130,6 +143,8 @@ class WastePickupTomorrowSummarySensor(
     """Binary sensor: on when waste pickup is tomorrow (summary mode)."""
 
     _attr_has_entity_name = True
+    # device_class intentionally omitted: no BinarySensorDeviceClass
+    # matches "upcoming scheduled event" semantics
 
     def __init__(
         self,
@@ -152,24 +167,14 @@ class WastePickupTomorrowSummarySensor(
             identifiers={(DOMAIN, f"{self._customer_id}")},
             name=f"Karlstadsenergi ({self._address})",
             manufacturer="Karlstads Energi",
+            model="Waste Collection",
+            sw_version=VERSION,
         )
-
-    def _next_pickup_date(self) -> datetime.date | None:
-        """Return the next pickup date from coordinator data."""
-        if not self.coordinator.data:
-            return None
-        for item in self.coordinator.data.get("next_dates", []):
-            if item.get("Type") == self._waste_type:
-                try:
-                    return datetime.date.fromisoformat(item["Date"])
-                except (ValueError, TypeError, KeyError):
-                    return None
-        return None
 
     @property
     def is_on(self) -> bool | None:
         """Return True if pickup is tomorrow."""
-        pickup_date = self._next_pickup_date()
+        pickup_date = pickup_date_for_type(self.coordinator.data, self._waste_type)
         if pickup_date is None:
             return None
         return pickup_date == dt_util.now().date() + datetime.timedelta(days=1)
