@@ -17,7 +17,7 @@ def update_manifest():
     ) as manifestfile:
         manifest = json.load(manifestfile)
 
-    manifest["version"] = version
+    manifest["version"] = version.lstrip("v")
 
     with open(
         f"{os.getcwd()}/custom_components/karlstadsenergi/manifest.json", "w"
