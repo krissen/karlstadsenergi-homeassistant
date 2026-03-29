@@ -1,4 +1,25 @@
 {
+  "selector": {
+    "auth_method": {
+      "options": {
+        "password": "Kundnummer & lösenord (rekommenderas)",
+        "bankid": "Mobilt BankID"
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "electricity_consumption": {
+        "name": "Elförbrukning"
+      },
+      "electricity_price": {
+        "name": "Elpris"
+      },
+      "spot_price": {
+        "name": "Spotpris"
+      }
+    }
+  },
   "config": {
     "step": {
       "user": {
