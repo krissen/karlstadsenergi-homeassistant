@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_PASSWORD
@@ -50,6 +50,7 @@ class KarlstadsenergiData:
     consumption_coordinator: KarlstadsenergiConsumptionCoordinator
     contract_coordinator: KarlstadsenergiContractCoordinator
     spot_price_coordinator: KarlstadsenergiSpotPriceCoordinator
+    setup_options: dict
 
 
 type KarlstadsenergiConfigEntry = ConfigEntry[KarlstadsenergiData]
@@ -76,12 +77,7 @@ class _CookieSavingCoordinator(DataUpdateCoordinator[dict]):
         self._entry = entry
 
     def _save_cookies(self) -> None:
-        """Persist current session cookies to config entry.
-
-        Note: async_update_entry triggers the update listener which will
-        reload the integration. This is acceptable -- the reload uses the
-        freshly saved cookies and restores a healthy session state.
-        """
+        """Persist current session cookies to config entry."""
         cookies = self.api.get_session_cookies()
         if cookies and cookies != self._entry.data.get("session_cookies"):
             new_data = {**self._entry.data, "session_cookies": cookies}
@@ -120,6 +116,8 @@ class KarlstadsenergiWasteCoordinator(_CookieSavingCoordinator):
                 if services:
                     service_ids = [s["FlexServiceId"] for s in services]
                     dates = await self.api.async_get_flex_dates(service_ids)
+            except KarlstadsenergiAuthError:
+                raise
             except Exception:
                 _LOGGER.debug("Detailed flex services unavailable", exc_info=True)
 
@@ -292,7 +290,7 @@ class KarlstadsenergiSpotPriceCoordinator(DataUpdateCoordinator[dict]):
         prices.sort(key=lambda p: p["start"])
 
         # Find current price (fall back to most recent known price if stale)
-        now = datetime.now(tz=prices[0]["start"].tzinfo) if prices else None
+        now = datetime.now(tz=timezone.utc) if prices else None
         current_price = None
         if now and prices:
             for i, p in enumerate(prices):
@@ -404,6 +402,7 @@ async def async_setup_entry(
         consumption_coordinator=consumption_coordinator,
         contract_coordinator=contract_coordinator,
         spot_price_coordinator=spot_price_coordinator,
+        setup_options=dict(entry.options),
     )
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -431,11 +430,14 @@ async def async_migrate_entry(
 ) -> bool:
     """Migrate config entry to a new version.
 
-    Review note (V9): Empty stub is correct for VERSION=1 -- there are no
-    prior schema versions to migrate from. Will be populated when VERSION
-    is bumped for a breaking config change.
+    Empty stub -- VERSION=1, no prior schema versions to migrate from.
+    Will be populated when VERSION is bumped for a breaking config change.
     """
-    _LOGGER.debug("Migrating config entry from version %s", entry.version)
+    if entry.version > 1:
+        _LOGGER.error(
+            "Can't migrate config entry from future version %s", entry.version
+        )
+        return False
     return True
 
 
@@ -456,5 +458,6 @@ async def _async_reload_entry(
     hass: HomeAssistant,
     entry: KarlstadsenergiConfigEntry,
 ) -> None:
-    """Reload entry on options change."""
-    await hass.config_entries.async_reload(entry.entry_id)
+    """Reload entry on options change (ignores data-only updates like cookie saves)."""
+    if dict(entry.options) != entry.runtime_data.setup_options:
+        await hass.config_entries.async_reload(entry.entry_id)
