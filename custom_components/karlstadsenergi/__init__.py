@@ -128,7 +128,10 @@ class KarlstadsenergiWasteCoordinator(_CookieSavingCoordinator):
             except KarlstadsenergiAuthError:
                 raise
             except Exception:
-                _LOGGER.debug("Detailed flex services unavailable", exc_info=True)
+                _LOGGER.info(
+                    "Detailed flex services unavailable, using summary fallback"
+                )
+                _LOGGER.debug("Flex service error details", exc_info=True)
 
             # Fallback: simple summary from start page
             next_dates = []
@@ -438,9 +441,10 @@ async def async_setup_entry(
     # Heartbeat: keep session alive every 5 minutes
     async def _heartbeat(_now=None) -> None:
         try:
-            await api.async_heartbeat()
+            async with api._auth_lock:
+                await api.async_heartbeat()
         except Exception:
-            pass
+            _LOGGER.debug("Heartbeat failed", exc_info=True)
 
     cancel_heartbeat = async_track_time_interval(
         hass,
@@ -456,14 +460,12 @@ async def async_setup_entry(
 async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Migrate config entry to a new version.
 
-    Empty stub -- VERSION=1, no prior schema versions to migrate from.
-    Will be populated when VERSION is bumped for a breaking config change.
     Uses bare ConfigEntry (not KarlstadsenergiConfigEntry) because
     migration runs before runtime_data is populated.
     """
     if entry.version > 1:
         _LOGGER.error(
-            "Can't migrate config entry from future version %s", entry.version
+            "Cannot migrate from future config entry version %s", entry.version
         )
         return False
     return True
@@ -479,6 +481,18 @@ async def async_unload_entry(
     )
     if unload_ok:
         await entry.runtime_data.api.async_close()
+
+        # Clean up shared spot price coordinator when last entry is unloaded
+        spot_key = f"{DOMAIN}_spot_price_coordinator"
+        if spot_key in hass.data:
+            remaining = [
+                e
+                for e in hass.config_entries.async_entries(DOMAIN)
+                if e.entry_id != entry.entry_id
+            ]
+            if not remaining:
+                del hass.data[spot_key]
+
     return unload_ok
 
 

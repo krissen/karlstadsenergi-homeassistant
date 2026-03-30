@@ -167,8 +167,11 @@ class KarlstadsenergiApi:
             URL_LOGIN,
             {"user": self._personnummer, "password": self._password, "captcha": ""},
         )
-        resp.raise_for_status()
-        data = await resp.json()
+        try:
+            resp.raise_for_status()
+            data = await resp.json()
+        finally:
+            await resp.release()
 
         result = _parse_aspnet_response(data)
         if isinstance(result, dict):
@@ -186,7 +189,7 @@ class KarlstadsenergiApi:
             )
 
         self._authenticated = True
-        _LOGGER.info("Password authentication successful")
+        _LOGGER.debug("Password authentication successful")
         return True
 
     # ── BankID authentication ────────────────────────────────
@@ -200,8 +203,11 @@ class KarlstadsenergiApi:
         transaction_id = uuid.uuid4().hex
         url = f"{BASE_URL}/api/grp2/Authenticate/{transaction_id}/bankid/0"
         resp = await self._post(url)
-        resp.raise_for_status()
-        data = await resp.json()
+        try:
+            resp.raise_for_status()
+            data = await resp.json()
+        finally:
+            await resp.release()
 
         order_resp = data.get("OrderResponseType", {})
         return {
@@ -220,8 +226,11 @@ class KarlstadsenergiApi:
         """
         url = f"{BASE_URL}/api/grp2/CollectRequest/{order_ref}/bankid"
         resp = await self._post(url)
-        resp.raise_for_status()
-        data = await resp.json()
+        try:
+            resp.raise_for_status()
+            data = await resp.json()
+        finally:
+            await resp.release()
 
         collect = data.get("CollectResponseType", {})
         status = collect.get("progressStatusField", -1)
@@ -229,6 +238,7 @@ class KarlstadsenergiApi:
         if data.get("HasError"):
             fault = data.get("GrpFault", {})
             fault_code = fault.get("faultStatusField", "unknown")
+            # Only log the fault code, not the full dict (may contain PII)
             raise KarlstadsenergiAuthError(f"BankID error: code={fault_code}")
 
         return {"status": status, "data": data}
@@ -265,16 +275,22 @@ class KarlstadsenergiApi:
             f"{BASE_URL}/api/grp2/GetCustomerByPinCode/{personnummer}/{transaction_id}"
         )
         resp = await self._post(url)
-        resp.raise_for_status()
-        customers = await self._parse_grp2_json(resp)
+        try:
+            resp.raise_for_status()
+            customers = await self._parse_grp2_json(resp)
+        finally:
+            await resp.release()
         if not isinstance(customers, list):
             customers = []
 
         # Get sub-users
         url_sub = f"{BASE_URL}/api/subuser/GetSubUsersByPinCode/{personnummer}"
         resp = await self._post(url_sub)
-        resp.raise_for_status()
-        sub_users = await self._parse_grp2_json(resp)
+        try:
+            resp.raise_for_status()
+            sub_users = await self._parse_grp2_json(resp)
+        finally:
+            await resp.release()
         if not isinstance(sub_users, list):
             sub_users = []
 
@@ -324,8 +340,11 @@ class KarlstadsenergiApi:
             f"/{transaction_id}/{sub_user_id}"
         )
         resp = await self._post(url_login)
-        resp.raise_for_status()
-        result = await resp.json()
+        try:
+            resp.raise_for_status()
+            result = await resp.json()
+        finally:
+            await resp.release()
 
         if result.get("Key") is True:
             # Navigate to start page to initialize the session view
@@ -341,7 +360,7 @@ class KarlstadsenergiApi:
                     )
 
             self._authenticated = True
-            _LOGGER.info("BankID authentication successful")
+            _LOGGER.debug("BankID authentication successful")
             return True
 
         raise KarlstadsenergiAuthError(
@@ -399,7 +418,6 @@ class KarlstadsenergiApi:
         try:
             # 302 redirect or 401 = session expired
             if resp.status in (301, 302, 401, 403):
-                await resp.release()
                 if retry_auth:
                     self._authenticated = False
                     await self.authenticate()

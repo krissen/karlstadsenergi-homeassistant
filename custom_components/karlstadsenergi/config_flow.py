@@ -306,7 +306,7 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
         code = account.get("customer_code", "")
         if name and code:
             return f"{name} ({code})"
-        return name or code or "Unknown"
+        return name or code or "—"
 
     def _show_user_form(self, errors: dict) -> ConfigFlowResult:
         return self.async_show_form(
@@ -350,8 +350,14 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
                 return await self.async_step_password()
             return await self.async_step_bankid()
 
+        method_label = (
+            "customer number & password"
+            if self._auth_method == AUTH_PASSWORD
+            else "BankID"
+        )
         return self.async_show_form(
             step_id="reauth_confirm",
+            description_placeholders={"auth_method": method_label},
             data_schema=vol.Schema({}),
         )
 
@@ -407,11 +413,19 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
         except KarlstadsenergiAuthError as err:
             _LOGGER.error("BankID login failed: %s", err)
             await self._cleanup_api()
-            return self.async_abort(reason="bankid_failed")
+            return self.async_show_form(
+                step_id="bankid_personnummer",
+                data_schema=vol.Schema({vol.Required(CONF_PERSONNUMMER): str}),
+                errors={"base": "bankid_failed"},
+            )
         except Exception:
             _LOGGER.exception("Unexpected error during BankID login")
             await self._cleanup_api()
-            return self.async_abort(reason="unknown")
+            return self.async_show_form(
+                step_id="bankid_personnummer",
+                data_schema=vol.Schema({vol.Required(CONF_PERSONNUMMER): str}),
+                errors={"base": "unknown"},
+            )
 
     @staticmethod
     @callback
@@ -428,8 +442,13 @@ class KarlstadsenergiOptionsFlow(OptionsFlow):
         self,
         user_input: dict[str, Any] | None = None,
     ) -> ConfigFlowResult:
+        errors: dict[str, str] = {}
         if user_input is not None:
-            return self.async_create_entry(title="", data=user_input)
+            interval = user_input.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL)
+            if not (MIN_UPDATE_INTERVAL <= interval <= MAX_UPDATE_INTERVAL):
+                errors["base"] = "invalid_interval"
+            else:
+                return self.async_create_entry(title="", data=user_input)
 
         current_interval = self.config_entry.options.get(
             CONF_UPDATE_INTERVAL,
@@ -454,4 +473,5 @@ class KarlstadsenergiOptionsFlow(OptionsFlow):
                     ),
                 }
             ),
+            errors=errors,
         )
