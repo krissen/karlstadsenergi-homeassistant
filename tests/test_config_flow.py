@@ -84,7 +84,7 @@ class TestStepUser:
     async def test_no_input_errors_are_empty(self) -> None:
         flow = _make_flow()
         result = await flow.async_step_user(user_input=None)
-        assert result.get("errors", {}) == {}
+        assert not result.get("errors")
 
     @pytest.mark.asyncio
     async def test_password_method_routes_to_password_step(self) -> None:
@@ -317,3 +317,136 @@ class TestOptionsFlow:
         result = await flow.async_step_init(user_input={CONF_UPDATE_INTERVAL: 12})
         assert result["type"] == "create_entry"
         assert result["data"][CONF_UPDATE_INTERVAL] == 12
+
+
+# ---------------------------------------------------------------------------
+# B7: Reauth flow
+# ---------------------------------------------------------------------------
+
+
+class TestStepReauth:
+    @pytest.mark.asyncio
+    async def test_stores_personnummer_from_entry_data(self) -> None:
+        """async_step_reauth must store the personnummer from the existing entry."""
+        flow = _make_flow(source="reauth")
+
+        entry_data = {
+            CONF_PERSONNUMMER: "199001011234",
+            CONF_AUTH_METHOD: AUTH_PASSWORD,
+        }
+        # async_step_reauth immediately calls async_step_reauth_confirm (no input),
+        # which returns a form -- we only care about the side-effect on flow state.
+        await flow.async_step_reauth(entry_data)
+
+        assert flow._personnummer == "199001011234"
+
+    @pytest.mark.asyncio
+    async def test_stores_auth_method_from_entry_data(self) -> None:
+        flow = _make_flow(source="reauth")
+
+        entry_data = {
+            CONF_PERSONNUMMER: "199001011234",
+            CONF_AUTH_METHOD: AUTH_BANKID,
+        }
+        await flow.async_step_reauth(entry_data)
+
+        assert flow._auth_method == AUTH_BANKID
+
+    @pytest.mark.asyncio
+    async def test_routes_to_reauth_confirm(self) -> None:
+        """async_step_reauth must advance to the reauth_confirm step."""
+        flow = _make_flow(source="reauth")
+
+        entry_data = {
+            CONF_PERSONNUMMER: "199001011234",
+            CONF_AUTH_METHOD: AUTH_PASSWORD,
+        }
+        result = await flow.async_step_reauth(entry_data)
+
+        assert result["type"] == "form"
+        assert result["step_id"] == "reauth_confirm"
+
+    @pytest.mark.asyncio
+    async def test_defaults_auth_method_to_password_when_missing(self) -> None:
+        """Absent CONF_AUTH_METHOD in entry_data must default to AUTH_PASSWORD."""
+        flow = _make_flow(source="reauth")
+
+        await flow.async_step_reauth({CONF_PERSONNUMMER: "199001011234"})
+
+        assert flow._auth_method == AUTH_PASSWORD
+
+
+class TestStepReauthConfirm:
+    @pytest.mark.asyncio
+    async def test_no_input_returns_reauth_confirm_form(self) -> None:
+        """With no user_input the form must be shown."""
+        flow = _make_flow(source="reauth")
+        flow._personnummer = "199001011234"
+        flow._auth_method = AUTH_PASSWORD
+
+        result = await flow.async_step_reauth_confirm(user_input=None)
+
+        assert result["type"] == "form"
+        assert result["step_id"] == "reauth_confirm"
+
+    @pytest.mark.asyncio
+    async def test_form_does_not_expose_personnummer(self) -> None:
+        """The reauth_confirm form must NOT expose personnummer (security H10)."""
+        flow = _make_flow(source="reauth")
+        flow._personnummer = "199001011234"
+        flow._auth_method = AUTH_PASSWORD
+
+        result = await flow.async_step_reauth_confirm(user_input=None)
+
+        placeholders = result.get("description_placeholders") or {}
+        assert "personnummer" not in placeholders
+
+    @pytest.mark.asyncio
+    async def test_with_input_routes_to_password_step_for_password_auth(self) -> None:
+        """Submitting the confirm form when auth_method=password must go to password."""
+        flow = _make_flow(source="reauth")
+        flow._personnummer = "199001011234"
+        flow._auth_method = AUTH_PASSWORD
+
+        result = await flow.async_step_reauth_confirm(user_input={})
+
+        assert result["type"] == "form"
+        assert result["step_id"] == "password"
+
+    @pytest.mark.asyncio
+    async def test_with_input_routes_to_bankid_step_for_bankid_auth(self) -> None:
+        """Submitting the confirm form when auth_method=bankid must go to bankid."""
+        flow = _make_flow(source="reauth")
+        flow._personnummer = "199001011234"
+        flow._auth_method = AUTH_BANKID
+
+        mock_api = MagicMock()
+        mock_api.bankid_initiate = AsyncMock(
+            return_value={
+                "order_ref": "ref-reauth",
+                "auto_start_token": "tok",
+                "qr_code_base64": "",
+                "transaction_id": "txn-reauth",
+            }
+        )
+
+        with patch(
+            "custom_components.karlstadsenergi.config_flow.KarlstadsenergiApi",
+            return_value=mock_api,
+        ):
+            result = await flow.async_step_reauth_confirm(user_input={})
+
+        assert result["type"] == "form"
+        assert result["step_id"] == "bankid"
+
+    @pytest.mark.asyncio
+    async def test_empty_schema_on_confirm_form(self) -> None:
+        """The reauth_confirm form has no fields -- schema must be empty."""
+        flow = _make_flow(source="reauth")
+        flow._personnummer = "199001011234"
+        flow._auth_method = AUTH_PASSWORD
+
+        result = await flow.async_step_reauth_confirm(user_input=None)
+
+        schema_keys = list(result["data_schema"].schema.keys())
+        assert schema_keys == []

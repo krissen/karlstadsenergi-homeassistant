@@ -204,17 +204,22 @@ class TestSaveCookies:
         hass = _make_hass()
         api = _make_api()
         api.get_session_cookies = MagicMock(
-            return_value={"ASP.NET_SessionId": "newval"}
+            return_value={"ASP.NET_SessionId": "newval", ".PORTALAUTH": "auth"}
         )
 
-        entry = _make_entry({"session_cookies": {"ASP.NET_SessionId": "oldval"}})
+        entry = _make_entry(
+            {"session_cookies": {"ASP.NET_SessionId": "oldval", ".PORTALAUTH": "auth"}}
+        )
 
         coord = KarlstadsenergiWasteCoordinator(hass, api, 6, entry)
         coord._save_cookies()
 
         hass.config_entries.async_update_entry.assert_called_once()
         _, kwargs = hass.config_entries.async_update_entry.call_args
-        assert kwargs["data"]["session_cookies"] == {"ASP.NET_SessionId": "newval"}
+        assert kwargs["data"]["session_cookies"] == {
+            "ASP.NET_SessionId": "newval",
+            ".PORTALAUTH": "auth",
+        }
 
     def test_save_cookies_does_nothing_when_cookies_unchanged(self) -> None:
         hass = _make_hass()
