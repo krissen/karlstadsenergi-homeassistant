@@ -77,9 +77,18 @@ class _CookieSavingCoordinator(DataUpdateCoordinator[dict]):
         self._entry = entry
 
     def _save_cookies(self) -> None:
-        """Persist current session cookies to config entry."""
+        """Persist current session cookies to config entry.
+
+        Only saves when both required cookies are present, preventing
+        invalid/partial cookies from being persisted after auth failures.
+        """
         cookies = self.api.get_session_cookies()
-        if cookies and cookies != self._entry.data.get("session_cookies"):
+        if (
+            cookies
+            and "ASP.NET_SessionId" in cookies
+            and ".PORTALAUTH" in cookies
+            and cookies != self._entry.data.get("session_cookies")
+        ):
             new_data = {**self._entry.data, "session_cookies": cookies}
             self.hass.config_entries.async_update_entry(
                 self._entry,
@@ -402,12 +411,18 @@ async def async_setup_entry(
     except Exception as err:
         _LOGGER.warning("Could not fetch contract data: %s", err)
 
-    # Spot price coordinator (15 min interval, public API, no auth)
-    spot_price_coordinator = KarlstadsenergiSpotPriceCoordinator(hass)
-    try:
-        await spot_price_coordinator.async_config_entry_first_refresh()
-    except Exception as err:
-        _LOGGER.warning("Could not fetch spot prices: %s", err)
+    # Spot price coordinator (15 min interval, public API, no auth).
+    # Shared across all config entries since it fetches public data.
+    spot_key = f"{DOMAIN}_spot_price_coordinator"
+    if spot_key in hass.data:
+        spot_price_coordinator = hass.data[spot_key]
+    else:
+        spot_price_coordinator = KarlstadsenergiSpotPriceCoordinator(hass)
+        try:
+            await spot_price_coordinator.async_config_entry_first_refresh()
+        except Exception as err:
+            _LOGGER.warning("Could not fetch spot prices: %s", err)
+        hass.data[spot_key] = spot_price_coordinator
 
     entry.runtime_data = KarlstadsenergiData(
         api=api,
@@ -438,13 +453,13 @@ async def async_setup_entry(
     return True
 
 
-async def async_migrate_entry(
-    hass: HomeAssistant, entry: KarlstadsenergiConfigEntry
-) -> bool:
+async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Migrate config entry to a new version.
 
     Empty stub -- VERSION=1, no prior schema versions to migrate from.
     Will be populated when VERSION is bumped for a breaking config change.
+    Uses bare ConfigEntry (not KarlstadsenergiConfigEntry) because
+    migration runs before runtime_data is populated.
     """
     if entry.version > 1:
         _LOGGER.error(

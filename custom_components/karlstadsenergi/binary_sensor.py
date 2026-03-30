@@ -71,7 +71,7 @@ async def async_setup_entry(
                 )
         if new_entities:
             async_add_entities(new_entities)
-        waste_entities_added = True
+            waste_entities_added = True
 
     waste_data = waste_coordinator.data
     if waste_data and (waste_data.get("services") or waste_data.get("next_dates")):

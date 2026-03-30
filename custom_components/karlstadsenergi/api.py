@@ -94,26 +94,27 @@ class KarlstadsenergiApi:
         self._authenticated = False
         self._saved_cookies: dict[str, str] | None = None
         self._auth_lock = asyncio.Lock()
+        self._session_lock = asyncio.Lock()
 
     async def _ensure_session(self) -> aiohttp.ClientSession:
-        """Create session if needed."""
-        if self._session is None or self._session.closed:
-            jar = aiohttp.CookieJar()
-            self._session = aiohttp.ClientSession(cookie_jar=jar)
-            self._authenticated = False
-            # Restore saved cookies if available.
-            # Review note (V1): We set _authenticated=True here without
-            # validating the cookies. This is intentional -- the first real
-            # API call via _request() will detect expired sessions (302/401)
-            # and trigger re-authentication automatically.
-            if self._saved_cookies:
-                for name, value in self._saved_cookies.items():
-                    jar.update_cookies(
-                        {name: value},
-                        URL(BASE_URL),
-                    )
-                self._authenticated = True
-        return self._session
+        """Create session if needed.
+
+        Serialized with a lock to prevent concurrent callers (heartbeat
+        + coordinators) from creating duplicate sessions.
+        """
+        async with self._session_lock:
+            if self._session is None or self._session.closed:
+                jar = aiohttp.CookieJar()
+                self._session = aiohttp.ClientSession(cookie_jar=jar)
+                self._authenticated = False
+                if self._saved_cookies:
+                    for name, value in self._saved_cookies.items():
+                        jar.update_cookies(
+                            {name: value},
+                            URL(BASE_URL),
+                        )
+                    self._authenticated = True
+            return self._session
 
     def get_session_cookies(self) -> dict[str, str]:
         """Export current session cookies for persistence."""
@@ -150,7 +151,9 @@ class KarlstadsenergiApi:
                 "Timeout connecting to Karlstadsenergi"
             ) from err
         except aiohttp.ClientError as err:
-            raise KarlstadsenergiConnectionError(f"Connection error: {err}") from err
+            raise KarlstadsenergiConnectionError(
+                f"Connection error: {type(err).__name__}"
+            ) from err
 
     # ── Password authentication ──────────────────────────────
 
@@ -225,7 +228,8 @@ class KarlstadsenergiApi:
 
         if data.get("HasError"):
             fault = data.get("GrpFault", {})
-            raise KarlstadsenergiAuthError(f"BankID error: {fault}")
+            fault_code = fault.get("faultStatusField", "unknown")
+            raise KarlstadsenergiAuthError(f"BankID error: code={fault_code}")
 
         return {"status": status, "data": data}
 
@@ -392,28 +396,29 @@ class KarlstadsenergiApi:
             allow_redirects=False,
         )
 
-        # 302 redirect or 401 = session expired
-        if resp.status in (301, 302, 401, 403):
-            await resp.release()
-            if retry_auth:
-                self._authenticated = False
-                await self.authenticate()
-                return await self._request(url, json_data, retry_auth=False)
-            raise KarlstadsenergiAuthError("Session expired and re-auth failed")
+        try:
+            # 302 redirect or 401 = session expired
+            if resp.status in (301, 302, 401, 403):
+                await resp.release()
+                if retry_auth:
+                    self._authenticated = False
+                    await self.authenticate()
+                    return await self._request(url, json_data, retry_auth=False)
+                raise KarlstadsenergiAuthError("Session expired and re-auth failed")
 
-        if resp.status != 200:
-            await resp.release()
-            raise KarlstadsenergiApiError(f"API returned status {resp.status}")
+            if resp.status != 200:
+                raise KarlstadsenergiApiError(f"API returned status {resp.status}")
 
-        content_type = resp.headers.get("Content-Type", "")
-        if "json" not in content_type:
-            await resp.release()
-            raise KarlstadsenergiAuthError(
-                f"Expected JSON, got {content_type} (likely session expired)"
-            )
+            content_type = resp.headers.get("Content-Type", "")
+            if "json" not in content_type:
+                raise KarlstadsenergiAuthError(
+                    f"Expected JSON, got {content_type} (likely session expired)"
+                )
 
-        data = await resp.json()
-        return _parse_aspnet_response(data)
+            data = await resp.json()
+            return _parse_aspnet_response(data)
+        finally:
+            await resp.release()
 
     async def async_get_next_flex_dates(self) -> list[dict[str, Any]]:
         """Get next pickup dates (simple summary from start page).
@@ -444,7 +449,7 @@ class KarlstadsenergiApi:
             async with asyncio.timeout(REQUEST_TIMEOUT):
                 async with session.get(f"{BASE_URL}/flex/flexservices.aspx"):
                     pass
-        except KarlstadsenergiAuthError:
+        except (KarlstadsenergiAuthError, KarlstadsenergiApiError):
             raise
         except Exception:
             _LOGGER.debug("Failed to visit flex page")
@@ -486,21 +491,22 @@ class KarlstadsenergiApi:
             await self.authenticate()
 
         session = await self._ensure_session()
-        # Visit pages to initialize server-side state (same session)
-        try:
-            async with asyncio.timeout(REQUEST_TIMEOUT):
-                async with session.get(f"{BASE_URL}/start.aspx"):
-                    pass
-                async with session.get(f"{BASE_URL}/consumption/consumption.aspx"):
-                    pass
-        except asyncio.TimeoutError as err:
-            raise KarlstadsenergiConnectionError(
-                "Timeout visiting consumption pages"
-            ) from err
-        except aiohttp.ClientError as err:
-            raise KarlstadsenergiConnectionError(
-                f"Connection error visiting consumption pages: {err}"
-            ) from err
+        # Visit pages to initialize server-side state (same session).
+        # Each page gets its own timeout so a slow first page doesn't
+        # starve the second.
+        for page in ("start.aspx", "consumption/consumption.aspx"):
+            try:
+                async with asyncio.timeout(REQUEST_TIMEOUT):
+                    async with session.get(f"{BASE_URL}/{page}"):
+                        pass
+            except asyncio.TimeoutError as err:
+                raise KarlstadsenergiConnectionError(
+                    f"Timeout visiting {page}"
+                ) from err
+            except aiohttp.ClientError as err:
+                raise KarlstadsenergiConnectionError(
+                    f"Connection error visiting {page}: {err}"
+                ) from err
 
         url = f"{BASE_URL}/Consumption/Consumption.aspx/GetConsumptionViewModelOnLoad"
         result = await self._request(url)
