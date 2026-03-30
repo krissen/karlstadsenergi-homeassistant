@@ -4,6 +4,10 @@
 
 All entities created by the Karlstadsenergi integration, grouped by type.
 
+![Integration page showing devices and entities](../images/integration.png)
+
+![Waste collection device with sensors and calendar](../images/device-waste.png)
+
 ---
 
 ## Waste collection sensors

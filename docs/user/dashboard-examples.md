@@ -28,6 +28,8 @@ The most popular approach in the HA community. Clean design with color-coded urg
 
 **Color logic:** green (7+ days), yellow (2--6 days), orange (tomorrow), red (today).
 
+![Mushroom Cards with template cards and chips](../images/dashboard-mushroom.png)
+
 ### 1a. Template card grid
 
 Three cards in a grid, one per waste type.
@@ -226,6 +228,8 @@ chips:
 
 Three-state card with distinct styling per urgency level. Uses button-card's JavaScript templates.
 
+![Button Card with color-coded backgrounds](../images/dashboard-button-card.png)
+
 ```yaml
 type: grid
 columns: 3
@@ -382,6 +386,8 @@ cards:
 ---
 
 ## 3. Built-in HA cards (no HACS required)
+
+![Built-in HA cards: entities, glance, and calendar](../images/dashboard-builtin.png)
 
 ### 3a. Calendar card
 

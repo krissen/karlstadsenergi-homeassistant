@@ -12,6 +12,8 @@ A Home Assistant integration for [Karlstads Energi](https://www.karlstadsenergi.
 >
 > It exists because [@krissen](https://github.com/krissen) got new waste bins with a new pickup schedule and kept dragging the wrong ones to the curb on cold Värmland mornings. Automation to the rescue. It's shared here in case someone else in Karlstad has the same problem. If that's you -- välkommen, and good luck.
 
+![Waste collection dashboard with color-coded pickup dates](docs/images/dashboard-button-card.png)
+
 ---
 
 ## Features
