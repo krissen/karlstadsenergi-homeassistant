@@ -52,15 +52,19 @@ class TestSlugForWasteType:
         assert not result.startswith("_")
         assert not result.endswith("_")
 
-    def test_empty_string_returns_unknown(self) -> None:
+    def test_empty_string_returns_hash_slug(self) -> None:
         result = slug_for_waste_type("")
-        # After sanitizing an empty string all chars stripped -> "unknown"
-        assert result == "unknown"
+        # Empty string produces a hash-based slug to avoid collisions
+        assert result.startswith("waste_")
+        assert len(result) > len("waste_")
 
-    def test_all_special_chars_returns_unknown(self) -> None:
-        # String with only non-alphanumeric chars -> all become _ -> stripped -> "unknown"
+    def test_all_special_chars_returns_hash_slug(self) -> None:
+        # String with only non-alphanumeric chars -> all stripped -> hash-based slug
         result = slug_for_waste_type("!!!###")
-        assert result == "unknown"
+        assert result.startswith("waste_")
+
+    def test_different_empty_inputs_produce_different_slugs(self) -> None:
+        assert slug_for_waste_type("") != slug_for_waste_type("!!!")
 
     def test_case_sensitive_lookup(self) -> None:
         # Wrong case must NOT return the mapped slug

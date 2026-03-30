@@ -1258,8 +1258,8 @@ class TestBankIdFlowFullPath:
         assert result["type"] == "form"
 
     @pytest.mark.asyncio
-    async def test_bankid_login_auth_error_aborts_flow(self) -> None:
-        """AuthError during _do_bankid_login returns an abort result."""
+    async def test_bankid_login_auth_error_returns_to_form(self) -> None:
+        """AuthError during _do_bankid_login returns to personnummer form."""
         from custom_components.karlstadsenergi.api import KarlstadsenergiAuthError
 
         flow = _make_flow()
@@ -1283,8 +1283,9 @@ class TestBankIdFlowFullPath:
 
         result = await flow._do_bankid_login(account)
 
-        assert result["type"] == "abort"
-        assert result["reason"] == "bankid_failed"
+        assert result["type"] == "form"
+        assert result["step_id"] == "bankid_personnummer"
+        assert result["errors"]["base"] == "bankid_failed"
         mock_api.async_close.assert_called_once()
 
     @pytest.mark.asyncio
