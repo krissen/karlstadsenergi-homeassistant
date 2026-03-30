@@ -82,6 +82,10 @@ ruff format custom_components/karlstadsenergi/
 ruff check custom_components/karlstadsenergi/ --fix
 ```
 
+### Version
+
+`const.py` defines `VERSION` and `manifest.json` defines `"version"`. Both **must be updated together** on every release -- they are not linked automatically.
+
 ### Translations
 
 `strings.json` is the source of truth. `translations/en.json` must be an exact copy. After editing `strings.json`, copy it:
@@ -139,6 +143,7 @@ Before tagging a release, verify the integration against a real HA instance:
 
 ## Useful resources
 
+- [CONTRIBUTING.md](../CONTRIBUTING.md) -- how to submit changes, code style, PR guidelines
 - [Home Assistant integration development docs](https://developers.home-assistant.io/docs/creating_integration_manifest)
 - [Home Assistant DataUpdateCoordinator](https://developers.home-assistant.io/docs/integration_fetching_data)
 - [aiohttp documentation](https://docs.aiohttp.org/)

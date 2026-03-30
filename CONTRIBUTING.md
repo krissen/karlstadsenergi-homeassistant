@@ -43,7 +43,7 @@ We appreciate all kinds of contributions: code, documentation, bug reports, feat
 3. Install dependencies:
 
    ```bash
-   pip install homeassistant aiohttp voluptuous ruff
+   pip install -r requirements_test.txt
    ```
 
 ### Test instance
@@ -65,6 +65,8 @@ The project uses a dedicated Home Assistant test instance at `../hass-test/confi
    ```
 
 3. Add the integration through the HA UI and verify your changes.
+
+For detailed architecture notes, coordinator design, and API internals, see [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
 ---
 

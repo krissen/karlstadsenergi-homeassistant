@@ -1,5 +1,7 @@
 # Entities
 
+> **Note:** Entity IDs shown in this document are examples. Your actual entity IDs depend on your address and installation. Check **Settings -> Devices & Services -> Karlstadsenergi** for your actual entity IDs.
+
 All entities created by the Karlstadsenergi integration, grouped by type.
 
 ---
@@ -28,7 +30,7 @@ When the integration retrieves full service data (the normal case), all attribut
 | `pickup_is_today` | bool | `true` if pickup is today |
 | `pickup_is_tomorrow` | bool | `true` if pickup is tomorrow |
 
-When the integration falls back to summary data (detailed services unavailable), `frequency` and `service_id` are not present. All other attributes remain available.
+When the integration falls back to summary data (detailed services unavailable), `frequency` and `service_id` are not present. All other attributes are present when a pickup date is available.
 
 ---
 
@@ -41,6 +43,8 @@ One calendar entity per waste type, compatible with HA's built-in Calendar card 
 | Food & residual waste | `calendar.karlstadsenergi_food_and_residual_waste_calendar` | All-day event on pickup date |
 | Glass/Metal | `calendar.karlstadsenergi_glass_metal_calendar` | All-day event on pickup date |
 | Plastic & paper packaging | `calendar.karlstadsenergi_plastic_paper_packaging_calendar` | All-day event on pickup date |
+
+> **Note:** Each calendar entity shows only the **next scheduled pickup**. The Karlstadsenergi API provides the next date only, not a full recurring schedule.
 
 ---
 
@@ -146,9 +150,9 @@ where `CUSTOMERID` and `CONTRACTID` are the values returned by the API for your 
 
 | Sensor | State |
 |--------|-------|
-| Grid contract | Contract type name |
-| Trading contract | Contract alternative (e.g. "Fast månadspris") |
-| Waste contract | Contract type name |
+| Grid contract | Contract alternative or utility type |
+| Trading contract | Contract alternative or utility type |
+| Waste contract | Contract alternative or utility type |
 
 ### Contract sensor attributes
 
