@@ -13,7 +13,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from homeassistant.components.sensor import SensorDeviceClass
 from homeassistant.const import EntityCategory
 
 from custom_components.karlstadsenergi.const import DOMAIN
@@ -493,9 +492,13 @@ class TestElectricityPriceSensor:
         attrs = sensor.extra_state_attributes
         assert attrs == {}
 
-    def test_device_class_is_monetary(self) -> None:
+    def test_no_device_class(self) -> None:
+        """Price sensors must not use MONETARY with compound unit SEK/kWh."""
         sensor = self._make_sensor()
-        assert sensor._attr_device_class == SensorDeviceClass.MONETARY
+        assert (
+            not hasattr(sensor, "_attr_device_class")
+            or sensor._attr_device_class is None
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -599,9 +602,13 @@ class TestSpotPriceSensor:
         assert attrs["today_max"] == pytest.approx(2.0)
         assert attrs["today_average"] == pytest.approx(1.5)
 
-    def test_device_class_is_monetary(self) -> None:
+    def test_no_device_class(self) -> None:
+        """Price sensors must not use MONETARY with compound unit SEK/kWh."""
         sensor = self._make_sensor()
-        assert sensor._attr_device_class == SensorDeviceClass.MONETARY
+        assert (
+            not hasattr(sensor, "_attr_device_class")
+            or sensor._attr_device_class is None
+        )
 
 
 # ---------------------------------------------------------------------------

@@ -508,7 +508,6 @@ class ElectricityPriceSensor(
     """
 
     _attr_has_entity_name = True
-    _attr_device_class = SensorDeviceClass.MONETARY
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = "SEK/kWh"
     _attr_icon = "mdi:cash"
@@ -626,7 +625,6 @@ class SpotPriceSensor(
     """
 
     _attr_has_entity_name = True
-    _attr_device_class = SensorDeviceClass.MONETARY
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = "SEK/kWh"
     _attr_icon = "mdi:flash"
