@@ -16,7 +16,7 @@
           "auth_method": "Authentication method"
         },
         "data_description": {
-          "auth_method": "Choose customer number & password for the simplest setup. BankID is available as an alternative but requires scanning a QR code."
+          "auth_method": "Choose customer number & password for the simplest setup. BankID is available as an alternative but requires signing with the BankID app."
         }
       },
       "bankid_personnummer": {
@@ -35,6 +35,10 @@
         "data": {
           "customer_number": "Customer number (kundnummer)",
           "password": "Password"
+        },
+        "data_description": {
+          "customer_number": "Your customer number (found on your invoice).",
+          "password": "Your password for the customer portal."
         }
       },
       "bankid": {
@@ -43,7 +47,7 @@
         "data": {}
       },
       "select_account": {
-        "title": "Select account",
+        "title": "Karlstadsenergi - Select account",
         "description": "Multiple accounts found. Choose which one to use.",
         "data": {
           "account": "Account"
@@ -54,7 +58,7 @@
       },
       "reauth_confirm": {
         "title": "Karlstadsenergi - Re-authenticate",
-        "description": "Session expired. Click Submit to re-authenticate.",
+        "description": "Session expired. You will be asked to re-authenticate using {auth_method}. Click Submit to continue.",
         "data": {}
       }
     },
@@ -74,6 +78,11 @@
     }
   },
   "entity": {
+    "binary_sensor": {
+      "pickup_tomorrow": {
+        "name": "{waste_type} pickup tomorrow"
+      }
+    },
     "sensor": {
       "electricity_consumption": {
         "name": "Electricity consumption"
@@ -83,6 +92,9 @@
       },
       "spot_price": {
         "name": "Spot price"
+      },
+      "contract": {
+        "name": "Contract {utility_name}"
       }
     }
   },
@@ -98,6 +110,9 @@
           "update_interval": "How often to fetch new data from Karlstadsenergi (1-24 hours)."
         }
       }
+    },
+    "error": {
+      "invalid_interval": "Update interval must be between 1 and 24 hours."
     }
   }
 }

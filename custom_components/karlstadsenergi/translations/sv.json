@@ -8,6 +8,11 @@
     }
   },
   "entity": {
+    "binary_sensor": {
+      "pickup_tomorrow": {
+        "name": "{waste_type} hämtas imorgon"
+      }
+    },
     "sensor": {
       "electricity_consumption": {
         "name": "Elförbrukning"
@@ -17,6 +22,9 @@
       },
       "spot_price": {
         "name": "Spotpris"
+      },
+      "contract": {
+        "name": "Avtal {utility_name}"
       }
     }
   },
@@ -29,7 +37,7 @@
           "auth_method": "Inloggningssätt"
         },
         "data_description": {
-          "auth_method": "Välj kundnummer & lösenord för enklast möjliga konfiguration. BankID finns som alternativ men kräver QR-kodskanning."
+          "auth_method": "Välj kundnummer & lösenord för enklast möjliga konfiguration. BankID finns som alternativ men kräver signering med BankID-appen."
         }
       },
       "bankid_personnummer": {
@@ -37,6 +45,9 @@
         "description": "Ange ditt personnummer för att starta BankID-inloggning.",
         "data": {
           "personnummer": "Personnummer"
+        },
+        "data_description": {
+          "personnummer": "Ditt 10- eller 12-siffriga personnummer (t.ex. 199001011234)."
         }
       },
       "password": {
@@ -45,6 +56,10 @@
         "data": {
           "customer_number": "Kundnummer",
           "password": "Lösenord"
+        },
+        "data_description": {
+          "customer_number": "Ditt kundnummer (hittas på fakturan).",
+          "password": "Lösenordet till Mina sidor."
         }
       },
       "bankid": {
@@ -53,20 +68,24 @@
         "data": {}
       },
       "select_account": {
-        "title": "Välj konto",
+        "title": "Karlstadsenergi - Välj konto",
         "description": "Flera konton hittades. Välj vilket som ska användas.",
         "data": {
           "account": "Konto"
+        },
+        "data_description": {
+          "account": "Välj det kundkonto som ska konfigureras."
         }
       },
       "reauth_confirm": {
         "title": "Karlstadsenergi - Logga in igen",
-        "description": "Sessionen har gått ut för konto {personnummer}. Klicka Skicka för att logga in igen.",
+        "description": "Sessionen har gått ut. Du loggas in igen med {auth_method}. Klicka Skicka för att fortsätta.",
         "data": {}
       }
     },
     "error": {
       "invalid_auth": "Felaktiga inloggningsuppgifter",
+      "invalid_personnummer": "Ogiltigt personnummer. Ange 10 eller 12 siffror.",
       "cannot_connect": "Kunde inte ansluta till Karlstadsenergi",
       "bankid_pending": "BankID inte signerat ännu. Öppna BankID-appen och försök igen.",
       "bankid_failed": "BankID-inloggning misslyckades",
@@ -91,6 +110,9 @@
           "update_interval": "Hur ofta data hämtas från Karlstadsenergi (1-24 timmar)."
         }
       }
+    },
+    "error": {
+      "invalid_interval": "Uppdateringsintervallet måste vara mellan 1 och 24 timmar."
     }
   }
 }
