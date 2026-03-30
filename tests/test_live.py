@@ -70,9 +70,7 @@ async def ha_session():
     }
     # Use ThreadedResolver to avoid aiodns compatibility issues in test venv
     connector = aiohttp.TCPConnector(resolver=aiohttp.ThreadedResolver())
-    async with aiohttp.ClientSession(
-        headers=headers, connector=connector
-    ) as session:
+    async with aiohttp.ClientSession(headers=headers, connector=connector) as session:
         # Verify HA is reachable
         try:
             async with session.get(f"{HA_URL}/api/") as resp:
@@ -186,9 +184,7 @@ class TestWasteEntities:
         ]
         for sensor in waste_sensors:
             state = sensor["state"]
-            assert state != "unknown", (
-                f"{sensor['entity_id']} has state 'unknown'"
-            )
+            assert state != "unknown", f"{sensor['entity_id']} has state 'unknown'"
             # State should be a date (YYYY-MM-DD) or unavailable
             if state != "unavailable":
                 assert len(state) == 10 and state[4] == "-", (
@@ -222,9 +218,7 @@ class TestWasteEntities:
         """Calendar entities for waste collection should be present."""
         states = await _get_states(ha_session)
         calendars = [
-            s
-            for s in _ke_entities(states)
-            if s["entity_id"].startswith("calendar.")
+            s for s in _ke_entities(states) if s["entity_id"].startswith("calendar.")
         ]
         assert len(calendars) >= 1, "No calendar entities found"
 
@@ -279,8 +273,7 @@ class TestElectricityEntities:
         spot = [
             s
             for s in _ke_entities(states)
-            if "spot_price" in s["entity_id"]
-            and s["entity_id"].startswith("sensor.")
+            if "spot_price" in s["entity_id"] and s["entity_id"].startswith("sensor.")
         ]
         assert len(spot) >= 1, "No spot price sensor found"
 

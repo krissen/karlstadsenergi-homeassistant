@@ -62,7 +62,7 @@ The integration supports two login methods. **Customer number & password is stro
 | **Recommended** | **Yes** | **No** -- avoid if possible |
 | Auto-reconnect on HA restart | **Yes** -- seamless | **No** -- requires manual re-scan |
 | Session handling | Automatic re-login | Heartbeat keep-alive only |
-| Setup complexity | Simple | Requires QR scan within 30s |
+| Setup complexity | Simple | Requires manual BankID app sign-in |
 | Multi-account | Logs in directly | Must select account each time |
 
 #### Customer number & password (recommended)
@@ -74,12 +74,14 @@ The integration supports two login methods. **Customer number & password is stro
 
 #### Mobile BankID (not recommended)
 
-> **Warning:** BankID is available but **we do not recommend using it.** When Home Assistant restarts, the session expires and **you must scan a new QR code manually** every time to reconnect. There is no way to automate BankID re-authentication. It is only included as a fallback for users who cannot set up password login. If at all possible, set up customer number & password instead.
+> **Warning:** BankID is available but **we do not recommend using it.** When Home Assistant restarts, the session expires and **you must manually sign in with the BankID app** every time to reconnect. There is no way to automate BankID re-authentication. It is only included as a fallback for users who cannot set up password login. If at all possible, set up customer number & password instead.
 
 1. Select **Mobilt BankID**.
 2. Enter your personnummer (Swedish personal identity number).
-3. Open the BankID app on your phone when prompted and sign in.
+3. In the config flow, click the **Open BankID app** link and sign in with BankID.
 4. If your personnummer is linked to multiple accounts, select which one to use.
+
+> **Note:** Home Assistant config flows cannot render the QR image from the upstream API. This integration therefore uses the `bankid://` deep link in the flow description instead.
 
 ### Options
 
@@ -106,8 +108,8 @@ See **[Dashboard examples](docs/user/dashboard-examples.md)** for card configura
 ### BankID authentication fails
 
 - Make sure you are signing with the correct personnummer in BankID.
-- The QR code has a limited validity window. If it expires, click Submit again to generate a new one.
-- If re-authentication is triggered (session expired), you will need to scan a new QR code.
+- The BankID start token has a limited validity window. If it expires, click Submit again to start a new BankID attempt.
+- If re-authentication is triggered (session expired), you will need to manually sign in with BankID again.
 
 ### Sensors show "unavailable"
 

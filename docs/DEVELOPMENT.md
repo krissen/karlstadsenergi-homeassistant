@@ -42,7 +42,7 @@ Config Flow (auth) --> async_setup_entry
 - **Cookie persistence**: Session cookies are saved to the config entry so sessions survive HA restarts.
 - **Heartbeat**: A timer sends a keepalive every 5 minutes to prevent server-side session timeout.
 - **Fallback data**: If detailed services are unavailable, the integration falls back to a simpler summary endpoint.
-- **Password over BankID**: Password auth can re-authenticate automatically. BankID requires interactive QR scanning each time.
+- **Password over BankID**: Password auth can re-authenticate automatically. BankID requires interactive sign-in in the BankID app each time.
 
 ---
 
