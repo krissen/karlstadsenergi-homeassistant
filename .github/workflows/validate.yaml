@@ -11,8 +11,8 @@ jobs:
     name: Ruff (lint + format)
     runs-on: ubuntu-latest
     steps:
-      - uses: "actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5"  # v4.3.1
-      - uses: "actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065"  # v5.6.0
+      - uses: "actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd"  # v6.0.2
+      - uses: "actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405"  # v6.2.0
         with:
           python-version: "3.12"
       - run: pip install ruff
@@ -23,8 +23,8 @@ jobs:
     name: Tests
     runs-on: ubuntu-latest
     steps:
-      - uses: "actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5"  # v4.3.1
-      - uses: "actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065"  # v5.6.0
+      - uses: "actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd"  # v6.0.2
+      - uses: "actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405"  # v6.2.0
         with:
           python-version: "3.12"
       - run: pip install -r requirements_test.txt
@@ -34,14 +34,14 @@ jobs:
     name: hassfest
     runs-on: "ubuntu-latest"
     steps:
-      - uses: "actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5"  # v4.3.1
+      - uses: "actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd"  # v6.0.2
       - uses: "home-assistant/actions/hassfest@d56d093b9ab8d2105bc0cb6ee9bcc0ef4ec8b96d"  # master 2026-03-18
 
   hacs:
     name: HACS Validation
     runs-on: ubuntu-latest
     steps:
-      - uses: "actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5"  # v4.3.1
+      - uses: "actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd"  # v6.0.2
       - name: HACS validation
         uses: hacs/action@dcb30e72781db3f207d5236b861172774ab0b485  # main 2026-01-26
         with:
