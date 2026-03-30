@@ -412,10 +412,10 @@ class TestElectricityPriceSensor:
         sensor = self._make_sensor(None)
         assert sensor.native_value is None
 
-    def test_native_value_returns_none_when_fee_is_zero(self) -> None:
+    def test_native_value_returns_zero_when_fee_is_zero(self) -> None:
         data = self._make_data(consumption_fee=0.0, consumption_kwh=100.0)
         sensor = self._make_sensor(data)
-        assert sensor.native_value is None
+        assert sensor.native_value == 0.0
 
     def test_native_value_returns_none_when_kwh_is_zero(self) -> None:
         data = self._make_data(consumption_fee=500.0, consumption_kwh=0.0)

@@ -10,7 +10,7 @@ from homeassistant.components.sensor import (
     SensorEntity,
     SensorStateClass,
 )
-from homeassistant.const import UnitOfEnergy
+from homeassistant.const import EntityCategory, UnitOfEnergy
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -239,7 +239,7 @@ class WasteCollectionSensor(
             today = dt_util.now().date()
             delta = (pickup_date - today).days
             attrs["days_until_pickup"] = max(delta, 0)
-            attrs["pickup_is_today"] = delta <= 0
+            attrs["pickup_is_today"] = delta == 0
             attrs["pickup_is_tomorrow"] = delta == 1
         return attrs
 
@@ -298,7 +298,7 @@ class WasteCollectionSummary(
             today = dt_util.now().date()
             delta = (pickup_date - today).days
             attrs["days_until_pickup"] = max(delta, 0)
-            attrs["pickup_is_today"] = delta <= 0
+            attrs["pickup_is_today"] = delta == 0
             attrs["pickup_is_tomorrow"] = delta == 1
         return attrs
 
@@ -508,6 +508,7 @@ class ElectricityPriceSensor(
     """
 
     _attr_has_entity_name = True
+    _attr_device_class = SensorDeviceClass.MONETARY
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = "SEK/kWh"
     _attr_icon = "mdi:cash"
@@ -578,7 +579,7 @@ class ElectricityPriceSensor(
         fee_data = self.coordinator.data.get("fee_data", {})
         fees = _extract_fee_series(fee_data)
         consumption_fee = fees.get(FEE_CONSUMPTION)
-        if consumption_fee is None or consumption_fee <= 0:
+        if consumption_fee is None:
             return None
         total_kwh = self._get_total_kwh_for_fee_period()
         if total_kwh <= 0:
@@ -625,6 +626,7 @@ class SpotPriceSensor(
     """
 
     _attr_has_entity_name = True
+    _attr_device_class = SensorDeviceClass.MONETARY
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = "SEK/kWh"
     _attr_icon = "mdi:flash"
@@ -720,6 +722,7 @@ class ContractSensor(
     """Sensor showing contract details."""
 
     _attr_has_entity_name = True
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_icon = "mdi:file-document-outline"
 
     def __init__(
