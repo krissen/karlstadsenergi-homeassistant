@@ -246,6 +246,22 @@ class TestSaveCookies:
 
         hass.config_entries.async_update_entry.assert_not_called()
 
+    def test_save_cookies_skips_partial_cookies(self) -> None:
+        # Only ASP.NET_SessionId present -- .PORTALAUTH missing.
+        # Partial cookies must NOT be persisted (would invalidate the session).
+        hass = _make_hass()
+        api = _make_api()
+        api.get_session_cookies = MagicMock(
+            return_value={"ASP.NET_SessionId": "val"}
+        )
+
+        entry = _make_entry({"session_cookies": {}})
+
+        coord = KarlstadsenergiWasteCoordinator(hass, api, 6, entry)
+        coord._save_cookies()
+
+        hass.config_entries.async_update_entry.assert_not_called()
+
 
 # ---------------------------------------------------------------------------
 # KarlstadsenergiWasteCoordinator -- _async_update_data
