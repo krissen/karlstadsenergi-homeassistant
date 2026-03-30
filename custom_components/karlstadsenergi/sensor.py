@@ -239,7 +239,7 @@ class WasteCollectionSensor(
             today = dt_util.now().date()
             delta = (pickup_date - today).days
             attrs["days_until_pickup"] = max(delta, 0)
-            attrs["pickup_is_today"] = delta == 0
+            attrs["pickup_is_today"] = delta <= 0
             attrs["pickup_is_tomorrow"] = delta == 1
         return attrs
 
@@ -298,7 +298,7 @@ class WasteCollectionSummary(
             today = dt_util.now().date()
             delta = (pickup_date - today).days
             attrs["days_until_pickup"] = max(delta, 0)
-            attrs["pickup_is_today"] = delta == 0
+            attrs["pickup_is_today"] = delta <= 0
             attrs["pickup_is_tomorrow"] = delta == 1
         return attrs
 
@@ -309,18 +309,18 @@ class ElectricityConsumptionSensor(
 ):
     """Sensor for electricity consumption.
 
-    Uses TOTAL state_class with last_reset for HA Energy Dashboard
+    Uses TOTAL_INCREASING state_class for HA Energy Dashboard
     compatibility. The native_value is the cumulative period total
     (CurrYearValue from CompareModel, or sum of all daily chart points
-    as fallback). The value resets on January 1st, which last_reset
-    communicates to HA so it correctly starts a new statistics series
-    rather than treating the drop as a meter rollover.
+    as fallback). The value increases monotonically within a year and
+    resets in January; TOTAL_INCREASING handles this automatically
+    without requiring a last_reset property.
     """
 
     _attr_has_entity_name = True
     _attr_device_class = SensorDeviceClass.ENERGY
     _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
-    _attr_state_class = SensorStateClass.TOTAL
+    _attr_state_class = SensorStateClass.TOTAL_INCREASING
     _attr_icon = "mdi:flash"
     _attr_suggested_display_precision = 1
     _attr_translation_key = "electricity_consumption"
@@ -355,12 +355,6 @@ class ElectricityConsumptionSensor(
             model="Electricity",
             sw_version=VERSION,
         )
-
-    @property
-    def last_reset(self) -> datetime.datetime | None:
-        """Return start of the current accumulation period (Jan 1)."""
-        now = dt_util.now()
-        return now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
 
     @property
     def native_value(self) -> float | None:
@@ -664,7 +658,7 @@ class SpotPriceSensor(
             identifiers={(DOMAIN, identifier)},
             name=name,
             manufacturer="Karlstads Energi",
-            model="Spot Price",
+            model="Electricity",
             sw_version=VERSION,
         )
 
@@ -745,7 +739,8 @@ class ContractSensor(
         self._contract_id = contract.get("ContractId", "")
 
         self._attr_unique_id = f"{DOMAIN}_{customer_id}_contract_{self._contract_id}"
-        self._attr_name = f"Contract {self._utility_name}"
+        self._attr_translation_key = "contract"
+        self._attr_translation_placeholders = {"utility_name": self._utility_name}
 
     @property
     def device_info(self) -> DeviceInfo:

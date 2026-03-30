@@ -108,7 +108,8 @@ class WastePickupTomorrowSensor(
         self._attr_unique_id = (
             f"{DOMAIN}_{customer_id}_{self._place_id}_{self._slug}_pickup_tomorrow"
         )
-        self._attr_name = f"{self._waste_type} pickup tomorrow"
+        self._attr_translation_key = "pickup_tomorrow"
+        self._attr_translation_placeholders = {"waste_type": self._waste_type}
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -159,7 +160,8 @@ class WastePickupTomorrowSummarySensor(
         self._address = item.get("Address", "").strip()
 
         self._attr_unique_id = f"{DOMAIN}_{customer_id}_{self._slug}_pickup_tomorrow"
-        self._attr_name = f"{self._waste_type} pickup tomorrow"
+        self._attr_translation_key = "pickup_tomorrow"
+        self._attr_translation_placeholders = {"waste_type": self._waste_type}
 
     @property
     def device_info(self) -> DeviceInfo:

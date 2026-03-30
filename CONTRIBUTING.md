@@ -93,7 +93,7 @@ ruff check custom_components/karlstadsenergi/ --fix
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements_test.txt  # if available
+pip install -r requirements_test.txt
 pytest tests/
 ```
 

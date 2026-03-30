@@ -1,12 +1,14 @@
 """Constants for the Karlstadsenergi integration."""
 
 import datetime
+import json
+from pathlib import Path
 
 from homeassistant.const import Platform
 
 DOMAIN = "karlstadsenergi"
 NAME = "Karlstadsenergi"
-VERSION = "0.2.0"
+VERSION = json.loads((Path(__file__).parent / "manifest.json").read_text())["version"]
 
 PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.CALENDAR, Platform.BINARY_SENSOR]
 
@@ -54,15 +56,26 @@ CONTRACT_TYPE_SLUG: dict[str, str] = {
 
 
 def slug_for_waste_type(waste_type: str) -> str:
-    """Get English slug for a Swedish waste type name."""
+    """Get English slug for a Swedish waste type name.
+
+    Falls back to a sanitized version of the input. If the input is empty
+    or produces no alphanumeric characters, returns a hash-based slug to
+    avoid unique_id collisions.
+    """
     slug = WASTE_TYPE_SLUG.get(waste_type)
     if slug:
         return slug
     result = "".join(c if c.isalnum() else "_" for c in waste_type.lower()).strip("_")
-    return result or "unknown"
+    if not result:
+        import hashlib
+
+        result = f"waste_{hashlib.md5(waste_type.encode()).hexdigest()[:8]}"
+    return result
 
 
-def pickup_date_for_service(data: dict | None, service_id: int) -> datetime.date | None:
+def pickup_date_for_service(
+    data: dict | None, service_id: int | str
+) -> datetime.date | None:
     """Get next pickup date from detailed service data."""
     if not data:
         return None

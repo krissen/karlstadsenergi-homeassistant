@@ -616,9 +616,12 @@ class TestContractSensor:
         sensor = self._make_sensor()
         assert sensor.unique_id == f"{DOMAIN}_CUST01_contract_C001"
 
-    def test_name_includes_utility_name(self) -> None:
+    def test_translation_key_and_placeholders(self) -> None:
         sensor = self._make_sensor()
-        assert "Elnät - Nätavtal" in sensor._attr_name
+        assert sensor._attr_translation_key == "contract"
+        assert (
+            sensor._attr_translation_placeholders["utility_name"] == "Elnät - Nätavtal"
+        )
 
     def test_extra_state_attributes_present(self) -> None:
         sensor = self._make_sensor()

@@ -627,6 +627,7 @@ def _make_bankid_initiate_resp(
     """Return a mock _post response for bankid_initiate."""
     resp = MagicMock()
     resp.raise_for_status = MagicMock()
+    resp.release = AsyncMock()
     resp.json = AsyncMock(
         return_value={
             "OrderResponseType": {
@@ -710,6 +711,7 @@ class TestBankidInitiate:
         api = KarlstadsenergiApi("1234567890", AUTH_BANKID)
         resp = MagicMock()
         resp.raise_for_status = MagicMock()
+        resp.release = AsyncMock()
         resp.json = AsyncMock(return_value={"QrCodeBase64": "data"})
         api._post = AsyncMock(return_value=resp)
 
@@ -732,6 +734,7 @@ def _make_bankid_poll_resp(
     """Return a mock _post response for bankid_poll."""
     resp = MagicMock()
     resp.raise_for_status = MagicMock()
+    resp.release = AsyncMock()
     payload: dict = {
         "CollectResponseType": {"progressStatusField": progress_status},
         "HasError": has_error,
@@ -821,6 +824,7 @@ class TestBankidPoll:
         api = KarlstadsenergiApi("1234567890", AUTH_BANKID)
         resp = MagicMock()
         resp.raise_for_status = MagicMock()
+        resp.release = AsyncMock()
         resp.json = AsyncMock(
             return_value={"CollectResponseType": {}, "HasError": False}
         )
@@ -913,6 +917,7 @@ def _make_resp_with_json(payload: Any) -> MagicMock:
     """Return a _post mock response whose .json() returns payload."""
     resp = MagicMock()
     resp.raise_for_status = MagicMock()
+    resp.release = AsyncMock()
     resp.json = AsyncMock(return_value=payload)
     return resp
 
@@ -1068,6 +1073,7 @@ class TestBankidLogin:
         api = KarlstadsenergiApi("1234567890", AUTH_BANKID)
         login_resp = MagicMock()
         login_resp.raise_for_status = MagicMock()
+        login_resp.release = AsyncMock()
         login_resp.json = AsyncMock(return_value={"Key": True})
         api._post = AsyncMock(return_value=login_resp)
         api._session = _make_cm_session_get_for_start_aspx(status=200)
@@ -1081,6 +1087,7 @@ class TestBankidLogin:
         api = KarlstadsenergiApi("1234567890", AUTH_BANKID)
         login_resp = MagicMock()
         login_resp.raise_for_status = MagicMock()
+        login_resp.release = AsyncMock()
         login_resp.json = AsyncMock(return_value={"Key": True})
         api._post = AsyncMock(return_value=login_resp)
         api._session = _make_cm_session_get_for_start_aspx(status=200)
@@ -1094,6 +1101,7 @@ class TestBankidLogin:
         api = KarlstadsenergiApi("1234567890", AUTH_BANKID)
         login_resp = MagicMock()
         login_resp.raise_for_status = MagicMock()
+        login_resp.release = AsyncMock()
         login_resp.json = AsyncMock(
             return_value={"Key": False, "Value": "invalid session"}
         )
@@ -1108,6 +1116,7 @@ class TestBankidLogin:
         api = KarlstadsenergiApi("1234567890", AUTH_BANKID)
         login_resp = MagicMock()
         login_resp.raise_for_status = MagicMock()
+        login_resp.release = AsyncMock()
         login_resp.json = AsyncMock(return_value={"Key": True})
         api._post = AsyncMock(return_value=login_resp)
         api._session = _make_cm_session_get_for_start_aspx(status=302)
@@ -1122,6 +1131,7 @@ class TestBankidLogin:
         api = KarlstadsenergiApi("1234567890", AUTH_BANKID)
         login_resp = MagicMock()
         login_resp.raise_for_status = MagicMock()
+        login_resp.release = AsyncMock()
         login_resp.json = AsyncMock(return_value={"Key": True})
         api._post = AsyncMock(return_value=login_resp)
         api._session = _make_cm_session_get_for_start_aspx(status=200)
@@ -1139,6 +1149,7 @@ class TestBankidLogin:
         api = KarlstadsenergiApi("1234567890", AUTH_BANKID)
         login_resp = MagicMock()
         login_resp.raise_for_status = MagicMock()
+        login_resp.release = AsyncMock()
         login_resp.json = AsyncMock(return_value={"Key": True})
         api._post = AsyncMock(return_value=login_resp)
         api._session = _make_cm_session_get_for_start_aspx(status=200)
