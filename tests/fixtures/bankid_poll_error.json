@@ -1,0 +1,9 @@
+{
+  "CollectResponseType": {
+    "progressStatusField": -1
+  },
+  "HasError": true,
+  "GrpFault": {
+    "faultStatusField": "CANCELLED"
+  }
+}

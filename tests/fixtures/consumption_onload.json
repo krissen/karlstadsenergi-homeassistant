@@ -1,0 +1,3 @@
+{
+  "d": "{\"ConsumptionModel\":{\"SiteId\":\"site-99\",\"SiteName\":\"Testgatan 1\",\"ModelId\":\"model-1\",\"Interval\":\"MONTH\",\"IntervalEnum\":2,\"IsPageLoad\":true,\"IsFeeTypeRequest\":false,\"Loadoptions\":[],\"TargetUnit\":\"kWh\"},\"CompareModel\":{\"CurrYearValue\":5432.1,\"LastYearValue\":4900.0,\"DifferencePercentage\":10.9,\"CurrYearAvg\":14.9,\"LastYearAvg\":13.4},\"DetailedConsumptionChart\":{\"SeriesList\":[{\"id\":\"CurrentYear\",\"data\":[{\"dateInterval\":\"2026-01-01\",\"y\":320.5},{\"dateInterval\":\"2026-02-01\",\"y\":285.0},{\"dateInterval\":\"2026-03-01\",\"y\":120.0}]}]}}"
+}
