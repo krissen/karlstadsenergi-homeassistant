@@ -7,27 +7,6 @@
       }
     }
   },
-  "entity": {
-    "binary_sensor": {
-      "pickup_tomorrow": {
-        "name": "{waste_type} hämtas imorgon"
-      }
-    },
-    "sensor": {
-      "electricity_consumption": {
-        "name": "Elförbrukning"
-      },
-      "electricity_price": {
-        "name": "Elpris"
-      },
-      "spot_price": {
-        "name": "Spotpris"
-      },
-      "contract": {
-        "name": "Avtal {utility_name}"
-      }
-    }
-  },
   "config": {
     "step": {
       "user": {
@@ -69,7 +48,7 @@
       },
       "select_account": {
         "title": "Karlstadsenergi - Välj konto",
-        "description": "Flera konton hittades. Välj vilket som ska användas.",
+        "description": "Flera konton hittades. Välj vilket kundkonto som ska användas. Varje konto motsvarar en separat faktureringsrelation med Karlstadsenergi.",
         "data": {
           "account": "Konto"
         },
@@ -77,9 +56,14 @@
           "account": "Välj det kundkonto som ska konfigureras."
         }
       },
-      "reauth_confirm": {
-        "title": "Karlstadsenergi - Logga in igen",
-        "description": "Sessionen har gått ut. Du loggas in igen med {auth_method}. Klicka Skicka för att fortsätta.",
+      "reauth_confirm_password": {
+        "title": "Karlstadsenergi - Ny inloggning krävs",
+        "description": "Sessionen har gått ut. Du loggas in igen med kundnummer och lösenord. Klicka Skicka för att fortsätta.",
+        "data": {}
+      },
+      "reauth_confirm_bankid": {
+        "title": "Karlstadsenergi - Ny inloggning krävs",
+        "description": "Sessionen har gått ut. Du loggas in igen med BankID. Klicka Skicka för att fortsätta.",
         "data": {}
       }
     },
@@ -98,10 +82,31 @@
       "unknown": "Oväntat fel"
     }
   },
+  "entity": {
+    "binary_sensor": {
+      "pickup_tomorrow": {
+        "name": "{waste_type} hämtas imorgon"
+      }
+    },
+    "sensor": {
+      "electricity_consumption": {
+        "name": "Elförbrukning"
+      },
+      "electricity_price": {
+        "name": "Elpris"
+      },
+      "spot_price": {
+        "name": "Spotpris"
+      },
+      "contract": {
+        "name": "Avtal {utility_name}"
+      }
+    }
+  },
   "options": {
     "step": {
       "init": {
-        "title": "Karlstadsenergi-inställningar",
+        "title": "Inställningar",
         "description": "Konfigurera uppdateringsinställningar för Karlstadsenergi-integrationen.",
         "data": {
           "update_interval": "Uppdateringsintervall (timmar)"
