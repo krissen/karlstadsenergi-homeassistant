@@ -251,9 +251,7 @@ class TestSaveCookies:
         # Partial cookies must NOT be persisted (would invalidate the session).
         hass = _make_hass()
         api = _make_api()
-        api.get_session_cookies = MagicMock(
-            return_value={"ASP.NET_SessionId": "val"}
-        )
+        api.get_session_cookies = MagicMock(return_value={"ASP.NET_SessionId": "val"})
 
         entry = _make_entry({"session_cookies": {}})
 

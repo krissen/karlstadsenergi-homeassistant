@@ -1332,7 +1332,9 @@ class TestDeferredWasteEntityRegistration:
     ) -> None:
         """When waste_coordinator.data is None/empty at setup, a listener is
         registered. Once data arrives the listener calls async_add_entities."""
-        from custom_components.karlstadsenergi.sensor import async_setup_entry as sensor_setup
+        from custom_components.karlstadsenergi.sensor import (
+            async_setup_entry as sensor_setup,
+        )
 
         # Build a minimal runtime_data stub where waste data is initially absent.
         waste_coord = MagicMock()
@@ -1362,7 +1364,9 @@ class TestDeferredWasteEntityRegistration:
         added_entities: list = []
 
         def _capture_add(entities, **kwargs):
-            added_entities.extend(entities if hasattr(entities, "__iter__") else [entities])
+            added_entities.extend(
+                entities if hasattr(entities, "__iter__") else [entities]
+            )
 
         # Capture the listener that sensor platform registers on the waste coordinator
         registered_listener = None
@@ -1385,7 +1389,14 @@ class TestDeferredWasteEntityRegistration:
         # Now simulate data arriving
         waste_coord.data = {
             "services": [],
-            "next_dates": [{"Type": "Mat- och restavfall", "Date": "2026-05-01", "Address": "Testgatan 1", "Size": "140L"}],
+            "next_dates": [
+                {
+                    "Type": "Mat- och restavfall",
+                    "Date": "2026-05-01",
+                    "Address": "Testgatan 1",
+                    "Size": "140L",
+                }
+            ],
         }
 
         before_count = len(added_entities)
@@ -1401,12 +1412,21 @@ class TestDeferredWasteEntityRegistration:
     @pytest.mark.asyncio
     async def test_waste_listener_not_registered_when_data_present(self) -> None:
         """When waste data is available at setup, no listener is registered."""
-        from custom_components.karlstadsenergi.sensor import async_setup_entry as sensor_setup
+        from custom_components.karlstadsenergi.sensor import (
+            async_setup_entry as sensor_setup,
+        )
 
         waste_coord = MagicMock()
         waste_coord.data = {
             "services": [],
-            "next_dates": [{"Type": "Mat- och restavfall", "Date": "2026-05-01", "Address": "Testgatan 1", "Size": "140L"}],
+            "next_dates": [
+                {
+                    "Type": "Mat- och restavfall",
+                    "Date": "2026-05-01",
+                    "Address": "Testgatan 1",
+                    "Size": "140L",
+                }
+            ],
         }
         # async_add_listener should never be called when data is already present
         waste_coord.async_add_listener = MagicMock(return_value=MagicMock())
