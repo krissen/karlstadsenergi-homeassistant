@@ -16,6 +16,8 @@ One sensor is created per active waste collection service at your address.
 
 ### Waste sensor attributes
 
+When the integration retrieves full service data (the normal case), all attributes below are available:
+
 | Attribute | Type | Description |
 |-----------|------|-------------|
 | `address` | string | Pickup address |
@@ -25,6 +27,8 @@ One sensor is created per active waste collection service at your address.
 | `days_until_pickup` | int | Days remaining until next pickup |
 | `pickup_is_today` | bool | `true` if pickup is today |
 | `pickup_is_tomorrow` | bool | `true` if pickup is tomorrow |
+
+When the integration falls back to summary data (detailed services unavailable), `frequency` and `service_id` are not present. All other attributes remain available.
 
 ---
 
@@ -54,7 +58,7 @@ One calendar entity per waste type, compatible with HA's built-in Calendar card 
 
 | Sensor | Entity ID example | State | Unit | Device class |
 |--------|-------------------|-------|------|--------------|
-| Electricity consumption | `sensor.karlstadsenergi_electricity_consumption` | Latest day's kWh | kWh | `energy` |
+| Electricity consumption | `sensor.karlstadsenergi_electricity_consumption` | Year-to-date consumption (kWh) | kWh | `energy` |
 
 Note: the portal API provides historical data only. Consumption data may lag days or weeks behind real-time. The `latest_date` attribute shows the actual date of the most recent data point.
 
@@ -124,13 +128,19 @@ Current Nord Pool electricity spot price for SE3 (Karlstad region), fetched from
 
 ## Contract sensors
 
-One sensor per contract (grid, trading, waste).
+One sensor per contract (grid, trading, waste). Entity IDs are based on the contract's internal `ContractId` from the API, not a fixed slug. The format is:
 
-| Sensor | Entity ID example | State |
-|--------|-------------------|-------|
-| Grid contract | `sensor.karlstadsenergi_contract_grid` | Contract type name |
-| Trading contract | `sensor.karlstadsenergi_contract_trading` | Contract alternative (e.g. "Fast månadspris") |
-| Waste contract | `sensor.karlstadsenergi_contract_waste` | Contract type name |
+```
+sensor.karlstadsenergi_CUSTOMERID_contract_CONTRACTID
+```
+
+where `CUSTOMERID` and `CONTRACTID` are the values returned by the API for your account. The exact IDs will differ between installations.
+
+| Sensor | State |
+|--------|-------|
+| Grid contract | Contract type name |
+| Trading contract | Contract alternative (e.g. "Fast månadspris") |
+| Waste contract | Contract type name |
 
 ### Contract sensor attributes
 
@@ -154,19 +164,13 @@ automation:
   - alias: "Waste pickup reminder"
     trigger:
       - platform: state
-        entity_id: sensor.karlstadsenergi_food_and_residual_waste
-    condition:
-      - condition: state
-        entity_id: sensor.karlstadsenergi_food_and_residual_waste
-        attribute: pickup_is_tomorrow
-        state: true
+        entity_id: binary_sensor.karlstadsenergi_food_and_residual_waste_pickup_tomorrow
+        to: "on"
     action:
       - service: notify.mobile_app
         data:
           title: "Waste pickup tomorrow"
-          message: >
-            {{ state_attr('sensor.karlstadsenergi_food_and_residual_waste', 'address') }}:
-            Food & residual waste pickup is tomorrow.
+          message: "Food & residual waste pickup is tomorrow."
 ```
 
 ### Template sensor for days until pickup

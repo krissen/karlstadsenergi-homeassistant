@@ -53,12 +53,26 @@ Config Flow (auth) --> async_setup_entry
 git clone https://github.com/krissen/karlstadsenergi-homeassistant.git
 cd karlstadsenergi-homeassistant
 
+# Create virtual environment and install test deps
+python3.12 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements_test.txt
+
 # Symlink into test HA instance
 ln -s "$(pwd)/custom_components/karlstadsenergi" \
   ../hass-test/config/custom_components/karlstadsenergi
 
 # Restart HA to pick up changes
 cd ../hass-test && docker compose restart
+```
+
+### Running tests
+
+```bash
+source .venv/bin/activate
+pytest tests/              # full suite
+pytest tests/ -q           # quiet output
+pytest tests/test_api.py   # single module
 ```
 
 ### Linting
