@@ -47,7 +47,7 @@ First working release.
 - **Session management** -- heartbeat keep-alive, cookie persistence, reauth flow
 - Swedish and English translations
 
-### Technical
+### Changed
 - Reverse-engineered API from Karlstadsenergi's customer portal (Evado MFR platform)
 - Cookie-based ASP.NET session authentication
 - Two DataUpdateCoordinators (waste: 6h, consumption: 1h intervals)

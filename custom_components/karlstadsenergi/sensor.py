@@ -102,7 +102,7 @@ async def async_setup_entry(
                 )
         if new_entities:
             async_add_entities(new_entities)
-        waste_entities_added = True
+            waste_entities_added = True
 
     waste_data = runtime.waste_coordinator.data
     if waste_data and (waste_data.get("services") or waste_data.get("next_dates")):
@@ -165,7 +165,7 @@ async def async_setup_entry(
                 )
         if new_entities:
             async_add_entities(new_entities)
-        contract_entities_added = True
+            contract_entities_added = True
 
     if runtime.contract_coordinator.data:
         _add_contracts()
@@ -238,7 +238,7 @@ class WasteCollectionSensor(
         if pickup_date:
             today = dt_util.now().date()
             delta = (pickup_date - today).days
-            attrs["days_until_pickup"] = delta
+            attrs["days_until_pickup"] = max(delta, 0)
             attrs["pickup_is_today"] = delta == 0
             attrs["pickup_is_tomorrow"] = delta == 1
         return attrs
@@ -297,7 +297,7 @@ class WasteCollectionSummary(
         if pickup_date:
             today = dt_util.now().date()
             delta = (pickup_date - today).days
-            attrs["days_until_pickup"] = delta
+            attrs["days_until_pickup"] = max(delta, 0)
             attrs["pickup_is_today"] = delta == 0
             attrs["pickup_is_tomorrow"] = delta == 1
         return attrs
@@ -309,16 +309,18 @@ class ElectricityConsumptionSensor(
 ):
     """Sensor for electricity consumption.
 
-    Uses TOTAL_INCREASING state_class so it is compatible with HA's Energy
-    Dashboard. The native_value is the cumulative period total (CurrYearValue
-    from CompareModel, or sum of all daily chart points as fallback). HA
-    detects meter resets automatically with TOTAL_INCREASING.
+    Uses TOTAL state_class with last_reset for HA Energy Dashboard
+    compatibility. The native_value is the cumulative period total
+    (CurrYearValue from CompareModel, or sum of all daily chart points
+    as fallback). The value resets on January 1st, which last_reset
+    communicates to HA so it correctly starts a new statistics series
+    rather than treating the drop as a meter rollover.
     """
 
     _attr_has_entity_name = True
     _attr_device_class = SensorDeviceClass.ENERGY
     _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
-    _attr_state_class = SensorStateClass.TOTAL_INCREASING
+    _attr_state_class = SensorStateClass.TOTAL
     _attr_icon = "mdi:flash"
     _attr_suggested_display_precision = 1
     _attr_translation_key = "electricity_consumption"
@@ -355,6 +357,12 @@ class ElectricityConsumptionSensor(
         )
 
     @property
+    def last_reset(self) -> datetime.datetime | None:
+        """Return start of the current accumulation period (Jan 1)."""
+        now = dt_util.now()
+        return now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+
+    @property
     def native_value(self) -> float | None:
         """Return cumulative total kWh for the current period.
 
@@ -362,10 +370,9 @@ class ElectricityConsumptionSensor(
         the API) when available. Falls back to summing all data[].y values
         from SeriesList[0].
 
-        Review note (V3): This value may lag days/weeks behind real-time
-        because the portal API only provides historical data. The
-        ``latest_date`` attribute exposes the actual data date so users
-        can judge staleness.
+        Note: This value may lag days/weeks behind real-time because the
+        portal API only provides historical data. The ``latest_date``
+        attribute exposes the actual data date so users can judge staleness.
         """
         consumption = (
             self.coordinator.data.get("consumption", {})
@@ -769,9 +776,15 @@ class ContractSensor(
 
     @property
     def native_value(self) -> str | None:
-        """Return contract alternative (e.g. 'Fast månadspris')."""
+        """Return contract alternative (e.g. 'Fast månadspris').
+
+        Truncated to 255 characters (HA state max length).
+        """
         contract = self._get_contract()
-        return contract.get("ContractAlternative") or contract.get("UtilityName")
+        value = contract.get("ContractAlternative") or contract.get("UtilityName")
+        if value and len(value) > 255:
+            return value[:255]
+        return value
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:

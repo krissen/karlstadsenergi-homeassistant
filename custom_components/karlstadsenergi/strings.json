@@ -24,6 +24,9 @@
         "description": "Enter your personnummer to start BankID authentication.",
         "data": {
           "personnummer": "Personnummer"
+        },
+        "data_description": {
+          "personnummer": "Your 10 or 12 digit Swedish personal identity number (e.g. 199001011234)."
         }
       },
       "password": {
@@ -44,16 +47,20 @@
         "description": "Multiple accounts found. Choose which one to use.",
         "data": {
           "account": "Account"
+        },
+        "data_description": {
+          "account": "Select the customer account to configure."
         }
       },
       "reauth_confirm": {
         "title": "Karlstadsenergi - Re-authenticate",
-        "description": "Session expired for account {personnummer}. Click Submit to re-authenticate.",
+        "description": "Session expired. Click Submit to re-authenticate.",
         "data": {}
       }
     },
     "error": {
       "invalid_auth": "Invalid credentials",
+      "invalid_personnummer": "Invalid personnummer. Enter 10 or 12 digits.",
       "cannot_connect": "Could not connect to Karlstadsenergi",
       "bankid_pending": "BankID not yet signed. Open BankID app and try again.",
       "bankid_failed": "BankID authentication failed",
