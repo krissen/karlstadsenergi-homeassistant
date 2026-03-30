@@ -7,24 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
-- Spot price coordinator is now per-entry (no longer shared via hass.data)
-- Contract sensors now have `entity_category: diagnostic` (shown under diagnostics in HA)
-- Config entry title for BankID no longer includes customer name (privacy)
-- Reauth flow uses separate translated steps for password and BankID
-- Options dialog title simplified
-- Customer number label no longer includes Swedish parenthetical
-
-### Fixed
-- `pickup_is_today` attribute now correctly returns false for past dates
-- Electricity price sensor returns `0.0` instead of unavailable when fee is zero
-- Price sensors now have `device_class: monetary` for Energy Dashboard discovery
-- `DeviceInfo` import updated from deprecated path
-- Removed synchronous file I/O for version constant at module load
-- Config flow properly cleans up API session on abort
-- `ContractId` now redacted in diagnostics exports
-- Differentiated exception handling in spot price coordinator
-
 ## [0.2.0] - 2026-03-29
 
 ### Added
@@ -38,15 +20,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Detailed waste service data via GetFlexServices (with fallback)
 - Options flow for configurable update interval (1--24 hours)
 - Dashboard card examples (Mushroom, Button Card, built-in HA cards)
+- Test fixtures based on real API response structures
 
 ### Fixed
 - Electricity sensor now uses `state_class: total_increasing` for correct Energy Dashboard integration
 - Spot price coordinator properly cleaned up on last config entry unload
 - BankID API responses properly released to prevent connection pool leaks
 - BankID login failure returns to retry flow instead of aborting
+- `pickup_is_today` attribute now correctly returns false for past dates
+- Electricity price sensor returns `0.0` instead of unavailable when fee is zero
+- `DeviceInfo` import updated from deprecated path
+- Removed synchronous file I/O for version constant at module load
+- Config flow properly cleans up API session on abort
+- `ContractId` now redacted in diagnostics exports
+- Differentiated exception handling in spot price coordinator
+- Removed incorrect `device_class: monetary` from price sensors (HA requires ISO 4217 currency code, not compound unit `SEK/kWh`)
 
 ### Changed
 - Cleaned up debug logging for production use
+- Spot price coordinator is now per-entry (no longer shared via hass.data)
+- Contract sensors now have `entity_category: diagnostic` (shown under diagnostics in HA)
+- Config entry title for BankID no longer includes customer name (privacy)
+- Reauth flow uses separate translated steps for password and BankID
+- Options dialog title simplified
+- Customer number label no longer includes Swedish parenthetical
 
 ### Documentation
 - Comprehensive documentation (README, CONTRIBUTING, DEVELOPMENT)
