@@ -5,6 +5,7 @@
 
 [![hacs][hacsbadge]][hacs]
 [![Project Maintenance][maintenance-shield]][user_profile]
+[![BuyMeCoffee][buymecoffeebadge]][buymecoffee]
 
 A Home Assistant integration for [Karlstads Energi](https://www.karlstadsenergi.se/) customers. Track your waste collection pickup dates and monitor electricity consumption -- all from within Home Assistant.
 
@@ -179,3 +180,5 @@ All data is retrieved from the [Karlstads Energi customer portal](https://minasi
 [releases-shield]: https://img.shields.io/github/release/krissen/karlstadsenergi-homeassistant.svg?style=for-the-badge
 [releases]: https://github.com/krissen/karlstadsenergi-homeassistant/releases
 [user_profile]: https://github.com/krissen
+[buymecoffee]: https://coff.ee/krissen
+[buymecoffeebadge]: https://img.shields.io/badge/buy%20me%20a%20coffee-donate-yellow.svg?style=for-the-badge
