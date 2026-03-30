@@ -316,9 +316,15 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
-    async def async_remove(self) -> None:
-        """Clean up API session if flow is aborted."""
-        await self._cleanup_api()
+    @callback
+    def async_remove(self) -> None:
+        """Clean up API session if flow is aborted.
+
+        Note: HA's base FlowHandler.async_remove() is a @callback (sync),
+        not a coroutine. We schedule the async cleanup as a task.
+        """
+        if self._api:
+            self.hass.async_create_task(self._cleanup_api())
 
     async def _cleanup_api(self) -> None:
         if self._api:
