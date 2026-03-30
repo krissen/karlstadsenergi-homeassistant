@@ -26,5 +26,6 @@ A Home Assistant integration for [Karlstads Energi](https://www.karlstadsenergi.
 
 ## Notes
 
+- **Password login is strongly recommended.** BankID requires manual re-authentication (QR scan) after every HA restart.
 - This integration is not affiliated with Karlstads Energi AB.
 - The API is reverse-engineered from the customer portal and may change without notice.

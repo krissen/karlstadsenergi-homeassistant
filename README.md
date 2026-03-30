@@ -78,7 +78,7 @@ The integration supports two login methods. **Customer number & password is stro
 
 1. Select **Mobilt BankID**.
 2. Enter your personnummer (Swedish personal identity number).
-3. A QR code will be displayed -- scan it with your BankID app and sign.
+3. Open the BankID app on your phone when prompted and sign in.
 4. If your personnummer is linked to multiple accounts, select which one to use.
 
 ### Options
@@ -143,6 +143,12 @@ The integration creates waste entities in one of two modes -- detailed (one enti
 ### Personnummer in API URLs
 
 The upstream Karlstadsenergi portal API requires the personnummer in URL paths when authenticating via BankID. All communication with the portal uses HTTPS, so the URL path (including the personnummer) is encrypted in transit. This is an upstream API design decision that this integration cannot change.
+
+---
+
+## Development
+
+See **[Development documentation](docs/DEVELOPMENT.md)** for architecture details, API notes, and how to set up a development environment.
 
 ---
 

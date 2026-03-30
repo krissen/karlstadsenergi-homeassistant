@@ -123,11 +123,17 @@ The server session times out after ~15 minutes. The integration handles this wit
 
 ---
 
-## Easter eggs from the API
+## Release smoke test checklist
 
-During development, we discovered that the login endpoint has a rather... opinionated response to certain edge cases. If you send stale session cookies along with a login request, the server returns a binary-encoded response that decodes to a message that would make a sailor blush.
+Before tagging a release, verify the integration against a real HA instance:
 
-We choose to interpret this as a heartfelt greeting from a fellow developer who spent one too many late nights debugging ASP.NET session state. If you find it, know that you are not alone. We see you, backend developer. We love you. Stay strong. <3
+- [ ] **Password setup**: Add integration with customer number + password, entities appear
+- [ ] **Entity update**: Waste, consumption, spot price sensors update after coordinator interval
+- [ ] **HA restart**: Restart HA, verify session recovers and entities update
+- [ ] **Reauth flow**: Expire session (clear cookies in config entry), verify reauth prompt appears and completes
+- [ ] **BankID setup** (if applicable): Add integration with BankID, sign in BankID app, entities appear
+- [ ] **Options flow**: Change update interval, verify new interval takes effect after reload
+- [ ] **Diagnostics**: Download diagnostics, verify PII is redacted
 
 ---
 

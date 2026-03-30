@@ -18,14 +18,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Diagnostics support (Settings > Devices > Download Diagnostics)
 - Hourly electricity consumption data in sensor attributes
 - Detailed waste service data via GetFlexServices (with fallback)
+- Options flow for configurable update interval (1--24 hours)
 - Dashboard card examples (Mushroom, Button Card, built-in HA cards)
 
 ### Fixed
-- Electricity sensor now compatible with HA Energy Dashboard (`last_reset` added)
+- Electricity sensor now uses `state_class: total_increasing` for correct Energy Dashboard integration
+- Spot price coordinator properly cleaned up on last config entry unload
+- BankID API responses properly released to prevent connection pool leaks
+- BankID login failure returns to retry flow instead of aborting
 
 ### Changed
 - Cleaned up debug logging for production use
-- Added comprehensive documentation (README, CONTRIBUTING, DEVELOPMENT)
+
+### Documentation
+- Comprehensive documentation (README, CONTRIBUTING, DEVELOPMENT)
+- Entity reference with automation examples
+- Dashboard card examples with multiple approaches
 
 ## [0.1.0] - 2026-03-28
 
@@ -47,7 +55,7 @@ First working release.
 - **Session management** -- heartbeat keep-alive, cookie persistence, reauth flow
 - Swedish and English translations
 
-### Changed
+### Technical notes
 - Reverse-engineered API from Karlstadsenergi's customer portal (Evado MFR platform)
 - Cookie-based ASP.NET session authentication
 - Two DataUpdateCoordinators (waste: 6h, consumption: 1h intervals)
