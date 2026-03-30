@@ -103,6 +103,12 @@ See **[Dashboard examples](docs/user/dashboard-examples.md)** for card configura
 
 ---
 
+## Advanced usage
+
+See **[Advanced usage](docs/user/advanced.md)** for service calls, manual data refresh, template sensors (pickup countdown, cost estimates, price level), spot price automations, and smart plug control.
+
+---
+
 ## Troubleshooting
 
 ### BankID authentication fails
