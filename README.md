@@ -13,20 +13,29 @@ A Home Assistant integration for [Karlstads Energi](https://www.karlstadsenergi.
 >
 > It exists because [@krissen](https://github.com/krissen) got new waste bins with a new pickup schedule and kept dragging the wrong ones to the curb on cold Värmland mornings. Automation to the rescue. It's shared here in case someone else in Karlstad has the same problem. If that's you -- välkommen, and good luck.
 
-![Waste collection dashboard with color-coded pickup dates](docs/images/button-card.png)
+<table align="center">
+  <tr>
+    <td><img width="450" alt="Button Card with color-coded waste pickup dates" src="docs/images/button-card.png" /></td>
+    <td><img width="450" alt="Built-in entities card with pickup dates and tomorrow alert" src="docs/images/builtin-entities.png" /></td>
+  </tr>
+  <tr>
+    <td><img width="450" alt="Mushroom chips showing days until pickup" src="docs/images/mushroom-chips.png" /></td>
+    <td><img width="450" alt="Calendar view with waste collection events" src="docs/images/calendar.png" /></td>
+  </tr>
+</table>
 
 ---
 
 ## Features
 
 - **Waste collection sensors** -- Next pickup date for each waste type (food & residual waste, glass/metal, plastic & paper packaging)
-- **Waste collection calendar** -- Calendar entities for HA's built-in Calendar card, [Mushroom Cards](https://github.com/piitaya/lovelace-mushroom), and other dashboard cards
+- **Waste collection calendar** -- Calendar entities, works with HA's built-in Calendar card and [Mushroom Cards](https://github.com/piitaya/lovelace-mushroom)
 - **Pickup reminders** -- Binary sensors for "pickup tomorrow" per waste type
 - **Electricity consumption** -- Daily and hourly consumption data with year-over-year comparison, Energy Dashboard compatible
 - **Electricity price** -- Effective energy price (SEK/kWh) derived from your invoice fee breakdown, Energy Dashboard compatible
 - **Spot price** -- Current Nord Pool SE3 spot price (15-minute intervals) from Karlstadsenergi/Evado public API
 - **Contract overview** -- Sensors for each contract (grid, trading, waste) with contract type, dates, and identifiers
-- **Computed attributes** -- `days_until_pickup`, `pickup_is_today`, `pickup_is_tomorrow` for easy automations
+- **Computed attributes** -- `days_until_pickup`, `pickup_is_today`, `pickup_is_tomorrow`
 - **Session management** -- Automatic session keepalive (heartbeat), cookie persistence across restarts, and re-authentication on session expiry
 - **Configurable update interval** -- Set how often data is refreshed (1--24 hours)
 
@@ -170,6 +179,10 @@ See **[Development documentation](docs/DEVELOPMENT.md)** for architecture detail
 ## Data source
 
 All data is retrieved from the [Karlstads Energi customer portal](https://minasidor.karlstadsenergi.se). This integration is not affiliated with or endorsed by Karlstads Energi AB.
+
+---
+
+[Want to support development? Buy me a coffee!](https://coff.ee/krissen)
 
 ---
 
