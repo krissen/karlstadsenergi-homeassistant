@@ -12,6 +12,8 @@ A Home Assistant integration for [Karlstads Energi](https://www.karlstadsenergi.
 >
 > It exists because [@krissen](https://github.com/krissen) got new waste bins with a new pickup schedule and kept dragging the wrong ones to the curb on cold Värmland mornings. Automation to the rescue. It's shared here in case someone else in Karlstad has the same problem. If that's you -- välkommen, and good luck.
 
+![Waste collection dashboard with color-coded pickup dates](docs/images/button-card.png)
+
 ---
 
 ## Features
@@ -103,6 +105,12 @@ See **[Dashboard examples](docs/user/dashboard-examples.md)** for card configura
 
 ---
 
+## Advanced usage
+
+See **[Advanced usage](docs/user/advanced.md)** for service calls, manual data refresh, template sensors (pickup countdown, cost estimates, price level), spot price automations, and smart plug control.
+
+---
+
 ## Troubleshooting
 
 ### BankID authentication fails
@@ -136,7 +144,11 @@ See **[Dashboard examples](docs/user/dashboard-examples.md)** for card configura
 
 ### Electricity consumption data lag
 
-The portal API provides historical consumption data only. Depending on your meter and billing cycle, data may lag days or weeks behind real-time. The `latest_date` attribute on the electricity consumption sensor shows the actual date of the most recent data point -- use this to judge how current the data is. The sensor uses `state_class: total_increasing`, which is correct: the cumulative value increases monotonically within a year and resets in January.
+The portal API provides historical consumption data only. Depending on your meter and billing cycle, data may lag days or weeks behind real-time. The `latest_date` attribute on the electricity consumption sensor shows the actual date of the most recent data point -- use this to judge how current the data is.
+
+### Electricity consumption and Energy Dashboard accuracy
+
+The consumption sensor uses `state_class: total_increasing` with the cumulative year-to-date value (`CurrYearValue`) from the portal API. This value increases monotonically within a year and resets in January -- `total_increasing` handles the annual reset correctly. However, if Karlstadsenergi retroactively corrects `CurrYearValue` downward (e.g. a billing adjustment), HA's long-term statistics will ignore the lower value and the Energy Dashboard may show inflated totals. This is a known limitation of `total_increasing` with an API source that is not a physical meter counter. No such corrections have been observed in practice.
 
 ### Orphaned entity registry entries
 

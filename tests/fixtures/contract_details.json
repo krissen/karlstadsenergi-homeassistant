@@ -1,0 +1,3 @@
+{
+  "d": "[{\"ContractId\":\"C001\",\"UtilityName\":\"Eln\\u00e4t - N\\u00e4tavtal\",\"ContractAlternative\":\"Fast n\\u00e4tpris\",\"ContractStartDate\":\"2025-01-01\",\"ContractEndDate\":\"2026-01-01\",\"NetAreaCode\":\"SE3\",\"ElecticityRegion\":\"SE3\"},{\"ContractId\":\"C002\",\"UtilityName\":\"Elhandel - Handelsavtal\",\"ContractAlternative\":\"R\\u00f6rlig handel\",\"ContractStartDate\":\"2024-06-01\",\"ContractEndDate\":\"\",\"NetAreaCode\":\"SE3\",\"ElecticityRegion\":\"SE3\"},{\"ContractId\":\"C003\",\"UtilityName\":\"Renh\\u00e5llning - Hush\\u00e5llsavfall\",\"ContractAlternative\":\"Standardavtal\",\"ContractStartDate\":\"2023-01-01\",\"ContractEndDate\":\"\",\"NetAreaCode\":\"\",\"ElecticityRegion\":\"\"}]"
+}

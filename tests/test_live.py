@@ -294,8 +294,8 @@ class TestElectricityEntities:
             )
 
     @pytest.mark.asyncio
-    async def test_price_sensors_have_monetary_device_class(self, ha_session) -> None:
-        """Price sensors must have device_class 'monetary' for Energy Dashboard."""
+    async def test_price_sensors_have_no_device_class(self, ha_session) -> None:
+        """Price sensors must NOT use device_class 'monetary' with compound unit SEK/kWh."""
         states = await _get_states(ha_session)
         price_sensors = [
             s
@@ -308,9 +308,9 @@ class TestElectricityEntities:
         assert len(price_sensors) >= 1, "No price sensors found"
         for sensor in price_sensors:
             attrs = sensor.get("attributes", {})
-            assert attrs.get("device_class") == "monetary", (
-                f"{sensor['entity_id']} device_class is '{attrs.get('device_class')}', "
-                f"expected 'monetary'"
+            assert attrs.get("device_class") != "monetary", (
+                f"{sensor['entity_id']} device_class is 'monetary' -- "
+                f"HA requires ISO 4217 currency code for MONETARY, not SEK/kWh"
             )
 
 

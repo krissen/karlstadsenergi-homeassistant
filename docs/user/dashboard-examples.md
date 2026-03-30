@@ -30,6 +30,8 @@ The most popular approach in the HA community. Clean design with color-coded urg
 
 ### 1a. Template card grid
 
+![Mushroom template cards with color-coded urgency](../images/mushroom-cards.png)
+
 Three cards in a grid, one per waste type.
 
 ```yaml
@@ -183,6 +185,8 @@ cards:
 
 ### 1c. Chips (compact status bar)
 
+![Mushroom chips showing days until pickup](../images/mushroom-chips.png)
+
 A single row for the top of a view. Each chip shows the icon and days remaining.
 
 ```yaml
@@ -225,6 +229,8 @@ chips:
 ## 2. Custom Button Card
 
 Three-state card with distinct styling per urgency level. Uses button-card's JavaScript templates.
+
+![Button Card with color-coded backgrounds](../images/button-card.png)
 
 ```yaml
 type: grid
@@ -385,6 +391,8 @@ cards:
 
 ### 3a. Calendar card
 
+![Calendar card showing next pickup](../images/builtin-calendar-card.png)
+
 Shows all waste calendars in HA's native calendar view.
 
 ```yaml
@@ -397,6 +405,8 @@ initial_view: listWeek
 ```
 
 ### 3b. Entities card with conditional rows
+
+![Entities card with pickup dates and tomorrow alert](../images/builtin-entities.png)
 
 Pickup dates always visible; alert rows appear only when a pickup is tomorrow.
 
@@ -444,6 +454,8 @@ entities:
 ```
 
 ### 3c. Glance card (most compact)
+
+![Glance card with pickup dates](../images/builtin-glance.png)
 
 ```yaml
 type: glance

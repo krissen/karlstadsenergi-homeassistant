@@ -2,9 +2,19 @@
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from typing import Any
 
 import pytest
+
+FIXTURES_DIR = Path(__file__).parent / "fixtures"
+
+
+def load_fixture(name: str) -> Any:
+    """Load a JSON fixture file by name (without .json extension)."""
+    path = FIXTURES_DIR / f"{name}.json"
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
 # ---------------------------------------------------------------------------

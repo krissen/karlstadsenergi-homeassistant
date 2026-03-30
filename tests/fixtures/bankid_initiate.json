@@ -1,0 +1,12 @@
+{
+  "OrderResponseType": {
+    "orderRefField": "e1d2c3b4-a5f6-7890-abcd-ef1234567890",
+    "autoStartTokenField": "start-token-abc123def456",
+    "qrStartTokenField": "qr-token-789xyz",
+    "qrStartSecretField": "secret-abc"
+  },
+  "QrCodeBase64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+  "Data": "",
+  "HasError": false,
+  "GrpFault": {}
+}

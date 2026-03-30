@@ -1,0 +1,7 @@
+{
+  "CollectResponseType": {
+    "progressStatusField": 2
+  },
+  "HasError": false,
+  "GrpFault": {}
+}
