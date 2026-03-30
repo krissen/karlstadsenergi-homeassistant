@@ -14,7 +14,7 @@ Some examples require custom frontend cards from HACS:
 
 | Card | HACS name | Required by |
 |------|-----------|-------------|
-| [Mushroom](https://github.com/piitaya/lovelace-mushroom) | `lovelace-mushroom` | Approach 1 |
+| [Mushroom](https://github.com/piitaya/lovelace-mushroom) | `lovelace-mushroom` | Approaches 1a--1c |
 | [card-mod](https://github.com/thomasloven/lovelace-card-mod) | `lovelace-card-mod` | Approach 1b (background tinting) |
 | [Custom Button Card](https://github.com/custom-cards/button-card) | `lovelace-button-card` | Approach 2 |
 
@@ -22,9 +22,9 @@ Approach 3 uses only built-in HA cards -- no HACS frontend dependencies.
 
 ---
 
-## 1. Mushroom Cards (recommended)
+## 1. Mushroom Cards
 
-The most popular approach in the HA community. Clean design with color-coded urgency.
+Color-coded cards showing days until pickup.
 
 **Color logic:** green (7+ days), yellow (2--6 days), orange (tomorrow), red (today).
 
@@ -228,7 +228,7 @@ chips:
 
 ## 2. Custom Button Card
 
-Three-state card with distinct styling per urgency level. Uses button-card's JavaScript templates.
+Color-coded cards using button-card's JavaScript templates.
 
 ![Button Card with color-coded backgrounds](../images/button-card.png)
 

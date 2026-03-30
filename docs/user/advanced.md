@@ -1,6 +1,6 @@
 # Advanced usage
 
-Tips and patterns for getting more out of the Karlstadsenergi integration.
+Service calls, template sensors, and automation examples for the Karlstadsenergi integration.
 
 ---
 

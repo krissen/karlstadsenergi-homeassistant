@@ -7,7 +7,7 @@
 [![Project Maintenance][maintenance-shield]][user_profile]
 [![BuyMeCoffee][buymecoffeebadge]][buymecoffee]
 
-A Home Assistant integration for [Karlstads Energi](https://www.karlstadsenergi.se/) customers. Track your waste collection pickup dates and monitor electricity consumption -- all from within Home Assistant.
+A Home Assistant integration for [Karlstads Energi](https://www.karlstadsenergi.se/) customers. Track waste collection pickup dates and electricity consumption.
 
 > **Disclaimer:** This is an unofficial integration built entirely for personal use. It talks to Karlstads Energi's customer portal through a reverse-engineered API that could break at any time -- so we really can't recommend that anyone else use it.
 >
@@ -63,7 +63,7 @@ The integration supports two login methods. **Customer number & password is stro
 | | Customer number & password | Mobile BankID |
 |---|---|---|
 | **Recommended** | **Yes** | **No** -- avoid if possible |
-| Auto-reconnect on HA restart | **Yes** -- seamless | **No** -- requires manual re-scan |
+| Auto-reconnect on HA restart | **Yes** -- automatic | **No** -- requires manual re-scan |
 | Session handling | Automatic re-login | Heartbeat keep-alive only |
 | Setup complexity | Simple | Requires manual BankID app sign-in |
 | Multi-account | Logs in directly | Must select account each time |
@@ -96,13 +96,13 @@ After setup, go to **Settings -> Devices & Services -> Karlstadsenergi -> Config
 
 ## Entities and automations
 
-See **[Entities](docs/user/entities.md)** for a complete reference of all sensors, calendars, binary sensors, and their attributes -- plus automation examples.
+See **[Entities](docs/user/entities.md)** for a reference of all sensors, calendars, binary sensors, and their attributes, with automation examples.
 
 ---
 
 ## Dashboard examples
 
-See **[Dashboard examples](docs/user/dashboard-examples.md)** for card configurations using Mushroom Cards, Custom Button Card, the built-in Calendar card, and more.
+See **[Dashboard examples](docs/user/dashboard-examples.md)** for card configurations using Mushroom Cards, Custom Button Card, and the built-in Calendar card.
 
 ---
 

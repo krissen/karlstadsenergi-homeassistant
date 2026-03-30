@@ -46,7 +46,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Customer number label no longer includes Swedish parenthetical
 
 ### Documentation
-- Comprehensive documentation (README, CONTRIBUTING, DEVELOPMENT)
+- Documentation (README, CONTRIBUTING, DEVELOPMENT)
 - Entity reference with automation examples
 - Dashboard card examples with multiple approaches
 
