@@ -364,7 +364,7 @@ class TestStepReauth:
         result = await flow.async_step_reauth(entry_data)
 
         assert result["type"] == "form"
-        assert result["step_id"] == "reauth_confirm"
+        assert result["step_id"] == "reauth_confirm_password"
 
     @pytest.mark.asyncio
     async def test_defaults_auth_method_to_password_when_missing(self) -> None:
@@ -387,7 +387,19 @@ class TestStepReauthConfirm:
         result = await flow.async_step_reauth_confirm(user_input=None)
 
         assert result["type"] == "form"
-        assert result["step_id"] == "reauth_confirm"
+        assert result["step_id"] == "reauth_confirm_password"
+
+    @pytest.mark.asyncio
+    async def test_bankid_returns_reauth_confirm_bankid_form(self) -> None:
+        """BankID reauth must show the bankid-specific form."""
+        flow = _make_flow(source="reauth")
+        flow._personnummer = "199001011234"
+        flow._auth_method = AUTH_BANKID
+
+        result = await flow.async_step_reauth_confirm(user_input=None)
+
+        assert result["type"] == "form"
+        assert result["step_id"] == "reauth_confirm_bankid"
 
     @pytest.mark.asyncio
     async def test_form_does_not_expose_personnummer(self) -> None:
