@@ -33,7 +33,7 @@
         "title": "Karlstadsenergi - Login",
         "description": "Enter your customer number and password.",
         "data": {
-          "customer_number": "Customer number (kundnummer)",
+          "customer_number": "Customer number",
           "password": "Password"
         },
         "data_description": {
@@ -48,7 +48,7 @@
       },
       "select_account": {
         "title": "Karlstadsenergi - Select account",
-        "description": "Multiple accounts found. Choose which one to use.",
+        "description": "Multiple accounts found. Choose which customer account to use. Each account represents a separate billing relationship with Karlstadsenergi.",
         "data": {
           "account": "Account"
         },
@@ -56,9 +56,14 @@
           "account": "Select the customer account to configure."
         }
       },
-      "reauth_confirm": {
+      "reauth_confirm_password": {
         "title": "Karlstadsenergi - Re-authenticate",
-        "description": "Session expired. You will be asked to re-authenticate using {auth_method}. Click Submit to continue.",
+        "description": "Session expired. You will be asked to re-authenticate with your customer number and password. Click Submit to continue.",
+        "data": {}
+      },
+      "reauth_confirm_bankid": {
+        "title": "Karlstadsenergi - Re-authenticate",
+        "description": "Session expired. You will be asked to re-authenticate with BankID. Click Submit to continue.",
         "data": {}
       }
     },
@@ -101,7 +106,7 @@
   "options": {
     "step": {
       "init": {
-        "title": "Karlstadsenergi Options",
+        "title": "Options",
         "description": "Configure update settings for the Karlstadsenergi integration.",
         "data": {
           "update_interval": "Update interval (hours)"

@@ -7,7 +7,8 @@ Use this report before tagging a release. Keep it short, factual, and reproducib
 - Release candidate: `vX.Y.Z`
 - Date:
 - Tester:
-- Home Assistant version:
+- Home Assistant version (test venv):
+- Home Assistant version (live instance):
 - Installation type (Container / Core / OS / Supervised):
 - Integration commit/tag tested:
 
@@ -17,7 +18,28 @@ Use this report before tagging a release. Keep it short, factual, and reproducib
 - Number of configured Karlstadsenergi entries:
 - Notes about test environment:
 
-## Smoke Checklist
+## Automated Tests
+
+### Unit tests (pytest)
+
+- Test count:
+- Result: `PASS` / `FAIL`
+- Command: `source .venv/bin/activate && pytest tests/ --ignore=tests/test_live.py -q`
+- Failures (if any):
+
+### Lint and formatting (ruff)
+
+- Result: `PASS` / `FAIL`
+- Command: `ruff check . && ruff format --check .`
+
+### Live smoke tests (pytest against running HA)
+
+- Test count:
+- Result: `PASS` / `FAIL`
+- Command: `pytest tests/test_live.py -v`
+- Failures (if any):
+
+## Manual Smoke Checklist
 
 ### 1) Password setup
 
@@ -65,7 +87,13 @@ Use this report before tagging a release. Keep it short, factual, and reproducib
 ### 7) Diagnostics redaction
 
 - [ ] Download diagnostics
-- [ ] Sensitive fields are redacted
+- [ ] Sensitive fields are redacted (personnummer, ContractId, cookies, etc.)
+- Evidence:
+
+### 8) Energy Dashboard (if price/consumption sensors in scope)
+
+- [ ] Price sensors visible in Energy Dashboard configuration
+- [ ] Consumption sensor selectable as grid consumption
 - Evidence:
 
 ## Result Summary

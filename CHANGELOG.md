@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Spot price coordinator is now per-entry (no longer shared via hass.data)
+- Contract sensors now have `entity_category: diagnostic` (shown under diagnostics in HA)
+- Config entry title for BankID no longer includes customer name (privacy)
+- Reauth flow uses separate translated steps for password and BankID
+- Options dialog title simplified
+- Customer number label no longer includes Swedish parenthetical
+
+### Fixed
+- `pickup_is_today` attribute now correctly returns false for past dates
+- Electricity price sensor returns `0.0` instead of unavailable when fee is zero
+- Price sensors now have `device_class: monetary` for Energy Dashboard discovery
+- `DeviceInfo` import updated from deprecated path
+- Removed synchronous file I/O for version constant at module load
+- Config flow properly cleans up API session on abort
+- `ContractId` now redacted in diagnostics exports
+- Differentiated exception handling in spot price coordinator
+
 ## [0.2.0] - 2026-03-29
 
 ### Added

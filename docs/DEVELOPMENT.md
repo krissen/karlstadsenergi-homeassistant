@@ -82,6 +82,10 @@ ruff format custom_components/karlstadsenergi/
 ruff check custom_components/karlstadsenergi/ --fix
 ```
 
+### Version
+
+`const.py` defines `VERSION` and `manifest.json` defines `"version"`. Both **must be updated together** on every release -- they are not linked automatically.
+
 ### Translations
 
 `strings.json` is the source of truth. `translations/en.json` must be an exact copy. After editing `strings.json`, copy it:
@@ -123,22 +127,25 @@ The server session times out after ~15 minutes. The integration handles this wit
 
 ---
 
-## Release smoke test checklist
+## Release smoke test
 
-Before tagging a release, verify the integration against a real HA instance:
+Before tagging a release, run automated and manual tests against a real HA instance.
 
-- [ ] **Password setup**: Add integration with customer number + password, entities appear
-- [ ] **Entity update**: Waste, consumption, spot price sensors update after coordinator interval
-- [ ] **HA restart**: Restart HA, verify session recovers and entities update
-- [ ] **Reauth flow**: Expire session (clear cookies in config entry), verify reauth prompt appears and completes
-- [ ] **BankID setup** (if applicable): Add integration with BankID, sign in BankID app, entities appear
-- [ ] **Options flow**: Change update interval, verify new interval takes effect after reload
-- [ ] **Diagnostics**: Download diagnostics, verify PII is redacted
+Use the **[Release Smoke Report Template](RELEASE_SMOKE_REPORT_TEMPLATE.md)** to document results. Save the filled-in report as `tmp/smoke-report-vX.Y.Z.md`.
+
+Quick reference (the template has full details):
+
+1. Run unit tests: `pytest tests/ --ignore=tests/test_live.py -q`
+2. Run lint: `ruff check . && ruff format --check .`
+3. Copy integration to test instance and restart HA
+4. Run live tests: `pytest tests/test_live.py -v`
+5. Manually verify reauth, BankID (if applicable), and options flow
 
 ---
 
 ## Useful resources
 
+- [CONTRIBUTING.md](../CONTRIBUTING.md) -- how to submit changes, code style, PR guidelines
 - [Home Assistant integration development docs](https://developers.home-assistant.io/docs/creating_integration_manifest)
 - [Home Assistant DataUpdateCoordinator](https://developers.home-assistant.io/docs/integration_fetching_data)
 - [aiohttp documentation](https://docs.aiohttp.org/)

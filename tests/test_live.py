@@ -293,6 +293,76 @@ class TestElectricityEntities:
                 f"{sensor['entity_id']} region is {attrs.get('region')}, expected SE3"
             )
 
+    @pytest.mark.asyncio
+    async def test_price_sensors_have_monetary_device_class(self, ha_session) -> None:
+        """Price sensors must have device_class 'monetary' for Energy Dashboard."""
+        states = await _get_states(ha_session)
+        price_sensors = [
+            s
+            for s in _ke_entities(states)
+            if s["entity_id"].startswith("sensor.")
+            and (
+                "spot_price" in s["entity_id"] or "electricity_price" in s["entity_id"]
+            )
+        ]
+        assert len(price_sensors) >= 1, "No price sensors found"
+        for sensor in price_sensors:
+            attrs = sensor.get("attributes", {})
+            assert attrs.get("device_class") == "monetary", (
+                f"{sensor['entity_id']} device_class is '{attrs.get('device_class')}', "
+                f"expected 'monetary'"
+            )
+
+
+# ---------------------------------------------------------------------------
+# Tests: Diagnostics (PII redaction)
+# ---------------------------------------------------------------------------
+
+
+class TestContractEntities:
+    """Verify contract sensors have correct metadata."""
+
+    @pytest.mark.asyncio
+    async def test_contract_sensors_are_diagnostic(self, ha_session) -> None:
+        """Contract sensors should have entity_category 'diagnostic'."""
+        states = await _get_states(ha_session)
+        contracts = [
+            s
+            for s in _ke_entities(states)
+            if s["entity_id"].startswith("sensor.")
+            and ("contract" in s["entity_id"] or "avtal" in s["entity_id"])
+        ]
+        for sensor in contracts:
+            attrs = sensor.get("attributes", {})
+            # HA exposes entity_category in the entity registry, not always in
+            # state attributes. If present, verify it is 'diagnostic'.
+            if "entity_category" in attrs:
+                assert attrs["entity_category"] == "diagnostic", (
+                    f"{sensor['entity_id']} entity_category is "
+                    f"'{attrs['entity_category']}', expected 'diagnostic'"
+                )
+
+
+class TestConfigEntryMetadata:
+    """Verify config entry metadata after review fixes."""
+
+    @pytest.mark.asyncio
+    async def test_config_entry_title_no_full_name(self, ha_session) -> None:
+        """Config entry title should be 'Karlstadsenergi (CODE)', not contain full name."""
+        entries = await _get_config_entries(ha_session)
+        ke_entries = [e for e in entries if e.get("domain") == DOMAIN]
+        for entry in ke_entries:
+            title = entry.get("title", "")
+            # Title should match "Karlstadsenergi (CODE)" pattern
+            # It should NOT contain three words before the parenthesis (name + surname)
+            parts_before_paren = title.split("(")[0].strip().split()
+            assert len(parts_before_paren) <= 1 or parts_before_paren == [
+                "Karlstadsenergi"
+            ], (
+                f"Config entry title '{title}' may contain a personal name. "
+                f"Expected format: 'Karlstadsenergi (CODE)'"
+            )
+
 
 # ---------------------------------------------------------------------------
 # Tests: Diagnostics (PII redaction)
@@ -323,6 +393,30 @@ class TestDiagnostics:
                 if pnr:
                     assert pnr == "**REDACTED**", (
                         "personnummer not redacted in diagnostics"
+                    )
+
+    @pytest.mark.asyncio
+    async def test_diagnostics_redacts_contract_id(self, ha_session) -> None:
+        """ContractId must be redacted in diagnostics exports."""
+        entries = await _get_config_entries(ha_session)
+        ke_entries = [e for e in entries if e.get("domain") == DOMAIN]
+        if not ke_entries:
+            pytest.skip("No config entry")
+        entry_id = ke_entries[0]["entry_id"]
+        async with ha_session.get(
+            f"{HA_URL}/api/diagnostics/config_entry/{entry_id}"
+        ) as resp:
+            if resp.status != 200:
+                pytest.skip("Diagnostics not available")
+            data = await resp.json()
+            # Check contract data for redacted ContractId
+            contract_data = data.get("data", {}).get("contract_data", {})
+            contracts = contract_data.get("contracts", [])
+            for contract in contracts:
+                cid = contract.get("ContractId", "")
+                if cid:
+                    assert cid == "**REDACTED**", (
+                        f"ContractId '{cid}' not redacted in diagnostics"
                     )
 
 

@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+
+import aiohttp
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_PASSWORD
@@ -258,6 +261,12 @@ class KarlstadsenergiSpotPriceCoordinator(DataUpdateCoordinator[dict]):
                 resp = await session.get(URL_SPOT_PRICES)
                 resp.raise_for_status()
                 data = await resp.json()
+        except asyncio.TimeoutError as err:
+            raise UpdateFailed(f"Spot price fetch timed out: {err}") from err
+        except aiohttp.ClientError as err:
+            raise UpdateFailed(f"Spot price HTTP error: {err}") from err
+        except (json.JSONDecodeError, KeyError, TypeError) as err:
+            raise UpdateFailed(f"Spot price parse error: {err}") from err
         except Exception as err:
             raise UpdateFailed(f"Spot price fetch failed: {err}") from err
         return self._parse_spot_data(data)
@@ -415,17 +424,11 @@ async def async_setup_entry(
         _LOGGER.warning("Could not fetch contract data: %s", err)
 
     # Spot price coordinator (15 min interval, public API, no auth).
-    # Shared across all config entries since it fetches public data.
-    spot_key = f"{DOMAIN}_spot_price_coordinator"
-    if spot_key in hass.data:
-        spot_price_coordinator = hass.data[spot_key]
-    else:
-        spot_price_coordinator = KarlstadsenergiSpotPriceCoordinator(hass)
-        try:
-            await spot_price_coordinator.async_config_entry_first_refresh()
-        except Exception as err:
-            _LOGGER.warning("Could not fetch spot prices: %s", err)
-        hass.data[spot_key] = spot_price_coordinator
+    spot_price_coordinator = KarlstadsenergiSpotPriceCoordinator(hass)
+    try:
+        await spot_price_coordinator.async_config_entry_first_refresh()
+    except Exception as err:
+        _LOGGER.warning("Could not fetch spot prices: %s", err)
 
     entry.runtime_data = KarlstadsenergiData(
         api=api,
@@ -441,8 +444,7 @@ async def async_setup_entry(
     # Heartbeat: keep session alive every 5 minutes
     async def _heartbeat(_now=None) -> None:
         try:
-            async with api._auth_lock:
-                await api.async_heartbeat()
+            await api.async_heartbeat()
         except Exception:
             _LOGGER.debug("Heartbeat failed", exc_info=True)
 
@@ -457,20 +459,6 @@ async def async_setup_entry(
     return True
 
 
-async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Migrate config entry to a new version.
-
-    Uses bare ConfigEntry (not KarlstadsenergiConfigEntry) because
-    migration runs before runtime_data is populated.
-    """
-    if entry.version > 1:
-        _LOGGER.error(
-            "Cannot migrate from future config entry version %s", entry.version
-        )
-        return False
-    return True
-
-
 async def async_unload_entry(
     hass: HomeAssistant, entry: KarlstadsenergiConfigEntry
 ) -> bool:
@@ -481,17 +469,6 @@ async def async_unload_entry(
     )
     if unload_ok:
         await entry.runtime_data.api.async_close()
-
-        # Clean up shared spot price coordinator when last entry is unloaded
-        spot_key = f"{DOMAIN}_spot_price_coordinator"
-        if spot_key in hass.data:
-            remaining = [
-                e
-                for e in hass.config_entries.async_entries(DOMAIN)
-                if e.entry_id != entry.entry_id
-            ]
-            if not remaining:
-                del hass.data[spot_key]
 
     return unload_ok
 

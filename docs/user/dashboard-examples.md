@@ -2,6 +2,8 @@
 
 Examples for displaying waste collection data on your Home Assistant dashboard. All examples use the entity IDs created by the Karlstadsenergi integration.
 
+> **Note:** Entity IDs in the examples below are illustrative. Your actual entity IDs depend on your address and installation. Replace them with the IDs shown in **Settings -> Devices & Services -> Karlstadsenergi** before using these examples.
+
 > **Tip:** The examples below use Swedish labels to match the waste type names from Karlstads Energi. Change them to whatever language you prefer.
 
 ---

@@ -28,6 +28,7 @@ from custom_components.karlstadsenergi.config_flow import KarlstadsenergiConfigF
 from custom_components.karlstadsenergi.const import (
     CONF_AUTH_METHOD,
     CONF_PERSONNUMMER,
+    CONF_UPDATE_INTERVAL,
     PLATFORMS,
 )
 
@@ -1317,3 +1318,307 @@ class TestBankIdFlowFullPath:
 
         assert result["type"] == "form"
         assert result["errors"].get("base") == "bankid_failed"
+
+
+# ---------------------------------------------------------------------------
+# Deferred entity registration (H-7): waste entities created via listener
+# ---------------------------------------------------------------------------
+
+
+class TestDeferredWasteEntityRegistration:
+    @pytest.mark.asyncio
+    async def test_waste_entities_created_via_listener_when_initially_empty(
+        self,
+    ) -> None:
+        """When waste_coordinator.data is None/empty at setup, a listener is
+        registered. Once data arrives the listener calls async_add_entities."""
+        from custom_components.karlstadsenergi.sensor import (
+            async_setup_entry as sensor_setup,
+        )
+
+        # Build a minimal runtime_data stub where waste data is initially absent.
+        waste_coord = MagicMock()
+        waste_coord.data = None  # no data at setup time
+
+        consumption_coord = MagicMock()
+        consumption_coord.data = None
+
+        contract_coord = MagicMock()
+        contract_coord.data = None
+
+        spot_coord = MagicMock()
+        spot_coord.data = None
+
+        runtime = MagicMock()
+        runtime.waste_coordinator = waste_coord
+        runtime.consumption_coordinator = consumption_coord
+        runtime.contract_coordinator = contract_coord
+        runtime.spot_price_coordinator = spot_coord
+
+        entry = _make_entry()
+        entry.runtime_data = runtime
+
+        hass = _make_hass()
+        hass.data = {}
+
+        added_entities: list = []
+
+        def _capture_add(entities, **kwargs):
+            added_entities.extend(
+                entities if hasattr(entities, "__iter__") else [entities]
+            )
+
+        # Capture the listener that sensor platform registers on the waste coordinator
+        registered_listener = None
+
+        def _fake_add_listener(callback):
+            nonlocal registered_listener
+            registered_listener = callback
+            return MagicMock()  # unsub
+
+        waste_coord.async_add_listener = _fake_add_listener
+
+        # Capture listener on contract coordinator too (avoid AttributeError)
+        contract_coord.async_add_listener = MagicMock(return_value=MagicMock())
+
+        await sensor_setup(hass, entry, _capture_add)
+
+        # At this point listener should be registered (waste data was None)
+        assert registered_listener is not None, "Listener was not registered"
+
+        # Now simulate data arriving
+        waste_coord.data = {
+            "services": [],
+            "next_dates": [
+                {
+                    "Type": "Mat- och restavfall",
+                    "Date": "2026-05-01",
+                    "Address": "Testgatan 1",
+                    "Size": "140L",
+                }
+            ],
+        }
+
+        before_count = len(added_entities)
+        registered_listener()
+        after_count = len(added_entities)
+
+        # At least one entity should have been added by the listener callback
+        assert after_count > before_count, (
+            "Listener callback did not add any entities "
+            f"(before={before_count}, after={after_count})"
+        )
+
+    @pytest.mark.asyncio
+    async def test_waste_listener_not_registered_when_data_present(self) -> None:
+        """When waste data is available at setup, no listener is registered."""
+        from custom_components.karlstadsenergi.sensor import (
+            async_setup_entry as sensor_setup,
+        )
+
+        waste_coord = MagicMock()
+        waste_coord.data = {
+            "services": [],
+            "next_dates": [
+                {
+                    "Type": "Mat- och restavfall",
+                    "Date": "2026-05-01",
+                    "Address": "Testgatan 1",
+                    "Size": "140L",
+                }
+            ],
+        }
+        # async_add_listener should never be called when data is already present
+        waste_coord.async_add_listener = MagicMock(return_value=MagicMock())
+
+        consumption_coord = MagicMock()
+        consumption_coord.data = None
+
+        contract_coord = MagicMock()
+        contract_coord.data = None
+        contract_coord.async_add_listener = MagicMock(return_value=MagicMock())
+
+        spot_coord = MagicMock()
+        spot_coord.data = None
+
+        runtime = MagicMock()
+        runtime.waste_coordinator = waste_coord
+        runtime.consumption_coordinator = consumption_coord
+        runtime.contract_coordinator = contract_coord
+        runtime.spot_price_coordinator = spot_coord
+
+        entry = _make_entry()
+        entry.runtime_data = runtime
+
+        hass = _make_hass()
+        hass.data = {}
+
+        await sensor_setup(hass, entry, MagicMock())
+
+        waste_coord.async_add_listener.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# _async_reload_entry (M-10): options change triggers reload, data-only does not
+# ---------------------------------------------------------------------------
+
+
+class TestAsyncReloadEntry:
+    @pytest.mark.asyncio
+    async def test_reload_triggered_when_options_changed(self) -> None:
+        """_async_reload_entry must call async_reload when options differ from
+        setup_options stored in runtime_data."""
+        from custom_components.karlstadsenergi import _async_reload_entry
+
+        hass = _make_hass()
+        hass.config_entries.async_reload = AsyncMock()
+
+        entry = _make_entry(options={"update_interval": 12})
+        entry.entry_id = "test-entry-id"
+        runtime = MagicMock()
+        runtime.setup_options = {"update_interval": 6}  # different from current options
+        entry.runtime_data = runtime
+
+        await _async_reload_entry(hass, entry)
+
+        hass.config_entries.async_reload.assert_called_once_with("test-entry-id")
+
+    @pytest.mark.asyncio
+    async def test_reload_not_triggered_on_data_only_change(self) -> None:
+        """_async_reload_entry must NOT call async_reload when options match
+        setup_options (e.g. a cookie save updated entry.data but not options)."""
+        from custom_components.karlstadsenergi import _async_reload_entry
+
+        hass = _make_hass()
+        hass.config_entries.async_reload = AsyncMock()
+
+        entry = _make_entry(options={"update_interval": 6})
+        runtime = MagicMock()
+        runtime.setup_options = {"update_interval": 6}  # same as current options
+        entry.runtime_data = runtime
+
+        await _async_reload_entry(hass, entry)
+
+        hass.config_entries.async_reload.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_reload_not_triggered_when_both_options_empty(self) -> None:
+        """_async_reload_entry does not reload when neither current nor setup options
+        have been customised (both are empty dicts)."""
+        from custom_components.karlstadsenergi import _async_reload_entry
+
+        hass = _make_hass()
+        hass.config_entries.async_reload = AsyncMock()
+
+        entry = _make_entry(options={})
+        runtime = MagicMock()
+        runtime.setup_options = {}
+        entry.runtime_data = runtime
+
+        await _async_reload_entry(hass, entry)
+
+        hass.config_entries.async_reload.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Update interval clamping (M-11)
+# ---------------------------------------------------------------------------
+
+
+class TestUpdateIntervalClamping:
+    """Verify that async_setup_entry clamps update_interval to [MIN, MAX]."""
+
+    def _setup_args(self, interval: int):
+        """Return (hass, entry, api) with the given update_interval option."""
+        hass = _make_hass()
+        entry = _make_entry(options={CONF_UPDATE_INTERVAL: interval})
+        api = _make_api()
+        return hass, entry, api
+
+    @pytest.mark.asyncio
+    async def test_interval_zero_clamped_to_minimum(self) -> None:
+        from custom_components.karlstadsenergi.const import MIN_UPDATE_INTERVAL
+        from datetime import timedelta
+
+        hass, entry, api = self._setup_args(0)
+
+        with (
+            patch(
+                "custom_components.karlstadsenergi.KarlstadsenergiApi",
+                return_value=api,
+            ),
+            patch(
+                "custom_components.karlstadsenergi.async_track_time_interval",
+                return_value=MagicMock(),
+            ),
+        ):
+            await async_setup_entry(hass, entry)
+
+        waste_coord = entry.runtime_data.waste_coordinator
+        assert waste_coord.update_interval >= timedelta(hours=MIN_UPDATE_INTERVAL)
+
+    @pytest.mark.asyncio
+    async def test_interval_999_clamped_to_maximum(self) -> None:
+        from custom_components.karlstadsenergi.const import MAX_UPDATE_INTERVAL
+        from datetime import timedelta
+
+        hass, entry, api = self._setup_args(999)
+
+        with (
+            patch(
+                "custom_components.karlstadsenergi.KarlstadsenergiApi",
+                return_value=api,
+            ),
+            patch(
+                "custom_components.karlstadsenergi.async_track_time_interval",
+                return_value=MagicMock(),
+            ),
+        ):
+            await async_setup_entry(hass, entry)
+
+        waste_coord = entry.runtime_data.waste_coordinator
+        assert waste_coord.update_interval <= timedelta(hours=MAX_UPDATE_INTERVAL)
+
+    @pytest.mark.asyncio
+    async def test_interval_at_minimum_boundary_is_accepted(self) -> None:
+        from custom_components.karlstadsenergi.const import MIN_UPDATE_INTERVAL
+        from datetime import timedelta
+
+        hass, entry, api = self._setup_args(MIN_UPDATE_INTERVAL)
+
+        with (
+            patch(
+                "custom_components.karlstadsenergi.KarlstadsenergiApi",
+                return_value=api,
+            ),
+            patch(
+                "custom_components.karlstadsenergi.async_track_time_interval",
+                return_value=MagicMock(),
+            ),
+        ):
+            await async_setup_entry(hass, entry)
+
+        waste_coord = entry.runtime_data.waste_coordinator
+        assert waste_coord.update_interval == timedelta(hours=MIN_UPDATE_INTERVAL)
+
+    @pytest.mark.asyncio
+    async def test_interval_at_maximum_boundary_is_accepted(self) -> None:
+        from custom_components.karlstadsenergi.const import MAX_UPDATE_INTERVAL
+        from datetime import timedelta
+
+        hass, entry, api = self._setup_args(MAX_UPDATE_INTERVAL)
+
+        with (
+            patch(
+                "custom_components.karlstadsenergi.KarlstadsenergiApi",
+                return_value=api,
+            ),
+            patch(
+                "custom_components.karlstadsenergi.async_track_time_interval",
+                return_value=MagicMock(),
+            ),
+        ):
+            await async_setup_entry(hass, entry)
+
+        waste_coord = entry.runtime_data.waste_coordinator
+        assert waste_coord.update_interval == timedelta(hours=MAX_UPDATE_INTERVAL)

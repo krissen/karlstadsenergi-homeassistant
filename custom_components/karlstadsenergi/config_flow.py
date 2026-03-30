@@ -46,6 +46,18 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 
+_USER_STEP_SCHEMA = vol.Schema(
+    {
+        vol.Required(CONF_AUTH_METHOD, default=AUTH_PASSWORD): SelectSelector(
+            SelectSelectorConfig(
+                options=[AUTH_PASSWORD, AUTH_BANKID],
+                translation_key=CONF_AUTH_METHOD,
+            )
+        ),
+    }
+)
+
+
 class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Karlstadsenergi."""
 
@@ -73,18 +85,7 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
 
         return self.async_show_form(
             step_id="user",
-            data_schema=vol.Schema(
-                {
-                    vol.Required(
-                        CONF_AUTH_METHOD, default=AUTH_PASSWORD
-                    ): SelectSelector(
-                        SelectSelectorConfig(
-                            options=[AUTH_PASSWORD, AUTH_BANKID],
-                            translation_key=CONF_AUTH_METHOD,
-                        )
-                    ),
-                }
-            ),
+            data_schema=_USER_STEP_SCHEMA,
         )
 
     async def async_step_bankid_personnummer(
@@ -311,20 +312,13 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
     def _show_user_form(self, errors: dict) -> ConfigFlowResult:
         return self.async_show_form(
             step_id="user",
-            data_schema=vol.Schema(
-                {
-                    vol.Required(
-                        CONF_AUTH_METHOD, default=AUTH_PASSWORD
-                    ): SelectSelector(
-                        SelectSelectorConfig(
-                            options=[AUTH_PASSWORD, AUTH_BANKID],
-                            translation_key=CONF_AUTH_METHOD,
-                        )
-                    ),
-                }
-            ),
+            data_schema=_USER_STEP_SCHEMA,
             errors=errors,
         )
+
+    async def async_remove(self) -> None:
+        """Clean up API session if flow is aborted."""
+        await self._cleanup_api()
 
     async def _cleanup_api(self) -> None:
         if self._api:
@@ -344,20 +338,32 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
         self,
         user_input: dict[str, Any] | None = None,
     ) -> ConfigFlowResult:
-        """Show reauth confirmation and route to the correct auth flow."""
-        if user_input is not None:
-            if self._auth_method == AUTH_PASSWORD:
-                return await self.async_step_password()
-            return await self.async_step_bankid()
+        """Route reauth to the correct method-specific step."""
+        if self._auth_method == AUTH_PASSWORD:
+            return await self.async_step_reauth_confirm_password(user_input)
+        return await self.async_step_reauth_confirm_bankid(user_input)
 
-        method_label = (
-            "customer number & password"
-            if self._auth_method == AUTH_PASSWORD
-            else "BankID"
-        )
+    async def async_step_reauth_confirm_password(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> ConfigFlowResult:
+        """Reauth confirmation for password users."""
+        if user_input is not None:
+            return await self.async_step_password()
         return self.async_show_form(
-            step_id="reauth_confirm",
-            description_placeholders={"auth_method": method_label},
+            step_id="reauth_confirm_password",
+            data_schema=vol.Schema({}),
+        )
+
+    async def async_step_reauth_confirm_bankid(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> ConfigFlowResult:
+        """Reauth confirmation for BankID users."""
+        if user_input is not None:
+            return await self.async_step_bankid()
+        return self.async_show_form(
+            step_id="reauth_confirm_bankid",
             data_schema=vol.Schema({}),
         )
 
@@ -386,12 +392,7 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
             if self.source != "reauth":
                 self._abort_if_unique_id_configured()
 
-            full_name = account.get("full_name", "")
-            title = (
-                f"Karlstadsenergi {full_name} ({customer_code})"
-                if full_name
-                else f"Karlstadsenergi ({customer_code})"
-            )
+            title = f"Karlstadsenergi ({customer_code})"
 
             new_data = {
                 CONF_PERSONNUMMER: self._personnummer,

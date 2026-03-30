@@ -36,6 +36,7 @@ TO_REDACT_DATA = {
     "Address",
     "SiteId",
     "ContractCode",
+    "ContractId",
 }
 
 

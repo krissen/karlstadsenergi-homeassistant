@@ -1,14 +1,13 @@
 """Constants for the Karlstadsenergi integration."""
 
 import datetime
-import json
-from pathlib import Path
+import hashlib
 
 from homeassistant.const import Platform
 
 DOMAIN = "karlstadsenergi"
 NAME = "Karlstadsenergi"
-VERSION = json.loads((Path(__file__).parent / "manifest.json").read_text())["version"]
+VERSION = "0.2.0"
 
 PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.CALENDAR, Platform.BINARY_SENSOR]
 
@@ -67,8 +66,6 @@ def slug_for_waste_type(waste_type: str) -> str:
         return slug
     result = "".join(c if c.isalnum() else "_" for c in waste_type.lower()).strip("_")
     if not result:
-        import hashlib
-
         result = f"waste_{hashlib.md5(waste_type.encode()).hexdigest()[:8]}"
     return result
 
