@@ -50,6 +50,7 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Karlstadsenergi."""
 
     VERSION = 1
+    MINOR_VERSION = 1
 
     def __init__(self) -> None:
         self._personnummer: str = ""
@@ -63,8 +64,6 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
         user_input: dict[str, Any] | None = None,
     ) -> ConfigFlowResult:
         """Step 1: Choose auth method and enter personnummer."""
-        errors: dict[str, str] = {}
-
         if user_input is not None:
             self._auth_method = user_input.get(CONF_AUTH_METHOD, AUTH_PASSWORD)
 
@@ -86,7 +85,6 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
                     ),
                 }
             ),
-            errors=errors,
         )
 
     async def async_step_bankid_personnummer(
@@ -97,10 +95,14 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
 
         if user_input is not None:
-            self._personnummer = user_input.get(CONF_PERSONNUMMER, "")
-            if self._personnummer:
+            self._personnummer = user_input.get(CONF_PERSONNUMMER, "").strip()
+            if (
+                self._personnummer
+                and self._personnummer.isdigit()
+                and len(self._personnummer) in (10, 12)
+            ):
                 return await self.async_step_bankid()
-            errors["base"] = "invalid_auth"
+            errors["base"] = "invalid_personnummer"
 
         return self.async_show_form(
             step_id="bankid_personnummer",
@@ -210,9 +212,11 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
                         break
                     if result["status"] not in (1, 2, 5):
                         break
-                    # Review note (V8): asyncio.sleep in config flow is the
-                    # standard BankID polling pattern. HA config flows support
-                    # async operations and this does not block the event loop.
+                    # Known limitation (B4): This sleep-based polling blocks the
+                    # config flow for up to 30 seconds. The recommended HA pattern
+                    # is async_show_progress with a background task, but the current
+                    # approach works because BankID is a secondary auth method used
+                    # by few users. Refactoring to progress steps is deferred.
                     await asyncio.sleep(2)
 
                 if result and result["status"] == BANKID_COMPLETE:
@@ -280,15 +284,18 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
                     return await self._do_bankid_login(self._accounts[selected_idx])
             errors["base"] = "unknown"
 
-        options = {
-            str(i): self._account_label(acc) for i, acc in enumerate(self._accounts)
-        }
+        options = [
+            {"value": str(i), "label": self._account_label(acc)}
+            for i, acc in enumerate(self._accounts)
+        ]
 
         return self.async_show_form(
             step_id="select_account",
             data_schema=vol.Schema(
                 {
-                    vol.Required("account"): vol.In(options),
+                    vol.Required("account"): SelectSelector(
+                        SelectSelectorConfig(options=options)
+                    ),
                 }
             ),
             errors=errors,
@@ -345,9 +352,6 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
 
         return self.async_show_form(
             step_id="reauth_confirm",
-            description_placeholders={
-                "personnummer": self._personnummer,
-            },
             data_schema=vol.Schema({}),
         )
 
@@ -444,7 +448,7 @@ class KarlstadsenergiOptionsFlow(OptionsFlow):
                             min=MIN_UPDATE_INTERVAL,
                             max=MAX_UPDATE_INTERVAL,
                             step=1,
-                            mode=NumberSelectorMode.SLIDER,
+                            mode=NumberSelectorMode.BOX,
                             unit_of_measurement="hours",
                         )
                     ),
