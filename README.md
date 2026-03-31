@@ -13,20 +13,10 @@ A Home Assistant integration for [Karlstads Energi](https://www.karlstadsenergi.
 >
 > It exists because [@krissen](https://github.com/krissen) got new waste bins with a new pickup schedule and kept dragging the wrong ones to the curb on cold Värmland mornings. Automation to the rescue. It's shared here in case someone else in Karlstad has the same problem. If that's you -- välkommen, and good luck.
 
-<table align="center">
-  <tr>
-    <td><img width="450" alt="Button Card with color-coded waste pickup dates" src="docs/images/button-card.png" /></td>
-    <td><img width="450" alt="Built-in entities card with pickup dates and tomorrow alert" src="docs/images/builtin-entities.png" /></td>
-  </tr>
-  <tr>
-    <td><img width="450" alt="Daily electricity consumption chart" src="docs/images/consumption-daily.png" /></td>
-    <td><img width="450" alt="Hourly electricity consumption chart" src="docs/images/consumption-hourly.png" /></td>
-  </tr>
-  <tr>
-    <td><img width="450" alt="Mushroom chips showing days until pickup" src="docs/images/mushroom-chips.png" /></td>
-    <td><img width="450" alt="Calendar view with waste collection events" src="docs/images/calendar.png" /></td>
-  </tr>
-</table>
+<table align="center"><tr>
+  <td><img width="450" alt="Button Card with color-coded waste pickup dates" src="docs/images/button-card.png" /></td>
+  <td><img width="450" alt="Daily electricity consumption chart" src="docs/images/consumption-daily.png" /></td>
+</tr></table>
 
 ---
 
@@ -109,11 +99,23 @@ After setup, go to **Settings -> Devices & Services -> Karlstadsenergi -> Config
 
 ## Entities and automations
 
+<table><tr>
+  <td><img width="420" alt="Built-in entities card with pickup dates and tomorrow alert" src="docs/images/builtin-entities.png" /></td>
+  <td><img width="420" alt="Hourly electricity consumption chart" src="docs/images/consumption-hourly.png" /></td>
+</tr></table>
+
 See **[Entities](docs/user/entities.md)** for a reference of all sensors, calendars, binary sensors, and their attributes, with automation examples.
 
 ---
 
 ## Dashboard examples
+
+<p align="center">
+  <img width="500" alt="Mushroom chips showing days until pickup" src="docs/images/mushroom-chips.png" />
+</p>
+<p align="center">
+  <img width="420" alt="Calendar view with waste collection events" src="docs/images/calendar.png" />
+</p>
 
 See **[Dashboard examples](docs/user/dashboard-examples.md)** for card configurations using Mushroom Cards, Custom Button Card, and the built-in Calendar card.
 
