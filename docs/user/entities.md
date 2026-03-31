@@ -127,6 +127,43 @@ Derived from your invoice fee breakdown. This is a historical/retrospective pric
 
 ---
 
+## Cost breakdown sensors
+
+Individual sensors for each fee component from the Karlstadsenergi invoice. Each sensor shows the latest month's amount. Monthly cost data is also imported into HA long-term statistics for Energy Dashboard integration and history graphs.
+
+| Sensor | Entity ID example | State | Unit | Device class |
+|--------|-------------------|-------|------|--------------|
+| Consumption fee | `sensor.karlstadsenergi_consumption_fee` | Latest month energy charge | SEK | `monetary` |
+| Power fee | `sensor.karlstadsenergi_power_fee` | Latest month grid/power fee | SEK | `monetary` |
+| Fixed fee | `sensor.karlstadsenergi_fixed_fee` | Latest month fixed fee | SEK | `monetary` |
+| Energy tax | `sensor.karlstadsenergi_energy_tax` | Latest month energy tax | SEK | `monetary` |
+| VAT | `sensor.karlstadsenergi_vat` | Latest month VAT | SEK | `monetary` |
+| Total cost | `sensor.karlstadsenergi_total_cost` | Latest month total invoice | SEK | `monetary` |
+
+### Cost sensor attributes
+
+| Attribute | Type | Description |
+|-----------|------|-------------|
+| `monthly_breakdown` | dict | Per-month amounts (`{"2026-01": 450.25, "2026-02": 520.10}`) |
+| `fee_period_months` | list | Months covered by the data (e.g. `["2026-01", "2026-02"]`) |
+
+### Long-term cost statistics
+
+Monthly fee data is imported into HA long-term statistics via `async_add_external_statistics`, one statistic per fee type. This follows the same pattern as Tibber's cost tracking. The statistics appear in the Energy Dashboard and history graphs.
+
+| Statistic ID pattern | Description |
+|---------------------|-------------|
+| `karlstadsenergi:cost_consumption_fee_{id}` | Monthly energy charge (SEK) |
+| `karlstadsenergi:cost_power_fee_{id}` | Monthly grid/power fee (SEK) |
+| `karlstadsenergi:cost_fixed_fee_{id}` | Monthly fixed fee (SEK) |
+| `karlstadsenergi:cost_energy_tax_{id}` | Monthly energy tax (SEK) |
+| `karlstadsenergi:cost_vat_{id}` | Monthly VAT (SEK) |
+| `karlstadsenergi:cost_total_cost_{id}` | Monthly total invoice (SEK) |
+
+Each statistic tracks both the monthly value (`state`) and a running cumulative sum (`sum`). Only new months are imported on each coordinator refresh.
+
+---
+
 ## Spot price sensor
 
 Current Nord Pool electricity spot price for SE3 (Karlstad region), fetched from Karlstadsenergi's public Evado API every 15 minutes. No authentication required.
@@ -143,7 +180,9 @@ To add these sensors to the HA Energy Dashboard:
 2. Under **Electricity grid**, add a **Grid consumption** sensor. Two options:
    - `sensor.karlstadsenergi_electricity_consumption` -- auto-recorded by HA from the sensor state (year-to-date value, sampled at each update)
    - `Karlstadsenergi Electricity Consumption` (external statistic) -- imported hourly data from the portal API, more granular
-3. For electricity cost tracking, add `sensor.karlstadsenergi_spot_price` or `sensor.karlstadsenergi_electricity_price` as the price entity.
+3. For electricity cost tracking, you have three options:
+   - **Price entity:** Add `sensor.karlstadsenergi_spot_price` or `sensor.karlstadsenergi_electricity_price` as the price entity. HA automatically calculates cost from consumption x price.
+   - **Total cost statistic:** Use `karlstadsenergi:cost_total_cost_{id}` as a pre-calculated cost statistic from your actual invoices.
 
 > **Tip:** The external statistic provides actual hourly consumption values from the portal, while the auto-recorded sensor tracks the cumulative year-to-date value. For the most accurate Energy Dashboard graphs, use the external statistic.
 

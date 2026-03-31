@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **Hourly statistics import** -- hourly consumption data is now imported into HA long-term statistics via `async_add_external_statistics`, making it available in the Energy Dashboard and history graphs
+- **Cost breakdown sensors** -- six new monetary sensors exposing individual fee components from the invoice: consumption fee, power fee, fixed fee, energy tax, VAT, and total cost (SEK)
+- **Monthly cost statistics import** -- fee data is imported into HA long-term statistics (one statistic per fee type), enabling cost tracking in the Energy Dashboard and history graphs
 
 ### Fixed
 - **Statistics sum continuation** -- subsequent coordinator refreshes would reset the cumulative sum to near-zero, causing negative energy in the Energy Dashboard

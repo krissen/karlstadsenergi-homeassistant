@@ -31,6 +31,7 @@ Config Flow (auth) --> async_setup_entry
   |                                 +> WastePickupTomorrowSensor (per waste type)
   --> ConsumptionCoordinator (1h) ---> ElectricityConsumptionSensor
   |                                 +> ElectricityPriceSensor
+  |                                 +> ElectricityCostSensor (x6 fee types)
   --> ContractCoordinator (24h) -----> ContractSensor (per contract)
   --> SpotPriceCoordinator (15min) --> SpotPriceSensor
   --> Heartbeat timer (every 5 min)
@@ -143,6 +144,16 @@ Hourly consumption data is imported into HA's long-term statistics using `async_
 - On subsequent imports, `sum` continues from the last imported value via `get_last_statistics`
 - Only new data points (after the last known statistic timestamp) are inserted
 - The `has_mean` / `has_sum` metadata tells HA that this statistic has a cumulative sum, making it compatible with the Energy Dashboard
+
+### Monthly cost statistics import
+
+Fee data is imported into long-term statistics using the same pattern as hourly consumption, but with monthly granularity and SEK instead of kWh. This is implemented in `ConsumptionCoordinator._async_import_fee_statistics()`.
+
+- **Statistic IDs:** `karlstadsenergi:cost_{fee_type}_{customer_id}` -- one per fee type (consumption_fee, power_fee, fixed_fee, energy_tax, vat, total_cost)
+- **Source:** `karlstadsenergi`
+- **Unit:** `SEK` with no `unit_class` (monetary values have no unit conversion, following the Tibber pattern)
+- Each monthly data point (`dateInterval` like `"2026-02-01"`) becomes a `StatisticData` entry with `state` (monthly SEK amount) and `sum` (running cumulative total)
+- The corresponding `ElectricityCostSensor` entities deliberately have no `state_class` -- cost statistics are handled entirely via external statistics import, not from the sensor state
 
 ---
 

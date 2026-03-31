@@ -104,6 +104,24 @@ template:
         icon: mdi:cash
 ```
 
+### Monthly cost trend
+
+```yaml
+template:
+  - sensor:
+      - name: "Power fee trend"
+        unit_of_measurement: "SEK"
+        state: >
+          {% set breakdown = state_attr('sensor.karlstadsenergi_power_fee', 'monthly_breakdown') %}
+          {% if breakdown %}
+            {% set values = breakdown.values() | list %}
+            {{ values[-1] | round(0) }}
+          {% else %}
+            unknown
+          {% endif %}
+        icon: mdi:transmission-tower
+```
+
 ### Spot price status (cheap/normal/expensive)
 
 ```yaml

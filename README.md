@@ -27,6 +27,7 @@ A Home Assistant integration for [Karlstads Energi](https://www.karlstadsenergi.
 - **Pickup reminders** -- Binary sensors for "pickup tomorrow" per waste type
 - **Electricity consumption** -- Daily and hourly consumption data with year-over-year comparison, Energy Dashboard compatible
 - **Electricity price** -- Effective energy price (SEK/kWh) derived from your invoice fee breakdown, Energy Dashboard compatible
+- **Cost breakdown** -- Individual sensors for each invoice fee component: consumption fee, power fee, fixed fee, energy tax, VAT, and total cost (SEK), with monthly long-term statistics for the Energy Dashboard
 - **Spot price** -- Current Nord Pool SE3 spot price (15-minute intervals) from Karlstadsenergi/Evado public API
 - **Contract overview** -- Sensors for each contract (grid, trading, waste) with contract type, dates, and identifiers
 - **Computed attributes** -- `days_until_pickup`, `pickup_is_today`, `pickup_is_tomorrow`
