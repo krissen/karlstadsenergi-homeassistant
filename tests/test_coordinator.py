@@ -440,7 +440,7 @@ class TestWasteCoordinatorUpdate:
         api.async_get_next_flex_dates = AsyncMock(return_value=[])
 
         coord = KarlstadsenergiWasteCoordinator(hass, api, 6, entry)
-        result = await coord._async_update_data()
+        await coord._async_update_data()
 
         # bad service passes filtering (Aktiv, not in SKIP_GROUP_NAMES) but
         # service_ids list comprehension must skip it instead of raising KeyError
