@@ -29,6 +29,7 @@ A Home Assistant integration for [Karlstads Energi](https://www.karlstadsenergi.
 - **Electricity price** -- Effective energy price (SEK/kWh) derived from your invoice fee breakdown, Energy Dashboard compatible
 - **Cost breakdown** -- Individual sensors for each invoice fee component: consumption fee, power fee, fixed fee, energy tax, VAT, and total cost (SEK), with monthly long-term statistics for the Energy Dashboard
 - **Spot price** -- Current Nord Pool SE3 spot price (15-minute intervals) from Karlstadsenergi/Evado public API
+- **Historical statistics** -- Hourly consumption and monthly cost data imported into HA long-term statistics with configurable depth (1--10 years, default 2). The portal API has data going back to contract start -- this integration unlocks it for Energy Dashboard graphs and history analysis.
 - **Contract overview** -- Sensors for each contract (grid, trading, waste) with contract type, dates, and identifiers
 - **Computed attributes** -- `days_until_pickup`, `pickup_is_today`, `pickup_is_tomorrow`
 - **Session management** -- Automatic session keepalive (heartbeat), cookie persistence across restarts, and re-authentication on session expiry
@@ -92,9 +93,14 @@ The integration supports two login methods. **Customer number & password is stro
 
 ### Options
 
-After setup, go to **Settings -> Devices & Services -> Karlstadsenergi -> Configure** to change the update interval (default: 6 hours, range: 1--24 hours).
+After setup, go to **Settings -> Devices & Services -> Karlstadsenergi -> Configure** to adjust:
 
-> **Tip:** Waste pickup dates rarely change, so 6--12 hours is usually sufficient. Electricity consumption updates more frequently (1/6 of the waste interval, minimum 1 hour).
+| Setting | Default | Range | Description |
+|---------|---------|-------|-------------|
+| Update interval | 6 hours | 1--24 hours | How often to fetch new data |
+| Statistics history | 2 years | 1--10 years | How far back to import hourly consumption and monthly cost data |
+
+> **Tip:** Waste pickup dates rarely change, so 6--12 hours is usually sufficient. Electricity consumption updates more frequently (1/6 of the waste interval, minimum 1 hour). The history setting affects the first import only -- subsequent refreshes only add new data points. Two years imports ~19,000 hourly data points; larger values are fine but the initial import takes longer.
 
 ---
 

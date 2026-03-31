@@ -85,7 +85,7 @@ Hourly consumption data is imported into Home Assistant's long-term statistics v
   </tr>
 </table>
 
-The statistics are imported each time the consumption coordinator refreshes (default: every hour). Only new data points are inserted -- existing statistics are not overwritten.
+The integration fetches historical data going back as far as the **Statistics history** setting allows (default: 2 years, configurable 1--10 years in Options). The portal API typically has data going back to the start of the customer contract. On the first coordinator refresh, all available historical data within the configured window is imported. Subsequent refreshes only add new data points -- existing statistics are not overwritten.
 
 ### Electricity sensor attributes
 
@@ -149,7 +149,7 @@ Individual sensors for each fee component from the Karlstadsenergi invoice. Each
 
 ### Long-term cost statistics
 
-Monthly fee data is imported into HA long-term statistics via `async_add_external_statistics`, one statistic per fee type. This follows the same pattern as Tibber's cost tracking. The statistics appear in the Energy Dashboard and history graphs.
+Monthly fee data is imported into HA long-term statistics via `async_add_external_statistics`, one statistic per fee type. The statistics appear in the Energy Dashboard and history graphs. Like hourly consumption, the history depth is controlled by the **Statistics history** setting in Options (default: 2 years).
 
 | Statistic ID pattern | Description |
 |---------------------|-------------|

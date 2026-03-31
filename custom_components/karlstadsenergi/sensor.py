@@ -521,7 +521,7 @@ class ElectricityPriceSensor(
 ):
     """Effective electricity price derived from fee breakdown.
 
-    Compatible with HA Energy Dashboard (matches Nordpool/Tibber pattern).
+    Compatible with HA Energy Dashboard.
     """
 
     _attr_has_entity_name = True
@@ -641,7 +641,7 @@ class ElectricityCostSensor(
     Shows the latest month's fee amount. No state_class is set so HA
     does not auto-generate statistics from this sensor; cost statistics
     are instead imported via async_add_external_statistics in the
-    coordinator (Tibber pattern).
+    coordinator.
     """
 
     _attr_has_entity_name = True

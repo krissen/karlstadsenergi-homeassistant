@@ -151,9 +151,29 @@ Fee data is imported into long-term statistics using the same pattern as hourly 
 
 - **Statistic IDs:** `karlstadsenergi:cost_{fee_type}_{customer_id}` -- one per fee type (consumption_fee, power_fee, fixed_fee, energy_tax, vat, total_cost)
 - **Source:** `karlstadsenergi`
-- **Unit:** `SEK` with no `unit_class` (monetary values have no unit conversion, following the Tibber pattern)
+- **Unit:** `SEK` with `unit_class=None` (monetary values have no unit conversion -- `unit_class` must be explicitly set to avoid HA 2026.11 deprecation warning)
 - Each monthly data point (`dateInterval` like `"2026-02-01"`) becomes a `StatisticData` entry with `state` (monthly SEK amount) and `sum` (running cumulative total)
 - The corresponding `ElectricityCostSensor` entities deliberately have no `state_class` -- cost statistics are handled entirely via external statistics import, not from the sensor state
+
+### History depth and date range widening
+
+The portal API's default `ConsumptionModel` only covers the last ~2 months (the `StartDate` field is typically set to the beginning of last month). However, the API supports requests going all the way back to the customer's `ContractsStartDate`, which can be 7+ years of data.
+
+The coordinator's `_widen_start_date()` method overrides `StartDate` based on the configurable **history_years** setting (options flow, default 2 years):
+
+1. Calculate target: January 1st of `(current_year - history_years)`
+2. Clamp to `ContractsStartDate` as the lower bound (can't request data before the contract existed)
+3. Replace `StartDate` in the model copy
+
+This widened model is used for both hourly consumption and fee requests. The existing `get_last_statistics` check ensures only new data points are imported on subsequent refreshes, so the wider window has no cost after the initial import.
+
+Observed data volumes for reference (single customer):
+
+| History | Hourly points | Fee points (per type) |
+|---------|--------------|----------------------|
+| 2 months (default API) | ~1,400 | 1 |
+| 2 years | ~19,000 | ~25 |
+| Full contract (~7 years) | ~66,000 | ~83 |
 
 ---
 

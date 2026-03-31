@@ -221,3 +221,22 @@ automation:
 | Fee breakdown | 1 hour | Same as consumption | Updated with consumption |
 | Contracts | 24 hours | No | Changes very rarely |
 | Spot price | 15 minutes | No | Public API, no auth |
+
+## Statistics history setting
+
+Controls how far back hourly consumption and monthly cost data is imported into HA's long-term statistics.
+
+| Setting | Default | Range | Notes |
+|---------|---------|-------|-------|
+| Statistics history | 2 years | 1--10 years | Configured via Options flow |
+
+The portal API typically has data going back to the start of the customer contract (up to ~7 years observed). The first import after changing this setting fetches all historical data within the new window. Subsequent refreshes only add new data points.
+
+| History depth | Approx. hourly data points | Approx. monthly cost points |
+|---------------|---------------------------|----------------------------|
+| 1 year | ~9,000 | ~12 per fee type |
+| 2 years (default) | ~19,000 | ~25 per fee type |
+| 5 years | ~44,000 | ~60 per fee type |
+| 10 years | ~88,000 | ~120 per fee type |
+
+> **Note:** If you increase the history depth after the initial import, you need to clear the existing statistics via **Developer Tools -> Statistics** to trigger a full reimport. Otherwise the integration only adds data points newer than what's already been imported.

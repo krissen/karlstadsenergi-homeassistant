@@ -365,7 +365,7 @@ class KarlstadsenergiConsumptionCoordinator(_CookieSavingCoordinator):
         """Import monthly fee data into HA long-term statistics.
 
         Creates one statistic per fee type (consumption fee, power fee, etc.)
-        with monthly granularity. Follows the Tibber pattern: unit_class is
+        with monthly granularity. unit_class is explicitly set to None as
         omitted for monetary values since currencies don't convert.
         """
         chart = fee_data.get("DetailedConsumptionChart") or {}
