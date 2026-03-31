@@ -50,8 +50,10 @@ from .api import (
 )
 from .const import (
     CONF_AUTH_METHOD,
+    CONF_HISTORY_YEARS,
     CONF_PERSONNUMMER,
     CONF_UPDATE_INTERVAL,
+    DEFAULT_HISTORY_YEARS,
     DEFAULT_UPDATE_INTERVAL,
     DOMAIN,
     FEE_SENSORS,
@@ -192,24 +194,51 @@ class KarlstadsenergiConsumptionCoordinator(_CookieSavingCoordinator):
         update_interval_hours: int,
         entry: ConfigEntry,
         customer_id: str = "",
+        history_years: int = DEFAULT_HISTORY_YEARS,
     ) -> None:
         super().__init__(
             hass, api, update_interval_hours, entry, f"{DOMAIN}_consumption"
         )
         self._customer_id = customer_id
+        self._history_years = history_years
         self._statistic_id = f"{DOMAIN}:electricity_consumption_{customer_id}"
+
+    @staticmethod
+    def _widen_start_date(model: dict, history_years: int) -> dict:
+        """Return a copy of the model with StartDate moved back.
+
+        Uses ContractsStartDate as the lower bound (earliest available
+        data). If the calculated date is earlier than ContractsStartDate,
+        ContractsStartDate wins.
+        """
+        widened = {**model}
+        now = datetime.now(tz=timezone.utc)
+        target = now.replace(year=now.year - history_years, month=1, day=1)
+        target_ms = int(target.timestamp() * 1000)
+
+        # Parse ContractsStartDate as lower bound
+        contracts_start = model.get("ContractsStartDate", "")
+        match = re.search(r"/Date\((-?\d+)\)/", contracts_start)
+        if match:
+            contracts_ms = int(match.group(1))
+            target_ms = max(target_ms, contracts_ms)
+
+        widened["StartDate"] = f"/Date({target_ms})/"
+        return widened
 
     async def _async_update_data(self) -> dict:
         """Fetch electricity consumption data."""
         try:
             consumption = await self.api.async_get_consumption()
 
-            # Get hourly data using the model from the default response
+            # Get hourly data using the model from the default response.
+            # Widen the date range to fetch historical data.
             hourly = {}
             model = consumption.get("ConsumptionModel")
             if model:
+                wide_model = self._widen_start_date(model, self._history_years)
                 try:
-                    hourly = await self.api.async_get_hourly_consumption(model)
+                    hourly = await self.api.async_get_hourly_consumption(wide_model)
                 except Exception:
                     _LOGGER.debug("Hourly consumption unavailable")
 
@@ -222,7 +251,7 @@ class KarlstadsenergiConsumptionCoordinator(_CookieSavingCoordinator):
             fee_data = {}
             if model:
                 try:
-                    fee_data = await self.api.async_get_fee_consumption(model)
+                    fee_data = await self.api.async_get_fee_consumption(wide_model)
                 except Exception:
                     _LOGGER.debug("Fee consumption unavailable")
 
@@ -579,12 +608,14 @@ async def async_setup_entry(
         entry,
     )
     customer_id = entry.data.get("customer_code") or personnummer
+    history_years = entry.options.get(CONF_HISTORY_YEARS, DEFAULT_HISTORY_YEARS)
     consumption_coordinator = KarlstadsenergiConsumptionCoordinator(
         hass,
         api,
         max(update_interval // 6, 1),
         entry,
         customer_id=customer_id,
+        history_years=history_years,
     )
 
     try:

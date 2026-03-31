@@ -592,6 +592,7 @@ class KarlstadsenergiApi:
         """Get fee-type consumption breakdown (SEK by month).
 
         Modifies the consumption model to request invoice/fee data.
+        The caller is expected to set StartDate for the desired period.
         """
         model = {**consumption_model}
         model["IsFeeTypeRequest"] = True

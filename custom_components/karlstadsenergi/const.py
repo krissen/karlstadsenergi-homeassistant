@@ -36,6 +36,11 @@ DEFAULT_UPDATE_INTERVAL = 6  # hours
 MIN_UPDATE_INTERVAL = 1
 MAX_UPDATE_INTERVAL = 24
 
+CONF_HISTORY_YEARS = "history_years"
+DEFAULT_HISTORY_YEARS = 2
+MIN_HISTORY_YEARS = 1
+MAX_HISTORY_YEARS = 10
+
 # Waste type slug mapping (Swedish name -> English entity slug)
 WASTE_TYPE_SLUG: dict[str, str] = {
     "Mat- och restavfall": "food_and_residual_waste",

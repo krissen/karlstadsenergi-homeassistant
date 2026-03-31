@@ -35,11 +35,15 @@ from .api import (
 )
 from .const import (
     CONF_AUTH_METHOD,
+    CONF_HISTORY_YEARS,
     CONF_PERSONNUMMER,
     CONF_UPDATE_INTERVAL,
+    DEFAULT_HISTORY_YEARS,
     DEFAULT_UPDATE_INTERVAL,
     DOMAIN,
+    MAX_HISTORY_YEARS,
     MAX_UPDATE_INTERVAL,
+    MIN_HISTORY_YEARS,
     MIN_UPDATE_INTERVAL,
 )
 
@@ -461,6 +465,10 @@ class KarlstadsenergiOptionsFlow(OptionsFlow):
             CONF_UPDATE_INTERVAL,
             DEFAULT_UPDATE_INTERVAL,
         )
+        current_history = self.config_entry.options.get(
+            CONF_HISTORY_YEARS,
+            DEFAULT_HISTORY_YEARS,
+        )
 
         return self.async_show_form(
             step_id="init",
@@ -476,6 +484,18 @@ class KarlstadsenergiOptionsFlow(OptionsFlow):
                             step=1,
                             mode=NumberSelectorMode.BOX,
                             unit_of_measurement="hours",
+                        )
+                    ),
+                    vol.Required(
+                        CONF_HISTORY_YEARS,
+                        default=current_history,
+                    ): NumberSelector(
+                        NumberSelectorConfig(
+                            min=MIN_HISTORY_YEARS,
+                            max=MAX_HISTORY_YEARS,
+                            step=1,
+                            mode=NumberSelectorMode.BOX,
+                            unit_of_measurement="years",
                         )
                     ),
                 }
