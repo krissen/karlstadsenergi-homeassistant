@@ -19,6 +19,10 @@ A Home Assistant integration for [Karlstads Energi](https://www.karlstadsenergi.
     <td><img width="450" alt="Built-in entities card with pickup dates and tomorrow alert" src="docs/images/builtin-entities.png" /></td>
   </tr>
   <tr>
+    <td><img width="450" alt="Daily electricity consumption chart" src="docs/images/consumption-daily.png" /></td>
+    <td><img width="450" alt="Hourly electricity consumption chart" src="docs/images/consumption-hourly.png" /></td>
+  </tr>
+  <tr>
     <td><img width="450" alt="Mushroom chips showing days until pickup" src="docs/images/mushroom-chips.png" /></td>
     <td><img width="450" alt="Calendar view with waste collection events" src="docs/images/calendar.png" /></td>
   </tr>

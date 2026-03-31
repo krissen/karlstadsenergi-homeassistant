@@ -112,6 +112,7 @@ The integration communicates with an ASP.NET Web Forms backend. A few patterns a
 - **Response wrapper**: All POST endpoints return `{"d": <value>}` where `<value>` is sometimes a JSON string requiring double-parsing.
 - **Server-side state**: Some endpoints require visiting the corresponding `.aspx` page (via GET) before the API call works.
 - **Session cookies**: Two cookies (`ASP.NET_SessionId`, `.PORTALAUTH`) maintain the session and must be sent with every request.
+- **Explicit nulls**: The API sometimes returns `null` for keys that normally hold objects or arrays. Python's `dict.get("key", {})` returns `None` (not `{}`) when the key exists with value `null`. Use `data.get("key") or {}` instead.
 
 > **Note:** The API is reverse-engineered and may change when the portal is updated. There is no official public API.
 
@@ -131,6 +132,16 @@ The integration currently fetches DAY (for the main sensor) and HOUR (for the `h
 All consumption data lags ~1 day behind real-time. The portal appears to update once per day, likely when meter data is imported from the grid operator.
 
 To request 15-min data, set `IntervalEnum: 6` and `Interval: "QUARTER"` in the ConsumptionModel payload. Note that this returns ~96 points/day (~5500 for the default 2-month window) vs ~24/day for hourly.
+
+### Long-term statistics import
+
+Hourly consumption data is imported into HA's long-term statistics using `async_add_external_statistics`. This is done in `ConsumptionCoordinator._async_update_data()` after each successful fetch. Key details:
+
+- **Statistic ID:** `karlstadsenergi:electricity_consumption_kwh`
+- **Source:** `karlstadsenergi`
+- Each hourly data point becomes a `StatisticsData(start=..., sum=..., state=...)` entry where `sum` is cumulative year-to-date kWh and `state` is the hourly kWh value
+- Only new data points (after the last known statistic timestamp) are inserted
+- The `has_mean` / `has_sum` metadata tells HA that this statistic has a cumulative sum, making it compatible with the Energy Dashboard
 
 ---
 

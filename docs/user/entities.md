@@ -74,6 +74,19 @@ One calendar entity per waste type, compatible with HA's built-in Calendar card 
 
 Note: the portal API provides historical data only. Consumption data may lag days or weeks behind real-time. The `latest_date` attribute shows the actual date of the most recent data point.
 
+### Long-term statistics
+
+Hourly consumption data is imported into Home Assistant's long-term statistics via `async_add_external_statistics`. This means hourly data is available in the Energy Dashboard and history graphs even though it originates from the portal API rather than a real-time meter.
+
+<table>
+  <tr>
+    <td><img width="400" alt="Daily electricity consumption" src="../images/consumption-daily.png" /></td>
+    <td><img width="400" alt="Hourly electricity consumption" src="../images/consumption-hourly.png" /></td>
+  </tr>
+</table>
+
+The statistics are imported each time the consumption coordinator refreshes (default: every hour). Only new data points are inserted -- existing statistics are not overwritten.
+
 ### Electricity sensor attributes
 
 | Attribute | Type | Description |
