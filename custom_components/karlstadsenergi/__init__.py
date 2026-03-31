@@ -151,9 +151,7 @@ class KarlstadsenergiWasteCoordinator(_CookieSavingCoordinator):
                 ]
                 if services:
                     service_ids = [
-                        s["FlexServiceId"]
-                        for s in services
-                        if "FlexServiceId" in s
+                        s["FlexServiceId"] for s in services if "FlexServiceId" in s
                     ]
                     dates = await self.api.async_get_flex_dates(service_ids)
             except KarlstadsenergiAuthError:

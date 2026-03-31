@@ -3,7 +3,7 @@
   "name": "Karlstadsenergi",
   "codeowners": ["@krissen"],
   "config_flow": true,
-  "dependencies": [],
+  "dependencies": ["recorder"],
   "documentation": "https://github.com/krissen/karlstadsenergi-homeassistant",
   "integration_type": "hub",
   "iot_class": "cloud_polling",

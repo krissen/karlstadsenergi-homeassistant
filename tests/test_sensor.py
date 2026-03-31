@@ -115,9 +115,7 @@ class TestExtractFeeSeries:
         assert fees == {}
 
     def test_series_list_explicit_null_returns_empty(self) -> None:
-        fees = _extract_fee_series(
-            {"DetailedConsumptionChart": {"SeriesList": None}}
-        )
+        fees = _extract_fee_series({"DetailedConsumptionChart": {"SeriesList": None}})
         assert fees == {}
 
     def test_series_data_explicit_null_treated_as_empty(self) -> None:

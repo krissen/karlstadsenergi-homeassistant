@@ -721,7 +721,9 @@ class TestBankidInitiate:
         assert result["auto_start_token"] == ""
 
     @pytest.mark.asyncio
-    async def test_explicit_null_order_response_type_returns_empty_strings(self) -> None:
+    async def test_explicit_null_order_response_type_returns_empty_strings(
+        self,
+    ) -> None:
         """OrderResponseType: null must not crash -- fields fall back to empty string."""
         api = KarlstadsenergiApi("1234567890", AUTH_BANKID)
         resp = MagicMock()
