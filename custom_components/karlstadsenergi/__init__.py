@@ -8,7 +8,6 @@ import logging
 import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import cast
 
 import aiohttp
 
@@ -17,7 +16,6 @@ from homeassistant.components.recorder.models import StatisticData, StatisticMet
 from homeassistant.components.recorder.statistics import (
     async_add_external_statistics,
     get_last_statistics,
-    statistics_during_period,
 )
 
 try:
@@ -285,37 +283,14 @@ class KarlstadsenergiConsumptionCoordinator(_CookieSavingCoordinator):
 
         # Check what's already been imported
         last_stats = await get_instance(self.hass).async_add_executor_job(
-            get_last_statistics, self.hass, 1, statistic_id, True, set()
+            get_last_statistics, self.hass, 1, statistic_id, True, {"sum"}
         )
 
         if last_stats and statistic_id in last_stats:
-            # Continue from last known sum
             last_stat = last_stats[statistic_id][0]
-            last_stats_time = last_stat["start"]
-            last_stats_time_dt = dt_util.utc_from_timestamp(last_stats_time)
-
-            # Query the sum at the point just before our new data starts
-            first_point_dt = self._parse_aspnet_date(data_points[0].get("date", ""))
-            if first_point_dt:
-                query_start = first_point_dt - timedelta(hours=1)
-                stat = await get_instance(self.hass).async_add_executor_job(
-                    statistics_during_period,
-                    self.hass,
-                    query_start,
-                    None,
-                    {statistic_id},
-                    "hour",
-                    None,
-                    {"sum"},
-                )
-                if statistic_id in stat and stat[statistic_id]:
-                    _sum = cast(float, stat[statistic_id][0]["sum"])
-                else:
-                    _sum = 0.0
-            else:
-                _sum = 0.0
+            last_stats_time_dt = dt_util.utc_from_timestamp(last_stat["start"])
+            _sum = last_stat.get("sum", 0.0) or 0.0
         else:
-            # First import
             last_stats_time_dt = None
             _sum = 0.0
 
