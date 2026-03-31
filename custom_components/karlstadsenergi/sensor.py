@@ -78,6 +78,8 @@ async def async_setup_entry(
         new_entities: list[SensorEntity] = []
         if services:
             for service in services:
+                if "FlexServiceId" not in service:
+                    continue
                 waste_type = service.get("FlexServiceContainTypeValue", "")
                 if not waste_type:
                     continue
@@ -483,7 +485,7 @@ def _extract_fee_months(fee_data: dict) -> set[str]:
     series_list = chart.get("SeriesList") or []
     months: set[str] = set()
     for series in series_list:
-        for point in series.get("data", []):
+        for point in series.get("data") or []:
             date_str = point.get("dateInterval", "")
             if len(date_str) >= 7:
                 months.add(date_str[:7])

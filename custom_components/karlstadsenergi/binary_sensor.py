@@ -42,11 +42,13 @@ async def async_setup_entry(
         if waste_entities_added or not waste_coordinator.data:
             return
         data = waste_coordinator.data
-        services = data.get("services", [])
-        next_dates = data.get("next_dates", [])
+        services = data.get("services") or []
+        next_dates = data.get("next_dates") or []
         new_entities: list[BinarySensorEntity] = []
         if services:
             for service in services:
+                if "FlexServiceId" not in service:
+                    continue
                 waste_type = service.get("FlexServiceContainTypeValue", "")
                 if not waste_type:
                     continue

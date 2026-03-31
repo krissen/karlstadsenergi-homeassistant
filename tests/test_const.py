@@ -106,6 +106,10 @@ class TestPickupDateForService:
         data = {"services": []}
         assert pickup_date_for_service(data, 123) is None
 
+    def test_returns_none_when_dates_is_explicit_null(self) -> None:
+        data = {"dates": None}
+        assert pickup_date_for_service(data, 123) is None
+
     def test_returns_none_for_invalid_date_string(self) -> None:
         data = {"dates": {"123": "not-a-date"}}
         assert pickup_date_for_service(data, 123) is None
@@ -201,4 +205,8 @@ class TestPickupDateForType:
 
     def test_returns_none_when_next_dates_key_missing(self) -> None:
         data = {"services": []}
+        assert pickup_date_for_type(data, "Mat- och restavfall") is None
+
+    def test_returns_none_when_next_dates_is_explicit_null(self) -> None:
+        data = {"next_dates": None}
         assert pickup_date_for_type(data, "Mat- och restavfall") is None

@@ -150,7 +150,11 @@ class KarlstadsenergiWasteCoordinator(_CookieSavingCoordinator):
                     and s.get("FlexServiceGroupName") not in SKIP_GROUP_NAMES
                 ]
                 if services:
-                    service_ids = [s["FlexServiceId"] for s in services]
+                    service_ids = [
+                        s["FlexServiceId"]
+                        for s in services
+                        if "FlexServiceId" in s
+                    ]
                     dates = await self.api.async_get_flex_dates(service_ids)
             except KarlstadsenergiAuthError:
                 raise
@@ -417,7 +421,7 @@ class KarlstadsenergiSpotPriceCoordinator(DataUpdateCoordinator[dict]):
 
         Prices are in öre/kWh, 15-minute intervals, times in UTC.
         """
-        spotprices = data.get("spotprices", [])
+        spotprices = data.get("spotprices") or []
         if not spotprices:
             return {
                 "current_price": None,
@@ -429,7 +433,7 @@ class KarlstadsenergiSpotPriceCoordinator(DataUpdateCoordinator[dict]):
         # Parse all price points
         prices = []
         for entry in spotprices:
-            sp = entry.get("Spotprice", {})
+            sp = entry.get("Spotprice") or {}
             start_str = sp.get("start_time", "")
             price_ore = sp.get("price")
             if not start_str or price_ore is None:
@@ -541,8 +545,8 @@ async def async_setup_entry(
     # Extract site_id from consumption data for contract fetching
     site_ids: list[str] = []
     if consumption_coordinator.data:
-        consumption = consumption_coordinator.data.get("consumption", {})
-        model = consumption.get("ConsumptionModel", {})
+        consumption = consumption_coordinator.data.get("consumption") or {}
+        model = consumption.get("ConsumptionModel") or {}
         site_id = model.get("SiteId", "")
         if site_id:
             site_ids = [str(site_id)]

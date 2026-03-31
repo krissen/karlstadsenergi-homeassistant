@@ -76,7 +76,7 @@ def pickup_date_for_service(
     """Get next pickup date from detailed service data."""
     if not data:
         return None
-    date_str = data.get("dates", {}).get(str(service_id))
+    date_str = (data.get("dates") or {}).get(str(service_id))
     if not date_str:
         return None
     try:
@@ -89,7 +89,7 @@ def pickup_date_for_type(data: dict | None, waste_type: str) -> datetime.date | 
     """Get next pickup date from summary data."""
     if not data:
         return None
-    for item in data.get("next_dates", []):
+    for item in data.get("next_dates") or []:
         if item.get("Type") == waste_type:
             try:
                 return datetime.date.fromisoformat(item["Date"])

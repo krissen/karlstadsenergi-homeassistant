@@ -209,7 +209,7 @@ class KarlstadsenergiApi:
         finally:
             await resp.release()
 
-        order_resp = data.get("OrderResponseType", {})
+        order_resp = data.get("OrderResponseType") or {}
         return {
             "transaction_id": transaction_id,
             "order_ref": order_resp.get("orderRefField", ""),
@@ -232,11 +232,11 @@ class KarlstadsenergiApi:
         finally:
             await resp.release()
 
-        collect = data.get("CollectResponseType", {})
+        collect = data.get("CollectResponseType") or {}
         status = collect.get("progressStatusField", -1)
 
         if data.get("HasError"):
-            fault = data.get("GrpFault", {})
+            fault = data.get("GrpFault") or {}
             fault_code = fault.get("faultStatusField", "unknown")
             # Only log the fault code, not the full dict (may contain PII)
             raise KarlstadsenergiAuthError(f"BankID error: code={fault_code}")

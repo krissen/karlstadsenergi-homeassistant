@@ -157,6 +157,21 @@ class TestParseSpotDataEmpty:
         result = parse(data)
         assert result["prices"] == []
 
+    def test_spotprices_explicit_null_returns_defaults(self) -> None:
+        result = parse({"spotprices": None})
+        assert result["current_price"] is None
+        assert result["prices"] == []
+
+    def test_spotprice_entry_explicit_null_is_skipped(self) -> None:
+        data = {
+            "spotprices": [
+                {"Spotprice": None},
+                _make_spotprice_entry("2026-03-29T10:00:00+0000", 52.5),
+            ]
+        }
+        result = parse(data)
+        assert len(result["prices"]) == 1
+
 
 # ---------------------------------------------------------------------------
 # _parse_spot_data -- current price selection (mocked time)
@@ -403,6 +418,35 @@ class TestWasteCoordinatorUpdate:
 
         with pytest.raises(UpdateFailed):
             await coord._async_update_data()
+
+    @pytest.mark.asyncio
+    async def test_skips_services_missing_flex_service_id(self) -> None:
+        hass = _make_hass()
+        api = _make_api()
+        entry = _make_entry()
+
+        good = {
+            "FlexServiceId": 1,
+            "FSStatusName": "Aktiv",
+            "FlexServiceGroupName": "X",
+        }
+        bad = {
+            "FSStatusName": "Aktiv",
+            "FlexServiceGroupName": "Y",
+            # no FlexServiceId
+        }
+        api.async_get_flex_services = AsyncMock(return_value=[good, bad])
+        api.async_get_flex_dates = AsyncMock(return_value={})
+        api.async_get_next_flex_dates = AsyncMock(return_value=[])
+
+        coord = KarlstadsenergiWasteCoordinator(hass, api, 6, entry)
+        result = await coord._async_update_data()
+
+        # bad service passes filtering (Aktiv, not in SKIP_GROUP_NAMES) but
+        # service_ids list comprehension must skip it instead of raising KeyError
+        api.async_get_flex_dates.assert_called_once()
+        ids_arg = api.async_get_flex_dates.call_args[0][0]
+        assert 1 in ids_arg
 
     @pytest.mark.asyncio
     async def test_saves_cookies_after_successful_update(self) -> None:

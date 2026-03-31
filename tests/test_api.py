@@ -720,6 +720,23 @@ class TestBankidInitiate:
         assert result["order_ref"] == ""
         assert result["auto_start_token"] == ""
 
+    @pytest.mark.asyncio
+    async def test_explicit_null_order_response_type_returns_empty_strings(self) -> None:
+        """OrderResponseType: null must not crash -- fields fall back to empty string."""
+        api = KarlstadsenergiApi("1234567890", AUTH_BANKID)
+        resp = MagicMock()
+        resp.raise_for_status = MagicMock()
+        resp.release = AsyncMock()
+        resp.json = AsyncMock(
+            return_value={"OrderResponseType": None, "QrCodeBase64": "data"}
+        )
+        api._post = AsyncMock(return_value=resp)
+
+        result = await api.bankid_initiate()
+
+        assert result["order_ref"] == ""
+        assert result["auto_start_token"] == ""
+
 
 # ---------------------------------------------------------------------------
 # B6: bankid_poll
@@ -833,6 +850,43 @@ class TestBankidPoll:
         result = await api.bankid_poll("ref")
 
         assert result["status"] == -1
+
+    @pytest.mark.asyncio
+    async def test_explicit_null_collect_response_type_defaults_to_minus_one(
+        self,
+    ) -> None:
+        """CollectResponseType: null must not crash -- status falls back to -1."""
+        api = KarlstadsenergiApi("1234567890", AUTH_BANKID)
+        resp = MagicMock()
+        resp.raise_for_status = MagicMock()
+        resp.release = AsyncMock()
+        resp.json = AsyncMock(
+            return_value={"CollectResponseType": None, "HasError": False}
+        )
+        api._post = AsyncMock(return_value=resp)
+
+        result = await api.bankid_poll("ref")
+
+        assert result["status"] == -1
+
+    @pytest.mark.asyncio
+    async def test_explicit_null_grp_fault_raises_with_unknown_code(self) -> None:
+        """GrpFault: null must not crash -- fault code falls back to 'unknown'."""
+        api = KarlstadsenergiApi("1234567890", AUTH_BANKID)
+        resp = MagicMock()
+        resp.raise_for_status = MagicMock()
+        resp.release = AsyncMock()
+        resp.json = AsyncMock(
+            return_value={
+                "CollectResponseType": {"progressStatusField": 0},
+                "HasError": True,
+                "GrpFault": None,
+            }
+        )
+        api._post = AsyncMock(return_value=resp)
+
+        with pytest.raises(KarlstadsenergiAuthError, match="unknown"):
+            await api.bankid_poll("ref")
 
 
 # ---------------------------------------------------------------------------

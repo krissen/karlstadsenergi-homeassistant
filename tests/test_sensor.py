@@ -110,6 +110,21 @@ class TestExtractFeeSeries:
         fees = _extract_fee_series({})
         assert fees == {}
 
+    def test_chart_key_explicit_null_returns_empty(self) -> None:
+        fees = _extract_fee_series({"DetailedConsumptionChart": None})
+        assert fees == {}
+
+    def test_series_list_explicit_null_returns_empty(self) -> None:
+        fees = _extract_fee_series(
+            {"DetailedConsumptionChart": {"SeriesList": None}}
+        )
+        assert fees == {}
+
+    def test_series_data_explicit_null_treated_as_empty(self) -> None:
+        data = _make_fee_data([{"id": "ConsumptionFee", "data": None}])
+        fees = _extract_fee_series(data)
+        assert fees[FEE_CONSUMPTION] == 0.0
+
 
 # ---------------------------------------------------------------------------
 # _extract_fee_months
@@ -178,6 +193,16 @@ class TestExtractFeeMonths:
         )
         months = _extract_fee_months(data)
         assert months == {"2026-03"}
+
+    def test_series_data_explicit_null_returns_empty(self) -> None:
+        data = _make_fee_data([{"id": "ConsumptionFee", "data": None}])
+        months = _extract_fee_months(data)
+        assert months == set()
+
+    def test_series_list_explicit_null_returns_empty(self) -> None:
+        data = {"DetailedConsumptionChart": {"SeriesList": None}}
+        months = _extract_fee_months(data)
+        assert months == set()
 
 
 # ---------------------------------------------------------------------------

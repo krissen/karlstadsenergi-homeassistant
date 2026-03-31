@@ -64,7 +64,7 @@ async def async_get_config_entry_diagnostics(
             ),
             "region": (runtime.spot_price_coordinator.data or {}).get("region"),
             "price_count": len(
-                (runtime.spot_price_coordinator.data or {}).get("prices", [])
+                (runtime.spot_price_coordinator.data or {}).get("prices") or []
             ),
         },
     }
