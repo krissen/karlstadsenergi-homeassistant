@@ -115,6 +115,23 @@ The integration communicates with an ASP.NET Web Forms backend. A few patterns a
 
 > **Note:** The API is reverse-engineered and may change when the portal is updated. There is no official public API.
 
+### Consumption data resolution
+
+The `GetConsumption` endpoint accepts an `IntervalEnum` parameter that controls data granularity:
+
+| IntervalEnum | Interval | Description |
+|---|---|---|
+| 3 | DAY | Daily totals (default) |
+| 4 | HOUR | Hourly consumption |
+| 5 | WEEK | Weekly totals |
+| 6 | QUARTER | 15-minute intervals |
+
+The integration currently fetches DAY (for the main sensor) and HOUR (for the `hourly_consumption` attribute). **15-minute data is available** from the API but not yet exposed -- can be added on request.
+
+All consumption data lags ~1 day behind real-time. The portal appears to update once per day, likely when meter data is imported from the grid operator.
+
+To request 15-min data, set `IntervalEnum: 6` and `Interval: "QUARTER"` in the ConsumptionModel payload. Note that this returns ~96 points/day (~5500 for the default 2-month window) vs ~24/day for hourly.
+
 ---
 
 ## Session management
