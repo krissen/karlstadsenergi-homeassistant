@@ -57,8 +57,8 @@ async def async_setup_entry(
     site_address = ""
     site_place_id = ""
     if runtime.consumption_coordinator.data:
-        consumption = runtime.consumption_coordinator.data.get("consumption", {})
-        model = consumption.get("ConsumptionModel", {})
+        consumption = runtime.consumption_coordinator.data.get("consumption") or {}
+        model = consumption.get("ConsumptionModel") or {}
         site_address = model.get("SiteName", "")
         site_place_id = model.get("SiteId", "")
 
@@ -73,8 +73,8 @@ async def async_setup_entry(
         if waste_entities_added or not runtime.waste_coordinator.data:
             return
         data = runtime.waste_coordinator.data
-        services = data.get("services", [])
-        next_dates = data.get("next_dates", [])
+        services = data.get("services") or []
+        next_dates = data.get("next_dates") or []
         new_entities: list[SensorEntity] = []
         if services:
             for service in services:
@@ -151,7 +151,7 @@ async def async_setup_entry(
         if contract_entities_added or not runtime.contract_coordinator.data:
             return
         new_entities: list[SensorEntity] = []
-        for contract in runtime.contract_coordinator.data.get("contracts", []):
+        for contract in runtime.contract_coordinator.data.get("contracts") or []:
             utility = contract.get("UtilityName", "")
             if utility:
                 new_entities.append(
@@ -369,22 +369,22 @@ class ElectricityConsumptionSensor(
         attribute exposes the actual data date so users can judge staleness.
         """
         consumption = (
-            self.coordinator.data.get("consumption", {})
+            self.coordinator.data.get("consumption") or {}
             if self.coordinator.data
             else {}
         )
         # Primary: use official period total from CompareModel
-        compare = consumption.get("CompareModel", {})
+        compare = consumption.get("CompareModel") or {}
         curr_year_value = compare.get("CurrYearValue")
         if curr_year_value is not None:
             return round(float(curr_year_value), 3)
 
         # Fallback: sum all daily chart points
-        chart = consumption.get("DetailedConsumptionChart", {})
-        series_list = chart.get("SeriesList", [])
+        chart = consumption.get("DetailedConsumptionChart") or {}
+        series_list = chart.get("SeriesList") or []
         if not series_list:
             return None
-        data_points = series_list[0].get("data", [])
+        data_points = series_list[0].get("data") or []
         if not data_points:
             return None
         total = sum(p.get("y", 0) for p in data_points if p.get("y") is not None)
@@ -395,13 +395,13 @@ class ElectricityConsumptionSensor(
         attrs: dict[str, Any] = {}
 
         consumption = (
-            self.coordinator.data.get("consumption", {})
+            self.coordinator.data.get("consumption") or {}
             if self.coordinator.data
             else {}
         )
 
         # Comparison data
-        compare = consumption.get("CompareModel", {})
+        compare = consumption.get("CompareModel") or {}
         if compare:
             attrs["total_last_year_period"] = compare.get("LastYearValue")
             attrs["difference_percentage"] = compare.get(
@@ -411,10 +411,10 @@ class ElectricityConsumptionSensor(
             attrs["average_daily_last_year"] = compare.get("LastYearAvg")
 
         # Monthly breakdown from chart data
-        chart = consumption.get("DetailedConsumptionChart", {})
-        series_list = chart.get("SeriesList", [])
+        chart = consumption.get("DetailedConsumptionChart") or {}
+        series_list = chart.get("SeriesList") or []
         if series_list:
-            data_points = series_list[0].get("data", [])
+            data_points = series_list[0].get("data") or []
             # Group by month
             monthly: dict[str, float] = {}
             for point in data_points:
@@ -438,12 +438,12 @@ class ElectricityConsumptionSensor(
 
         # Hourly data (last 24h for today)
         hourly = (
-            self.coordinator.data.get("hourly", {}) if self.coordinator.data else {}
+            self.coordinator.data.get("hourly") or {} if self.coordinator.data else {}
         )
-        hourly_chart = hourly.get("DetailedConsumptionChart", {})
-        hourly_series = hourly_chart.get("SeriesList", [])
+        hourly_chart = hourly.get("DetailedConsumptionChart") or {}
+        hourly_series = hourly_chart.get("SeriesList") or []
         if hourly_series:
-            hourly_points = hourly_series[0].get("data", [])
+            hourly_points = hourly_series[0].get("data") or []
             # Last 24 points
             recent = hourly_points[-24:] if len(hourly_points) >= 24 else hourly_points
             attrs["hourly_consumption"] = [
@@ -460,14 +460,14 @@ def _extract_fee_series(fee_data: dict) -> dict[str, float]:
 
     Returns dict of series_id -> total SEK for the period.
     """
-    chart = fee_data.get("DetailedConsumptionChart", {})
-    series_list = chart.get("SeriesList", [])
+    chart = fee_data.get("DetailedConsumptionChart") or {}
+    series_list = chart.get("SeriesList") or []
     fees: dict[str, float] = {}
     for series in series_list:
         series_id = series.get("id", "")
         if not series_id:
             continue
-        data_points = series.get("data", [])
+        data_points = series.get("data") or []
         total = sum(p.get("y", 0) for p in data_points)
         fees[series_id] = round(total, 2)
     return fees
@@ -479,8 +479,8 @@ def _extract_fee_months(fee_data: dict) -> set[str]:
     Returns set of month keys like {"2026-02"} from the fee SeriesList
     dateInterval fields (e.g. "2026-02-01" -> "2026-02").
     """
-    chart = fee_data.get("DetailedConsumptionChart", {})
-    series_list = chart.get("SeriesList", [])
+    chart = fee_data.get("DetailedConsumptionChart") or {}
+    series_list = chart.get("SeriesList") or []
     months: set[str] = set()
     for series in series_list:
         for point in series.get("data", []):
@@ -549,17 +549,17 @@ class ElectricityPriceSensor(
         """Get total kWh consumption matching the fee data's months only."""
         if not self.coordinator.data:
             return 0.0
-        fee_data = self.coordinator.data.get("fee_data", {})
+        fee_data = self.coordinator.data.get("fee_data") or {}
         fee_months = _extract_fee_months(fee_data)
         if not fee_months:
             return 0.0
 
-        consumption = self.coordinator.data.get("consumption", {})
-        chart = consumption.get("DetailedConsumptionChart", {})
-        series_list = chart.get("SeriesList", [])
+        consumption = self.coordinator.data.get("consumption") or {}
+        chart = consumption.get("DetailedConsumptionChart") or {}
+        series_list = chart.get("SeriesList") or []
         if not series_list:
             return 0.0
-        data_points = series_list[0].get("data", [])
+        data_points = series_list[0].get("data") or []
         return sum(
             p.get("y", 0)
             for p in data_points
@@ -575,7 +575,7 @@ class ElectricityPriceSensor(
         """
         if not self.coordinator.data:
             return None
-        fee_data = self.coordinator.data.get("fee_data", {})
+        fee_data = self.coordinator.data.get("fee_data") or {}
         fees = _extract_fee_series(fee_data)
         consumption_fee = fees.get(FEE_CONSUMPTION)
         if consumption_fee is None:
@@ -589,7 +589,7 @@ class ElectricityPriceSensor(
     def extra_state_attributes(self) -> dict[str, Any]:
         if not self.coordinator.data:
             return {}
-        fee_data = self.coordinator.data.get("fee_data", {})
+        fee_data = self.coordinator.data.get("fee_data") or {}
         fees = _extract_fee_series(fee_data)
         total_kwh = self._get_total_kwh_for_fee_period()
         attrs: dict[str, Any] = {
@@ -683,7 +683,7 @@ class SpotPriceSensor(
             attrs["price_ore_kwh"] = round(current_sek * 100, 2)
 
         # Today's prices summary (use local time for correct day boundaries)
-        prices = data.get("prices", [])
+        prices = data.get("prices") or []
         local_now = dt_util.now()
         today = local_now.date()
         tomorrow = today + datetime.timedelta(days=1)
@@ -765,7 +765,7 @@ class ContractSensor(
         """Find this contract in coordinator data."""
         if not self.coordinator.data:
             return {}
-        for c in self.coordinator.data.get("contracts", []):
+        for c in self.coordinator.data.get("contracts") or []:
             if c.get("ContractId") == self._contract_id:
                 return c
         return {}
