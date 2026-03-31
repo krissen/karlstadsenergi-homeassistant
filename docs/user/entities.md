@@ -140,8 +140,12 @@ Current Nord Pool electricity spot price for SE3 (Karlstad region), fetched from
 To add these sensors to the HA Energy Dashboard:
 
 1. Go to **Settings -> Dashboards -> Energy**.
-2. Under **Electricity grid**, add `sensor.karlstadsenergi_electricity_consumption` as a **Grid consumption** sensor.
+2. Under **Electricity grid**, add a **Grid consumption** sensor. Two options:
+   - `sensor.karlstadsenergi_electricity_consumption` -- auto-recorded by HA from the sensor state (year-to-date value, sampled at each update)
+   - `Karlstadsenergi Electricity Consumption` (external statistic) -- imported hourly data from the portal API, more granular
 3. For electricity cost tracking, add `sensor.karlstadsenergi_spot_price` or `sensor.karlstadsenergi_electricity_price` as the price entity.
+
+> **Tip:** The external statistic provides actual hourly consumption values from the portal, while the auto-recorded sensor tracks the cumulative year-to-date value. For the most accurate Energy Dashboard graphs, use the external statistic.
 
 ### Spot price attributes
 

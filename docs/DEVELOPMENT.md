@@ -137,9 +137,10 @@ To request 15-min data, set `IntervalEnum: 6` and `Interval: "QUARTER"` in the C
 
 Hourly consumption data is imported into HA's long-term statistics using `async_add_external_statistics`. This is done in `ConsumptionCoordinator._async_update_data()` after each successful fetch. Key details:
 
-- **Statistic ID:** `karlstadsenergi:electricity_consumption_kwh`
+- **Statistic ID:** `karlstadsenergi:electricity_consumption_{customer_id}` (customer ID from config entry)
 - **Source:** `karlstadsenergi`
-- Each hourly data point becomes a `StatisticsData(start=..., sum=..., state=...)` entry where `sum` is cumulative year-to-date kWh and `state` is the hourly kWh value
+- Each hourly data point becomes a `StatisticData(start=..., sum=..., state=...)` entry where `sum` is a running total starting from 0 at first import and `state` is the hourly kWh value
+- On subsequent imports, `sum` continues from the last imported value via `get_last_statistics`
 - Only new data points (after the last known statistic timestamp) are inserted
 - The `has_mean` / `has_sum` metadata tells HA that this statistic has a cumulative sum, making it compatible with the Energy Dashboard
 
