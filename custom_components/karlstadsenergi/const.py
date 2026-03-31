@@ -2,6 +2,7 @@
 
 import datetime
 import hashlib
+from dataclasses import dataclass
 
 from homeassistant.const import Platform
 
@@ -105,3 +106,29 @@ FEE_FIXED = "FixFee"
 FEE_ENERGY_TAX = "EnergyTax"
 FEE_VAT = "VAT"
 FEE_SUM = "SUM"
+
+
+@dataclass(frozen=True)
+class FeeSensorInfo:
+    """Metadata for a fee cost sensor."""
+
+    name: str
+    icon: str
+    translation_key: str
+    stat_suffix: str
+
+
+FEE_SENSORS: dict[str, FeeSensorInfo] = {
+    FEE_CONSUMPTION: FeeSensorInfo(
+        "Consumption fee", "mdi:lightning-bolt", "consumption_fee", "consumption_fee"
+    ),
+    FEE_POWER: FeeSensorInfo(
+        "Power fee", "mdi:transmission-tower", "power_fee", "power_fee"
+    ),
+    FEE_FIXED: FeeSensorInfo("Fixed fee", "mdi:currency-usd", "fixed_fee", "fixed_fee"),
+    FEE_ENERGY_TAX: FeeSensorInfo("Energy tax", "mdi:bank", "energy_tax", "energy_tax"),
+    FEE_VAT: FeeSensorInfo("VAT", "mdi:percent", "vat", "vat"),
+    FEE_SUM: FeeSensorInfo(
+        "Total cost", "mdi:cash-multiple", "total_cost", "total_cost"
+    ),
+}

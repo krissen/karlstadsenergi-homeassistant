@@ -32,9 +32,11 @@ from .const import (
     FEE_ENERGY_TAX,
     FEE_FIXED,
     FEE_POWER,
+    FEE_SENSORS,
     FEE_SUM,
     FEE_VAT,
     VERSION,
+    FeeSensorInfo,
     pickup_date_for_service,
     pickup_date_for_type,
     slug_for_waste_type,
@@ -132,6 +134,19 @@ async def async_setup_entry(
             place_id=site_place_id,
         )
     )
+
+    # Cost sensors (one per fee type, always created)
+    for fee_id, fee_info in FEE_SENSORS.items():
+        entities.append(
+            ElectricityCostSensor(
+                coordinator=runtime.consumption_coordinator,
+                customer_id=customer_id,
+                fee_id=fee_id,
+                fee_info=fee_info,
+                address=site_address,
+                place_id=site_place_id,
+            )
+        )
 
     # Spot price sensor (always created -- shows unavailable if API is down)
     entities.append(
@@ -615,6 +630,100 @@ class ElectricityPriceSensor(
         if fee_months:
             attrs["fee_period_months"] = sorted(fee_months)
         return attrs
+
+
+class ElectricityCostSensor(
+    CoordinatorEntity[KarlstadsenergiConsumptionCoordinator],
+    SensorEntity,
+):
+    """Monthly cost sensor for a specific fee type.
+
+    Shows the latest month's fee amount. No state_class is set so HA
+    does not auto-generate statistics from this sensor; cost statistics
+    are instead imported via async_add_external_statistics in the
+    coordinator (Tibber pattern).
+    """
+
+    _attr_has_entity_name = True
+    _attr_device_class = SensorDeviceClass.MONETARY
+    _attr_native_unit_of_measurement = "SEK"
+    _attr_suggested_display_precision = 2
+
+    def __init__(
+        self,
+        coordinator: KarlstadsenergiConsumptionCoordinator,
+        customer_id: str,
+        fee_id: str,
+        fee_info: FeeSensorInfo,
+        address: str = "",
+        place_id: str = "",
+    ) -> None:
+        super().__init__(coordinator)
+        self._customer_id = customer_id
+        self._fee_id = fee_id
+        self._address = address
+        self._place_id = place_id
+        self._attr_unique_id = f"{DOMAIN}_{customer_id}_cost_{fee_info.stat_suffix}"
+        self._attr_icon = fee_info.icon
+        self._attr_translation_key = fee_info.translation_key
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        identifier = (
+            f"{self._customer_id}_{self._place_id}"
+            if self._place_id
+            else self._customer_id
+        )
+        name = (
+            f"Karlstadsenergi ({self._address})" if self._address else "Karlstadsenergi"
+        )
+        return DeviceInfo(
+            identifiers={(DOMAIN, identifier)},
+            name=name,
+            manufacturer="Karlstads Energi",
+            model="Electricity",
+            sw_version=VERSION,
+        )
+
+    def _get_series_points(self) -> list[dict]:
+        """Get data points for this fee type from coordinator data."""
+        if not self.coordinator.data:
+            return []
+        fee_data = self.coordinator.data.get("fee_data") or {}
+        chart = fee_data.get("DetailedConsumptionChart") or {}
+        for series in chart.get("SeriesList") or []:
+            if series.get("id") == self._fee_id:
+                return series.get("data") or []
+        return []
+
+    @property
+    def native_value(self) -> float | None:
+        """Return the latest month's fee amount in SEK."""
+        data_points = self._get_series_points()
+        if not data_points:
+            return None
+        sorted_points = sorted(data_points, key=lambda p: p.get("dateInterval", ""))
+        last_value = sorted_points[-1].get("y")
+        return round(float(last_value), 2) if last_value is not None else None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        data_points = self._get_series_points()
+        if not data_points:
+            return {}
+        monthly: dict[str, float] = {}
+        for point in data_points:
+            date_str = point.get("dateInterval", "")
+            value = point.get("y")
+            if date_str and value is not None:
+                month_key = date_str[:7]
+                monthly[month_key] = round(float(value), 2)
+        if monthly:
+            return {
+                "monthly_breakdown": dict(sorted(monthly.items())),
+                "fee_period_months": sorted(monthly.keys()),
+            }
+        return {}
 
 
 class SpotPriceSensor(

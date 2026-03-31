@@ -54,6 +54,7 @@ from .const import (
     CONF_UPDATE_INTERVAL,
     DEFAULT_UPDATE_INTERVAL,
     DOMAIN,
+    FEE_SENSORS,
     MAX_UPDATE_INTERVAL,
     MIN_UPDATE_INTERVAL,
     PLATFORMS,
@@ -232,6 +233,13 @@ class KarlstadsenergiConsumptionCoordinator(_CookieSavingCoordinator):
                 except Exception:
                     _LOGGER.debug("Statistics import failed", exc_info=True)
 
+            # Import monthly fee data into long-term statistics
+            if fee_data and self._customer_id:
+                try:
+                    await self._async_import_fee_statistics(fee_data)
+                except Exception:
+                    _LOGGER.debug("Fee statistics import failed", exc_info=True)
+
             return {
                 "consumption": consumption,
                 "hourly": hourly,
@@ -323,6 +331,87 @@ class KarlstadsenergiConsumptionCoordinator(_CookieSavingCoordinator):
                 len(statistics),
                 statistics[-1].get("start") if statistics else "none",
             )
+
+    async def _async_import_fee_statistics(self, fee_data: dict) -> None:
+        """Import monthly fee data into HA long-term statistics.
+
+        Creates one statistic per fee type (consumption fee, power fee, etc.)
+        with monthly granularity. Follows the Tibber pattern: unit_class is
+        omitted for monetary values since currencies don't convert.
+        """
+        chart = fee_data.get("DetailedConsumptionChart") or {}
+        series_list = chart.get("SeriesList") or []
+        if not series_list:
+            return
+
+        for series in series_list:
+            series_id = series.get("id", "")
+            if series_id not in FEE_SENSORS:
+                continue
+
+            fee_info = FEE_SENSORS[series_id]
+            statistic_id = f"{DOMAIN}:cost_{fee_info.stat_suffix}_{self._customer_id}"
+            data_points = series.get("data") or []
+            if not data_points:
+                continue
+
+            meta_kwargs: dict = {
+                "has_mean": False,
+                "has_sum": True,
+                "name": f"Karlstadsenergi {fee_info.name}",
+                "source": DOMAIN,
+                "statistic_id": statistic_id,
+                "unit_of_measurement": "SEK",
+            }
+            if _MEAN_TYPE_NONE is not None:
+                meta_kwargs["mean_type"] = _MEAN_TYPE_NONE
+            metadata = StatisticMetaData(**meta_kwargs)
+
+            last_stats = await get_instance(self.hass).async_add_executor_job(
+                get_last_statistics, self.hass, 1, statistic_id, True, {"sum"}
+            )
+
+            if last_stats and statistic_id in last_stats:
+                last_stat = last_stats[statistic_id][0]
+                last_stats_time_dt = dt_util.utc_from_timestamp(last_stat["start"])
+                _sum = last_stat.get("sum", 0.0) or 0.0
+            else:
+                last_stats_time_dt = None
+                _sum = 0.0
+
+            statistics: list[StatisticData] = []
+            sorted_points = sorted(data_points, key=lambda p: p.get("dateInterval", ""))
+            for point in sorted_points:
+                value = point.get("y")
+                if value is None:
+                    continue
+                date_str = point.get("dateInterval", "")
+                if not date_str:
+                    continue
+                try:
+                    point_dt = datetime.strptime(date_str[:10], "%Y-%m-%d").replace(
+                        tzinfo=timezone.utc
+                    )
+                except (ValueError, TypeError):
+                    continue
+                if last_stats_time_dt is not None and point_dt <= last_stats_time_dt:
+                    continue
+                _sum += float(value)
+                statistics.append(
+                    StatisticData(
+                        start=point_dt,
+                        state=float(value),
+                        sum=_sum,
+                    )
+                )
+
+            if statistics:
+                async_add_external_statistics(self.hass, metadata, statistics)
+                _LOGGER.debug(
+                    "Imported %d fee statistics points for %s",
+                    len(statistics),
+                    series_id,
+                )
 
 
 class KarlstadsenergiContractCoordinator(_CookieSavingCoordinator):

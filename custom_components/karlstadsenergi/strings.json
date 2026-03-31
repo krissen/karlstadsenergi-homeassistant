@@ -98,6 +98,24 @@
       "spot_price": {
         "name": "Spot price"
       },
+      "consumption_fee": {
+        "name": "Consumption fee"
+      },
+      "power_fee": {
+        "name": "Power fee"
+      },
+      "fixed_fee": {
+        "name": "Fixed fee"
+      },
+      "energy_tax": {
+        "name": "Energy tax"
+      },
+      "vat": {
+        "name": "VAT"
+      },
+      "total_cost": {
+        "name": "Total cost"
+      },
       "contract": {
         "name": "Contract {utility_name}"
       }
