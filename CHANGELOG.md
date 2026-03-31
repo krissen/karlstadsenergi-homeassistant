@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Hourly statistics import** -- hourly consumption data is now imported into HA long-term statistics via `async_add_external_statistics`, making it available in the Energy Dashboard and history graphs
+
 ## [0.2.0] - 2026-03-29
 
 ### Added

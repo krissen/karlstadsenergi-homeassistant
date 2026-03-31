@@ -5,18 +5,42 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from typing import cast
 
 import aiohttp
 
+from homeassistant.components.recorder import get_instance
+from homeassistant.components.recorder.models import StatisticData, StatisticMetaData
+from homeassistant.components.recorder.statistics import (
+    async_add_external_statistics,
+    get_last_statistics,
+    statistics_during_period,
+)
+
+try:
+    from homeassistant.components.recorder.models import StatisticMeanType
+
+    _MEAN_TYPE_NONE = StatisticMeanType.NONE
+except ImportError:
+    _MEAN_TYPE_NONE = None  # type: ignore[assignment]
+
+try:
+    from homeassistant.util.unit_conversion import EnergyConverter
+
+    _ENERGY_UNIT_CLASS: str | None = EnergyConverter.UNIT_CLASS
+except ImportError:
+    _ENERGY_UNIT_CLASS = None
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_PASSWORD
+from homeassistant.const import CONF_PASSWORD, UnitOfEnergy
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from homeassistant.util import dt as dt_util
 
 from .api import (
     AUTH_BANKID,
@@ -166,10 +190,13 @@ class KarlstadsenergiConsumptionCoordinator(_CookieSavingCoordinator):
         api: KarlstadsenergiApi,
         update_interval_hours: int,
         entry: ConfigEntry,
+        customer_id: str = "",
     ) -> None:
         super().__init__(
             hass, api, update_interval_hours, entry, f"{DOMAIN}_consumption"
         )
+        self._customer_id = customer_id
+        self._statistic_id = f"{DOMAIN}:electricity_consumption_{customer_id}"
 
     async def _async_update_data(self) -> dict:
         """Fetch electricity consumption data."""
@@ -198,6 +225,13 @@ class KarlstadsenergiConsumptionCoordinator(_CookieSavingCoordinator):
                 except Exception:
                     _LOGGER.debug("Fee consumption unavailable")
 
+            # Import hourly data into long-term statistics
+            if hourly and self._customer_id:
+                try:
+                    await self._async_import_statistics(hourly)
+                except Exception:
+                    _LOGGER.debug("Statistics import failed", exc_info=True)
+
             return {
                 "consumption": consumption,
                 "hourly": hourly,
@@ -212,6 +246,106 @@ class KarlstadsenergiConsumptionCoordinator(_CookieSavingCoordinator):
             raise UpdateFailed(f"API error: {err}") from err
         finally:
             self._save_cookies()
+
+    @staticmethod
+    def _parse_aspnet_date(date_str: str) -> datetime | None:
+        """Parse ASP.NET date format '/Date(EPOCH_MS)/' to UTC datetime."""
+        match = re.search(r"/Date\((\d+)\)/", date_str)
+        if not match:
+            return None
+        epoch_ms = int(match.group(1))
+        return datetime.fromtimestamp(epoch_ms / 1000, tz=timezone.utc)
+
+    async def _async_import_statistics(self, hourly_data: dict) -> None:
+        """Import hourly consumption data into HA long-term statistics."""
+        chart = hourly_data.get("DetailedConsumptionChart") or {}
+        series_list = chart.get("SeriesList") or []
+        if not series_list:
+            return
+        data_points = series_list[0].get("data") or []
+        if not data_points:
+            return
+
+        statistic_id = self._statistic_id
+        meta_kwargs: dict = {
+            "has_mean": False,
+            "has_sum": True,
+            "name": "Karlstadsenergi Electricity Consumption",
+            "source": DOMAIN,
+            "statistic_id": statistic_id,
+            "unit_of_measurement": UnitOfEnergy.KILO_WATT_HOUR,
+        }
+        if _MEAN_TYPE_NONE is not None:
+            meta_kwargs["mean_type"] = _MEAN_TYPE_NONE
+        if _ENERGY_UNIT_CLASS is not None:
+            meta_kwargs["unit_class"] = _ENERGY_UNIT_CLASS
+        metadata = StatisticMetaData(**meta_kwargs)
+
+        # Check what's already been imported
+        last_stats = await get_instance(self.hass).async_add_executor_job(
+            get_last_statistics, self.hass, 1, statistic_id, True, set()
+        )
+
+        if last_stats and statistic_id in last_stats:
+            # Continue from last known sum
+            last_stat = last_stats[statistic_id][0]
+            last_stats_time = last_stat["start"]
+            last_stats_time_dt = dt_util.utc_from_timestamp(last_stats_time)
+
+            # Query the sum at the point just before our new data starts
+            first_point_dt = self._parse_aspnet_date(data_points[0].get("date", ""))
+            if first_point_dt:
+                query_start = first_point_dt - timedelta(hours=1)
+                stat = await get_instance(self.hass).async_add_executor_job(
+                    statistics_during_period,
+                    self.hass,
+                    query_start,
+                    None,
+                    {statistic_id},
+                    "hour",
+                    None,
+                    {"sum"},
+                )
+                if statistic_id in stat and stat[statistic_id]:
+                    _sum = cast(float, stat[statistic_id][0]["sum"])
+                else:
+                    _sum = 0.0
+            else:
+                _sum = 0.0
+        else:
+            # First import
+            last_stats_time_dt = None
+            _sum = 0.0
+
+        statistics: list[StatisticData] = []
+        for point in data_points:
+            value = point.get("y")
+            if value is None:
+                continue
+            point_dt = self._parse_aspnet_date(point.get("date", ""))
+            if point_dt is None:
+                continue
+            # Truncate to hour boundary
+            point_dt = point_dt.replace(minute=0, second=0, microsecond=0)
+            # Skip already-imported points
+            if last_stats_time_dt is not None and point_dt <= last_stats_time_dt:
+                continue
+            _sum += float(value)
+            statistics.append(
+                StatisticData(
+                    start=point_dt,
+                    state=float(value),
+                    sum=_sum,
+                )
+            )
+
+        if statistics:
+            async_add_external_statistics(self.hass, metadata, statistics)
+            _LOGGER.debug(
+                "Imported %d hourly statistics points (last: %s)",
+                len(statistics),
+                statistics[-1].get("start") if statistics else "none",
+            )
 
 
 class KarlstadsenergiContractCoordinator(_CookieSavingCoordinator):
@@ -377,11 +511,13 @@ async def async_setup_entry(
         update_interval,
         entry,
     )
+    customer_id = entry.data.get("customer_code") or personnummer
     consumption_coordinator = KarlstadsenergiConsumptionCoordinator(
         hass,
         api,
         max(update_interval // 6, 1),
         entry,
+        customer_id=customer_id,
     )
 
     try:
