@@ -10,6 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - **Hourly statistics import** -- hourly consumption data is now imported into HA long-term statistics via `async_add_external_statistics`, making it available in the Energy Dashboard and history graphs
 
+### Fixed
+- **Statistics sum continuation** -- subsequent coordinator refreshes would reset the cumulative sum to near-zero, causing negative energy in the Energy Dashboard
+- **Explicit null values** -- API responses with `null` for nested objects no longer cause `KeyError` or `TypeError`
+
 ## [0.2.0] - 2026-03-29
 
 ### Added
