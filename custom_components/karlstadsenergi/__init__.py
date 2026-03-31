@@ -362,6 +362,7 @@ class KarlstadsenergiConsumptionCoordinator(_CookieSavingCoordinator):
                 "source": DOMAIN,
                 "statistic_id": statistic_id,
                 "unit_of_measurement": "SEK",
+                "unit_class": None,
             }
             if _MEAN_TYPE_NONE is not None:
                 meta_kwargs["mean_type"] = _MEAN_TYPE_NONE

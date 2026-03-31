@@ -166,6 +166,7 @@ class TestWasteEntities:
             and "spot" not in s["entity_id"]
             and "avtal" not in s["entity_id"]
             and "contract" not in s["entity_id"]
+            and s.get("attributes", {}).get("device_class") != "monetary"
         ]
         assert len(waste_sensors) >= 1, "No waste sensors found"
 
@@ -181,6 +182,7 @@ class TestWasteEntities:
             and "spot" not in s["entity_id"]
             and "avtal" not in s["entity_id"]
             and "contract" not in s["entity_id"]
+            and s.get("attributes", {}).get("device_class") != "monetary"
         ]
         for sensor in waste_sensors:
             state = sensor["state"]
@@ -203,6 +205,7 @@ class TestWasteEntities:
             and "spot" not in s["entity_id"]
             and "avtal" not in s["entity_id"]
             and "contract" not in s["entity_id"]
+            and s.get("attributes", {}).get("device_class") != "monetary"
             and s["state"] != "unavailable"
         ]
         for sensor in waste_sensors:
