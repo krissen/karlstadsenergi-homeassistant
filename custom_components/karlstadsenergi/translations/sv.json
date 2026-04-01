@@ -137,7 +137,8 @@
       }
     },
     "error": {
-      "invalid_interval": "Uppdateringsintervallet måste vara mellan 1 och 24 timmar."
+      "invalid_interval": "Uppdateringsintervallet måste vara mellan 1 och 24 timmar.",
+      "invalid_history_years": "Statistikhistoriken måste vara mellan 1 och 10 år."
     }
   }
 }

@@ -137,7 +137,8 @@
       }
     },
     "error": {
-      "invalid_interval": "Update interval must be between 1 and 24 hours."
+      "invalid_interval": "Update interval must be between 1 and 24 hours.",
+      "invalid_history_years": "Statistics history must be between 1 and 10 years."
     }
   }
 }
