@@ -219,7 +219,7 @@ class KarlstadsenergiConsumptionCoordinator(_CookieSavingCoordinator):
 
         # Parse ContractsStartDate as lower bound
         contracts_start = model.get("ContractsStartDate", "")
-        match = re.search(r"/Date\((-?\d+)\)/", contracts_start)
+        match = re.search(r"/Date\((-?\d+)(?:[+-]\d{4})?\)/", contracts_start)
         if match:
             contracts_ms = int(match.group(1))
             target_ms = max(target_ms, contracts_ms)
@@ -294,7 +294,7 @@ class KarlstadsenergiConsumptionCoordinator(_CookieSavingCoordinator):
     @staticmethod
     def _parse_aspnet_date(date_str: str) -> datetime | None:
         """Parse ASP.NET date format '/Date(EPOCH_MS)/' to UTC datetime."""
-        match = re.search(r"/Date\((\d+)\)/", date_str)
+        match = re.search(r"/Date\((\d+)(?:[+-]\d{4})?\)/", date_str)
         if not match:
             return None
         epoch_ms = int(match.group(1))

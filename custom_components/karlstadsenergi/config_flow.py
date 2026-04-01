@@ -461,6 +461,8 @@ class KarlstadsenergiOptionsFlow(OptionsFlow):
             history = int(user_input.get(CONF_HISTORY_YEARS, DEFAULT_HISTORY_YEARS))
             if not (MIN_UPDATE_INTERVAL <= interval <= MAX_UPDATE_INTERVAL):
                 errors["base"] = "invalid_interval"
+            elif not (MIN_HISTORY_YEARS <= history <= MAX_HISTORY_YEARS):
+                errors["base"] = "invalid_interval"
             else:
                 coerced = {
                     **user_input,
