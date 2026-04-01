@@ -472,10 +472,13 @@ class ElectricityConsumptionSensor(
         return attrs
 
 
-def _extract_fee_series(fee_data: dict) -> dict[str, float]:
+def _extract_fee_series(
+    fee_data: dict, months: set[str] | None = None
+) -> dict[str, float]:
     """Extract fee amounts from fee-type consumption response.
 
     Returns dict of series_id -> total SEK for the period.
+    When months is provided, only data points within those months are summed.
     """
     chart = fee_data.get("DetailedConsumptionChart") or {}
     series_list = chart.get("SeriesList") or []
@@ -485,7 +488,14 @@ def _extract_fee_series(fee_data: dict) -> dict[str, float]:
         if not series_id:
             continue
         data_points = series.get("data") or []
-        total = sum(p.get("y", 0) for p in data_points)
+        if months is not None:
+            total = sum(
+                p.get("y", 0)
+                for p in data_points
+                if p.get("dateInterval", "")[:7] in months
+            )
+        else:
+            total = sum(p.get("y", 0) for p in data_points)
         fees[series_id] = round(total, 2)
     return fees
 
@@ -562,43 +572,52 @@ class ElectricityPriceSensor(
             sw_version=VERSION,
         )
 
-    def _get_total_kwh_for_fee_period(self) -> float:
-        """Get total kWh consumption matching the fee data's months only."""
+    def _get_fee_overlap(self) -> tuple[set[str], float]:
+        """Get months with both fee and consumption data, and their total kWh.
+
+        Returns (overlap_months, total_kwh). Using the intersection ensures
+        that fee and consumption cover the same period for price calculation.
+        """
         if not self.coordinator.data:
-            return 0.0
+            return set(), 0.0
         fee_data = self.coordinator.data.get("fee_data") or {}
         fee_months = _extract_fee_months(fee_data)
         if not fee_months:
-            return 0.0
-
+            return set(), 0.0
         consumption = self.coordinator.data.get("consumption") or {}
         chart = consumption.get("DetailedConsumptionChart") or {}
         series_list = chart.get("SeriesList") or []
         if not series_list:
-            return 0.0
-        data_points = series_list[0].get("data") or []
-        return sum(
-            p.get("y", 0)
-            for p in data_points
-            if p.get("dateInterval", "")[:7] in fee_months
-        )
+            return set(), 0.0
+        overlap: set[str] = set()
+        total_kwh = 0.0
+        for p in series_list[0].get("data") or []:
+            date_str = p.get("dateInterval", "")
+            value = p.get("y")
+            if len(date_str) >= 7 and value is not None:
+                month = date_str[:7]
+                if month in fee_months:
+                    overlap.add(month)
+                    total_kwh += float(value)
+        return overlap, total_kwh
 
     @property
     def native_value(self) -> float | None:
         """Return effective energy price in SEK/kWh.
 
-        Calculated as ConsumptionFee (SEK) / consumption (kWh) for the
-        same month(s) that the fee data covers.
+        Calculated as ConsumptionFee (SEK) / consumption (kWh) for
+        months that have both fee and consumption data, ensuring the
+        numerator and denominator cover the same period.
         """
         if not self.coordinator.data:
             return None
+        overlap, total_kwh = self._get_fee_overlap()
+        if total_kwh <= 0:
+            return None
         fee_data = self.coordinator.data.get("fee_data") or {}
-        fees = _extract_fee_series(fee_data)
+        fees = _extract_fee_series(fee_data, months=overlap)
         consumption_fee = fees.get(FEE_CONSUMPTION)
         if consumption_fee is None:
-            return None
-        total_kwh = self._get_total_kwh_for_fee_period()
-        if total_kwh <= 0:
             return None
         return round(consumption_fee / total_kwh, 4)
 
@@ -607,8 +626,8 @@ class ElectricityPriceSensor(
         if not self.coordinator.data:
             return {}
         fee_data = self.coordinator.data.get("fee_data") or {}
-        fees = _extract_fee_series(fee_data)
-        total_kwh = self._get_total_kwh_for_fee_period()
+        overlap, total_kwh = self._get_fee_overlap()
+        fees = _extract_fee_series(fee_data, months=overlap if overlap else None)
         attrs: dict[str, Any] = {
             "consumption_fee_sek": fees.get(FEE_CONSUMPTION),
             "power_fee_sek": fees.get(FEE_POWER),
@@ -624,11 +643,8 @@ class ElectricityPriceSensor(
         )
         if total_kwh and variable_fees:
             attrs["total_variable_price_sek_kwh"] = round(variable_fees / total_kwh, 4)
-        # Expose the fee data's time period so users can see if the price
-        # calculation might be inaccurate due to partial month coverage (M8).
-        fee_months = _extract_fee_months(fee_data)
-        if fee_months:
-            attrs["fee_period_months"] = sorted(fee_months)
+        if overlap:
+            attrs["fee_period_months"] = sorted(overlap)
         return attrs
 
 
