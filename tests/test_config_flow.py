@@ -318,6 +318,65 @@ class TestOptionsFlow:
         assert result["type"] == "create_entry"
         assert result["data"][CONF_UPDATE_INTERVAL] == 12
 
+    @pytest.mark.asyncio
+    async def test_valid_history_years_creates_entry(self) -> None:
+        from custom_components.karlstadsenergi.const import (
+            CONF_HISTORY_YEARS,
+            CONF_UPDATE_INTERVAL,
+        )
+
+        flow = self._make_options_flow()
+        result = await flow.async_step_init(
+            user_input={CONF_UPDATE_INTERVAL: 6, CONF_HISTORY_YEARS: 5}
+        )
+        assert result["type"] == "create_entry"
+        assert result["data"][CONF_HISTORY_YEARS] == 5
+
+    @pytest.mark.asyncio
+    async def test_history_years_too_low_shows_error(self) -> None:
+        from custom_components.karlstadsenergi.const import (
+            CONF_HISTORY_YEARS,
+            CONF_UPDATE_INTERVAL,
+        )
+
+        flow = self._make_options_flow()
+        result = await flow.async_step_init(
+            user_input={CONF_UPDATE_INTERVAL: 6, CONF_HISTORY_YEARS: 0}
+        )
+        assert result["type"] == "form"
+        assert result["errors"]["base"] == "invalid_history_years"
+
+    @pytest.mark.asyncio
+    async def test_history_years_too_high_shows_error(self) -> None:
+        from custom_components.karlstadsenergi.const import (
+            CONF_HISTORY_YEARS,
+            CONF_UPDATE_INTERVAL,
+        )
+
+        flow = self._make_options_flow()
+        result = await flow.async_step_init(
+            user_input={CONF_UPDATE_INTERVAL: 6, CONF_HISTORY_YEARS: 11}
+        )
+        assert result["type"] == "form"
+        assert result["errors"]["base"] == "invalid_history_years"
+
+    @pytest.mark.asyncio
+    async def test_values_coerced_to_int(self) -> None:
+        from custom_components.karlstadsenergi.const import (
+            CONF_HISTORY_YEARS,
+            CONF_UPDATE_INTERVAL,
+        )
+
+        flow = self._make_options_flow()
+        result = await flow.async_step_init(
+            user_input={CONF_UPDATE_INTERVAL: "6", CONF_HISTORY_YEARS: "3"}
+        )
+        assert result["type"] == "create_entry"
+        assert result["data"][CONF_UPDATE_INTERVAL] == 6
+        assert result["data"][CONF_HISTORY_YEARS] == 3
+        assert isinstance(result["data"][CONF_UPDATE_INTERVAL], int)
+        assert isinstance(result["data"][CONF_HISTORY_YEARS], int)
+
 
 # ---------------------------------------------------------------------------
 # B7: Reauth flow
