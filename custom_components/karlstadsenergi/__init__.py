@@ -232,24 +232,22 @@ class KarlstadsenergiConsumptionCoordinator(_CookieSavingCoordinator):
         try:
             consumption = await self.api.async_get_consumption()
 
-            # Use widened date range for the initial backfill (imports years
-            # of historical data), then switch to the API's default ~2 month
-            # window on subsequent refreshes. Statistics deduplication ensures
-            # no data is lost; the narrow window reduces API payload size.
+            # Hourly data: use widened date range for initial backfill, then
+            # narrow (~2 month) window to reduce payload (19k vs 1.4k rows).
+            # Fee data: always use wide range — only ~25 monthly rows, and
+            # cost sensors expose monthly_breakdown as an attribute for Plotly.
             hourly = {}
             fee_data = {}
             model = consumption.get("ConsumptionModel")
             if model:
-                if not self._backfill_done:
-                    fetch_model = self._widen_start_date(model, self._history_years)
-                else:
-                    fetch_model = model
+                wide_model = self._widen_start_date(model, self._history_years)
+                fetch_model = wide_model if not self._backfill_done else model
                 try:
                     hourly = await self.api.async_get_hourly_consumption(fetch_model)
                 except Exception:
                     _LOGGER.debug("Hourly consumption unavailable")
                 try:
-                    fee_data = await self.api.async_get_fee_consumption(fetch_model)
+                    fee_data = await self.api.async_get_fee_consumption(wide_model)
                 except Exception:
                     _LOGGER.debug("Fee consumption unavailable")
 

@@ -165,7 +165,7 @@ The coordinator's `_widen_start_date()` method overrides `StartDate` based on th
 2. Clamp to `ContractsStartDate` as the lower bound (can't request data before the contract existed)
 3. Replace `StartDate` in the model copy
 
-This widened model is used for both hourly consumption and fee requests on the initial backfill. Subsequent refreshes use the API's default ~2 month window, reducing payload size. The `get_last_statistics` check ensures only new data points are imported regardless of fetch window.
+This widened model is used for hourly consumption on the initial backfill only; subsequent hourly refreshes use the API's default ~2 month window, reducing payload size (19k → 1.4k rows). Fee requests always use the widened model (~25 monthly rows regardless of window) because cost sensors expose `monthly_breakdown` as an entity attribute for dashboard charts. The `get_last_statistics` check ensures only new data points are imported regardless of fetch window.
 
 Observed data volumes for reference (single customer):
 
