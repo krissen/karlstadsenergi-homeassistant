@@ -16,7 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - **Widened API date range** -- consumption and fee API requests now use the customer's `ContractsStartDate` (capped by the history depth setting) instead of the portal's default ~2 month window, unlocking years of historical data that was previously inaccessible
-- **Cost sensors use `state_class: total`** -- makes cost sensors visible in HA's built-in Statistics card
+- **Cost sensors rely on external statistics only** -- removed `state_class: total` from cost sensors; monthly fee values are non-cumulative and would produce incorrect recorder-derived statistics. History is provided entirely by the external statistics import.
 - **Swedish fee statistics metadata** -- long-term statistics for fee components now use Swedish display names
 - **Swedish translations** -- cost sensors and history depth setting translated to Swedish
 
@@ -24,6 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Statistics sum continuation** -- subsequent coordinator refreshes would reset the cumulative sum to near-zero, causing negative energy in the Energy Dashboard
 - **Explicit null values** -- API responses with `null` for nested objects no longer cause `KeyError` or `TypeError`
 - **Fee statistics unit_class** -- explicit `unit_class=None` for monetary statistics prevents HA 2026.11 deprecation warning
+- **ASP.NET date parsing** -- date regex now accepts optional timezone offset (e.g. `/Date(1711920000000+0200)/`), preventing silent parse failures
+- **Options flow validation** -- history years setting is now range-checked before saving
 
 ### Documentation
 - Cost breakdown sensors and fee statistics reference
