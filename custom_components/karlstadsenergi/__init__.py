@@ -262,14 +262,20 @@ class KarlstadsenergiConsumptionCoordinator(_CookieSavingCoordinator):
                 try:
                     await self._async_import_statistics(hourly)
                 except Exception:
-                    _LOGGER.debug("Statistics import failed", exc_info=True)
+                    _LOGGER.warning("Statistics import failed", exc_info=True)
+            elif not hourly:
+                _LOGGER.debug("No hourly data to import (empty response)")
+            elif not self._customer_id:
+                _LOGGER.warning("No customer_id set, skipping statistics import")
 
             # Import monthly fee data into long-term statistics
             if fee_data and self._customer_id:
                 try:
                     await self._async_import_fee_statistics(fee_data)
                 except Exception:
-                    _LOGGER.debug("Fee statistics import failed", exc_info=True)
+                    _LOGGER.warning("Fee statistics import failed", exc_info=True)
+            elif not fee_data:
+                _LOGGER.debug("No fee data to import (empty response)")
 
             if not self._backfill_done and (hourly or fee_data):
                 self._backfill_done = True
@@ -332,11 +338,22 @@ class KarlstadsenergiConsumptionCoordinator(_CookieSavingCoordinator):
             last_stat = last_stats[statistic_id][0]
             last_stats_time_dt = dt_util.utc_from_timestamp(last_stat["start"])
             _sum = last_stat.get("sum", 0.0) or 0.0
+            _LOGGER.debug(
+                "Resuming statistics for %s from %s (sum=%.1f)",
+                statistic_id,
+                last_stats_time_dt,
+                _sum,
+            )
         else:
             last_stats_time_dt = None
             _sum = 0.0
+            _LOGGER.debug(
+                "No existing statistics for %s, starting fresh import",
+                statistic_id,
+            )
 
         statistics: list[StatisticData] = []
+        skipped = 0
         for point in data_points:
             value = point.get("y")
             if value is None:
@@ -348,6 +365,7 @@ class KarlstadsenergiConsumptionCoordinator(_CookieSavingCoordinator):
             point_dt = point_dt.replace(minute=0, second=0, microsecond=0)
             # Skip already-imported points
             if last_stats_time_dt is not None and point_dt <= last_stats_time_dt:
+                skipped += 1
                 continue
             _sum += float(value)
             statistics.append(
@@ -361,9 +379,16 @@ class KarlstadsenergiConsumptionCoordinator(_CookieSavingCoordinator):
         if statistics:
             async_add_external_statistics(self.hass, metadata, statistics)
             _LOGGER.debug(
-                "Imported %d hourly statistics points (last: %s)",
+                "Imported %d hourly statistics points (skipped %d, last: %s)",
                 len(statistics),
+                skipped,
                 statistics[-1].get("start") if statistics else "none",
+            )
+        else:
+            _LOGGER.debug(
+                "No new hourly statistics to import (%d data points, %d skipped)",
+                len(data_points),
+                skipped,
             )
 
     async def _async_import_fee_statistics(self, fee_data: dict) -> None:

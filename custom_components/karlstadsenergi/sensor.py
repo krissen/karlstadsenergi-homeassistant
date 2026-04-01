@@ -326,18 +326,19 @@ class ElectricityConsumptionSensor(
 ):
     """Sensor for electricity consumption.
 
-    Uses TOTAL_INCREASING state_class for HA Energy Dashboard
-    compatibility. The native_value is the cumulative period total
-    (CurrYearValue from CompareModel, or sum of all daily chart points
-    as fallback). The value increases monotonically within a year and
-    resets in January; TOTAL_INCREASING handles this automatically
-    without requiring a last_reset property.
+    Shows the cumulative period total (CurrYearValue from CompareModel,
+    or sum of all daily chart points as fallback) as an informational
+    sensor. No state_class is set because the portal API provides
+    delayed historical data (hours/days lag), not real-time metering.
+
+    For Energy Dashboard integration, use the external statistic
+    ``karlstadsenergi:electricity_consumption_{customer_id}`` which is
+    imported with correct hourly timestamps by the coordinator.
     """
 
     _attr_has_entity_name = True
     _attr_device_class = SensorDeviceClass.ENERGY
     _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
-    _attr_state_class = SensorStateClass.TOTAL_INCREASING
     _attr_icon = "mdi:flash"
     _attr_suggested_display_precision = 1
     _attr_translation_key = "electricity_consumption"
