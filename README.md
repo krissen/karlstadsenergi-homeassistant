@@ -15,8 +15,10 @@ A Home Assistant integration for [Karlstads Energi](https://www.karlstadsenergi.
 
 <table align="center"><tr>
   <td><img width="450" alt="Button Card with color-coded waste pickup dates" src="docs/images/button-card.png" /></td>
-  <td><img width="450" alt="Daily electricity consumption chart" src="docs/images/consumption-daily.png" /></td>
+  <td><img width="450" alt="Monthly electricity cost breakdown (Plotly)" src="docs/images/cost-monthly-plotly.png" /></td>
 </tr></table>
+
+> *Right: Monthly cost breakdown rendered with [Plotly Graph Card](https://github.com/dbuezas/lovelace-plotly-graph-card). The winter spike? That's [@krissen](https://github.com/krissen) running a full-scale kitchen renovation in January -- turns out power tools and temporary heating don't do wonders for the electricity bill.*
 
 ---
 
