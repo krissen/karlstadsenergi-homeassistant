@@ -153,7 +153,7 @@ Fee data is imported into long-term statistics using the same pattern as hourly 
 - **Source:** `karlstadsenergi`
 - **Unit:** `SEK` with `unit_class=None` (monetary values have no unit conversion -- `unit_class` must be explicitly set to avoid HA 2026.11 deprecation warning)
 - Each monthly data point (`dateInterval` like `"2026-02-01"`) becomes a `StatisticData` entry with `state` (monthly SEK amount) and `sum` (running cumulative total)
-- The corresponding `ElectricityCostSensor` entities deliberately have no `state_class` -- cost statistics are handled entirely via external statistics import, not from the sensor state
+- The corresponding `ElectricityCostSensor` entities use `state_class: total` so they appear in HA's built-in Statistics card. Historical depth beyond the current sensor state is provided by the external statistics import above
 
 ### History depth and date range widening
 
@@ -165,7 +165,7 @@ The coordinator's `_widen_start_date()` method overrides `StartDate` based on th
 2. Clamp to `ContractsStartDate` as the lower bound (can't request data before the contract existed)
 3. Replace `StartDate` in the model copy
 
-This widened model is used for both hourly consumption and fee requests. The existing `get_last_statistics` check ensures only new data points are imported on subsequent refreshes, so the wider window has no cost after the initial import.
+This widened model is used for both hourly consumption and fee requests on the initial backfill. Subsequent refreshes use the API's default ~2 month window, reducing payload size. The `get_last_statistics` check ensures only new data points are imported regardless of fetch window.
 
 Observed data volumes for reference (single customer):
 

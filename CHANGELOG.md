@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Hourly statistics import** -- hourly consumption data is now imported into HA long-term statistics via `async_add_external_statistics`, making it available in the Energy Dashboard and history graphs
 - **Cost breakdown sensors** -- six new monetary sensors exposing individual fee components from the invoice: consumption fee, power fee, fixed fee, energy tax, VAT, and total cost (SEK)
 - **Monthly cost statistics import** -- fee data is imported into HA long-term statistics (one statistic per fee type), enabling cost tracking in the Energy Dashboard and history graphs
-- **Configurable history depth** -- new options flow setting (1--10 years, default 2) controls how far back hourly consumption and monthly cost data is imported into long-term statistics. The portal API supports data going back to the start of the customer contract (up to ~7 years observed), but the default is 2 years to keep the initial import manageable (~19,000 hourly data points per year). The setting applies to both hourly consumption and monthly fee statistics.
+- **Configurable history depth** -- new options flow setting (1--10 years, default 2) controls how far back hourly consumption and monthly cost data is imported into long-term statistics. The portal API supports data going back to the start of the customer contract (up to ~7 years observed), but the default is 2 years to keep the initial import manageable (~17,500 hourly data points over 2 years, ~8,800 per year). The setting applies to both hourly consumption and monthly fee statistics.
 - **Dark mode icons** -- brand icons and logos for HA's dark mode
 
 ### Changed

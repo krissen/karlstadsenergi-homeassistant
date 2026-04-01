@@ -18,7 +18,7 @@ A Home Assistant integration for [Karlstads Energi](https://www.karlstadsenergi.
   <td><img width="450" alt="Monthly electricity cost breakdown (Plotly)" src="docs/images/cost-monthly-plotly.png" /></td>
 </tr></table>
 
-> *Right: Monthly cost breakdown rendered with [Plotly Graph Card](https://github.com/dbuezas/lovelace-plotly-graph-card). The winter spike? That's [@krissen](https://github.com/krissen) running a full-scale kitchen renovation in January -- turns out power tools and temporary heating don't do wonders for the electricity bill.*
+> *Right: Monthly cost breakdown rendered with [Plotly Graph Card](https://github.com/dbuezas/lovelace-plotly-graph-card). The winter spike? That's [@krissen](https://github.com/krissen) running a full-scale bathroom renovation from November -- turns out power tools don't do wonders for the electricity bill --- especially not when combined with Swedish winters.*
 
 ---
 
@@ -102,7 +102,7 @@ After setup, go to **Settings -> Devices & Services -> Karlstadsenergi -> Config
 | Update interval | 6 hours | 1--24 hours | How often to fetch new data |
 | Statistics history | 2 years | 1--10 years | How far back to import hourly consumption and monthly cost data |
 
-> **Tip:** Waste pickup dates rarely change, so 6--12 hours is usually sufficient. Electricity consumption updates more frequently (1/6 of the waste interval, minimum 1 hour). The history setting affects the first import only -- subsequent refreshes only add new data points. Two years imports ~19,000 hourly data points; larger values are fine but the initial import takes longer.
+> **Tip:** Waste pickup dates rarely change, so 6--12 hours is usually sufficient. Electricity consumption updates more frequently (1/6 of the waste interval, minimum 1 hour). The history setting controls the initial backfill depth -- the first refresh fetches the full historical range, and subsequent refreshes use a shorter window while still importing any new data points. Two years imports ~17,500 hourly data points; larger values are fine but the initial import takes longer.
 
 ---
 
