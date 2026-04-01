@@ -214,7 +214,9 @@ class KarlstadsenergiConsumptionCoordinator(_CookieSavingCoordinator):
         """
         widened = {**model}
         now = datetime.now(tz=timezone.utc)
-        target = now.replace(year=now.year - history_years, month=1, day=1)
+        target = datetime(
+            year=now.year - history_years, month=1, day=1, tzinfo=timezone.utc
+        )
         target_ms = int(target.timestamp() * 1000)
 
         # Parse ContractsStartDate as lower bound
