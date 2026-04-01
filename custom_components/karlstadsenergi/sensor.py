@@ -638,14 +638,15 @@ class ElectricityCostSensor(
 ):
     """Monthly cost sensor for a specific fee type.
 
-    Shows the latest month's fee amount. No state_class is set so HA
-    does not auto-generate statistics from this sensor; cost statistics
-    are instead imported via async_add_external_statistics in the
-    coordinator.
+    Shows the latest month's fee amount. state_class=TOTAL enables HA
+    to record statistics for the sensor entity (visible in Statistics
+    cards). Historical depth is provided by async_add_external_statistics
+    in the coordinator.
     """
 
     _attr_has_entity_name = True
     _attr_device_class = SensorDeviceClass.MONETARY
+    _attr_state_class = SensorStateClass.TOTAL
     _attr_native_unit_of_measurement = "SEK"
     _attr_suggested_display_precision = 2
 
