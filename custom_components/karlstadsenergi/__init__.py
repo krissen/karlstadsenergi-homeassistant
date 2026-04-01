@@ -202,6 +202,7 @@ class KarlstadsenergiConsumptionCoordinator(_CookieSavingCoordinator):
         self._customer_id = customer_id
         self._history_years = history_years
         self._statistic_id = f"{DOMAIN}:electricity_consumption_{customer_id}"
+        self._backfill_done = False
 
     @staticmethod
     def _widen_start_date(model: dict, history_years: int) -> dict:
@@ -231,29 +232,32 @@ class KarlstadsenergiConsumptionCoordinator(_CookieSavingCoordinator):
         try:
             consumption = await self.api.async_get_consumption()
 
-            # Get hourly data using the model from the default response.
-            # Widen the date range to fetch historical data.
+            # Use widened date range for the initial backfill (imports years
+            # of historical data), then switch to the API's default ~2 month
+            # window on subsequent refreshes. Statistics deduplication ensures
+            # no data is lost; the narrow window reduces API payload size.
             hourly = {}
+            fee_data = {}
             model = consumption.get("ConsumptionModel")
             if model:
-                wide_model = self._widen_start_date(model, self._history_years)
+                if not self._backfill_done:
+                    fetch_model = self._widen_start_date(model, self._history_years)
+                else:
+                    fetch_model = model
                 try:
-                    hourly = await self.api.async_get_hourly_consumption(wide_model)
+                    hourly = await self.api.async_get_hourly_consumption(fetch_model)
                 except Exception:
                     _LOGGER.debug("Hourly consumption unavailable")
+                try:
+                    fee_data = await self.api.async_get_fee_consumption(fetch_model)
+                except Exception:
+                    _LOGGER.debug("Fee consumption unavailable")
 
             service_info = {}
             try:
                 service_info = await self.api.async_get_service_info()
             except Exception:
                 _LOGGER.debug("GetServiceInfo failed, continuing without it")
-
-            fee_data = {}
-            if model:
-                try:
-                    fee_data = await self.api.async_get_fee_consumption(wide_model)
-                except Exception:
-                    _LOGGER.debug("Fee consumption unavailable")
 
             # Import hourly data into long-term statistics
             if hourly and self._customer_id:
@@ -268,6 +272,9 @@ class KarlstadsenergiConsumptionCoordinator(_CookieSavingCoordinator):
                     await self._async_import_fee_statistics(fee_data)
                 except Exception:
                     _LOGGER.debug("Fee statistics import failed", exc_info=True)
+
+            if not self._backfill_done and (hourly or fee_data):
+                self._backfill_done = True
 
             return {
                 "consumption": consumption,
@@ -608,7 +615,7 @@ async def async_setup_entry(
         entry,
     )
     customer_id = entry.data.get("customer_code") or personnummer
-    history_years = entry.options.get(CONF_HISTORY_YEARS, DEFAULT_HISTORY_YEARS)
+    history_years = int(entry.options.get(CONF_HISTORY_YEARS, DEFAULT_HISTORY_YEARS))
     consumption_coordinator = KarlstadsenergiConsumptionCoordinator(
         hass,
         api,

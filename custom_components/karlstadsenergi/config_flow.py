@@ -455,11 +455,19 @@ class KarlstadsenergiOptionsFlow(OptionsFlow):
     ) -> ConfigFlowResult:
         errors: dict[str, str] = {}
         if user_input is not None:
-            interval = user_input.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL)
+            interval = int(
+                user_input.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL)
+            )
+            history = int(user_input.get(CONF_HISTORY_YEARS, DEFAULT_HISTORY_YEARS))
             if not (MIN_UPDATE_INTERVAL <= interval <= MAX_UPDATE_INTERVAL):
                 errors["base"] = "invalid_interval"
             else:
-                return self.async_create_entry(title="", data=user_input)
+                coerced = {
+                    **user_input,
+                    CONF_UPDATE_INTERVAL: interval,
+                    CONF_HISTORY_YEARS: history,
+                }
+                return self.async_create_entry(title="", data=coerced)
 
         current_interval = self.config_entry.options.get(
             CONF_UPDATE_INTERVAL,
