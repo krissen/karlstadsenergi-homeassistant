@@ -125,15 +125,19 @@ class FeeSensorInfo:
 
 FEE_SENSORS: dict[str, FeeSensorInfo] = {
     FEE_CONSUMPTION: FeeSensorInfo(
-        "Consumption fee", "mdi:lightning-bolt", "consumption_fee", "consumption_fee"
+        "Energiavgift", "mdi:lightning-bolt", "consumption_fee", "consumption_fee"
     ),
     FEE_POWER: FeeSensorInfo(
-        "Power fee", "mdi:transmission-tower", "power_fee", "power_fee"
+        "Effektavgift", "mdi:transmission-tower", "power_fee", "power_fee"
     ),
-    FEE_FIXED: FeeSensorInfo("Fixed fee", "mdi:currency-usd", "fixed_fee", "fixed_fee"),
-    FEE_ENERGY_TAX: FeeSensorInfo("Energy tax", "mdi:bank", "energy_tax", "energy_tax"),
-    FEE_VAT: FeeSensorInfo("VAT", "mdi:percent", "vat", "vat"),
+    FEE_FIXED: FeeSensorInfo(
+        "Fast avgift", "mdi:currency-usd", "fixed_fee", "fixed_fee"
+    ),
+    FEE_ENERGY_TAX: FeeSensorInfo(
+        "Energiskatt", "mdi:bank", "energy_tax", "energy_tax"
+    ),
+    FEE_VAT: FeeSensorInfo("Moms", "mdi:percent", "vat", "vat"),
     FEE_SUM: FeeSensorInfo(
-        "Total cost", "mdi:cash-multiple", "total_cost", "total_cost"
+        "Total kostnad", "mdi:cash-multiple", "total_cost", "total_cost"
     ),
 }
