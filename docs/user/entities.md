@@ -72,7 +72,7 @@ One calendar entity per waste type, compatible with HA's built-in Calendar card 
 |--------|-------------------|-------|------|--------------|
 | Electricity consumption | `sensor.karlstadsenergi_electricity_consumption` | Year-to-date consumption (kWh) | kWh | `energy` |
 
-Note: the portal API provides historical data only. Consumption data may lag days or weeks behind real-time. The `latest_date` attribute shows the actual date of the most recent data point.
+Note: the portal API provides historical data only. Consumption data may lag days or weeks behind real-time. The `latest_date` attribute shows the actual date of the most recent data point. This sensor is informational -- it does not have a `state_class` and is not directly tracked by the recorder. For energy tracking, see the external statistics below.
 
 ### Long-term statistics
 
@@ -85,7 +85,7 @@ Hourly consumption data is imported into Home Assistant's long-term statistics v
   </tr>
 </table>
 
-The statistics are imported each time the consumption coordinator refreshes (default: every hour). Only new data points are inserted -- existing statistics are not overwritten.
+The integration fetches historical data going back as far as the **Statistics history** setting allows (default: 2 years, configurable 1--10 years in Options). The portal API typically has data going back to the start of the customer contract. On the first coordinator refresh, all available historical data within the configured window is imported. Subsequent refreshes only add new data points -- existing statistics are not overwritten.
 
 ### Electricity sensor attributes
 
@@ -127,6 +127,43 @@ Derived from your invoice fee breakdown. This is a historical/retrospective pric
 
 ---
 
+## Cost breakdown sensors
+
+Individual sensors for each fee component from the Karlstadsenergi invoice. Each sensor shows the latest month's amount. Monthly cost data is also imported into HA long-term statistics for Energy Dashboard integration and history graphs.
+
+| Sensor | Entity ID example | State | Unit | Device class |
+|--------|-------------------|-------|------|--------------|
+| Consumption fee | `sensor.karlstadsenergi_consumption_fee` | Latest month energy charge | SEK | `monetary` |
+| Power fee | `sensor.karlstadsenergi_power_fee` | Latest month grid/power fee | SEK | `monetary` |
+| Fixed fee | `sensor.karlstadsenergi_fixed_fee` | Latest month fixed fee | SEK | `monetary` |
+| Energy tax | `sensor.karlstadsenergi_energy_tax` | Latest month energy tax | SEK | `monetary` |
+| VAT | `sensor.karlstadsenergi_vat` | Latest month VAT | SEK | `monetary` |
+| Total cost | `sensor.karlstadsenergi_total_cost` | Latest month total invoice | SEK | `monetary` |
+
+### Cost sensor attributes
+
+| Attribute | Type | Description |
+|-----------|------|-------------|
+| `monthly_breakdown` | dict | Per-month amounts (`{"2026-01": 450.25, "2026-02": 520.10}`) |
+| `fee_period_months` | list | Months covered by the data (e.g. `["2026-01", "2026-02"]`) |
+
+### Long-term cost statistics
+
+Monthly fee data is imported into HA long-term statistics via `async_add_external_statistics`, one statistic per fee type. The statistics appear in the Energy Dashboard and history graphs. Like hourly consumption, the history depth is controlled by the **Statistics history** setting in Options (default: 2 years).
+
+| Statistic ID pattern | Description |
+|---------------------|-------------|
+| `karlstadsenergi:cost_consumption_fee_{id}` | Monthly energy charge (SEK) |
+| `karlstadsenergi:cost_power_fee_{id}` | Monthly grid/power fee (SEK) |
+| `karlstadsenergi:cost_fixed_fee_{id}` | Monthly fixed fee (SEK) |
+| `karlstadsenergi:cost_energy_tax_{id}` | Monthly energy tax (SEK) |
+| `karlstadsenergi:cost_vat_{id}` | Monthly VAT (SEK) |
+| `karlstadsenergi:cost_total_cost_{id}` | Monthly total invoice (SEK) |
+
+Each statistic tracks both the monthly value (`state`) and a running cumulative sum (`sum`). Only new months are imported on each coordinator refresh.
+
+---
+
 ## Spot price sensor
 
 Current Nord Pool electricity spot price for SE3 (Karlstad region), fetched from Karlstadsenergi's public Evado API every 15 minutes. No authentication required.
@@ -135,13 +172,19 @@ Current Nord Pool electricity spot price for SE3 (Karlstad region), fetched from
 |--------|-------------------|-------|------|
 | Spot price | `sensor.karlstadsenergi_spot_price` | Current spot price | SEK/kWh |
 
-### Energy Dashboard configuration
+### Energy Dashboard
 
-To add these sensors to the HA Energy Dashboard:
+The integration imports hourly consumption and monthly costs as external statistics, which can be used as sources in HA's Energy Dashboard. Since the data comes from the portal API (not a real-time meter), the external statistics with their correct historical timestamps tend to give better results than the entity sensor.
+
+To try this out:
 
 1. Go to **Settings -> Dashboards -> Energy**.
-2. Under **Electricity grid**, add `sensor.karlstadsenergi_electricity_consumption` as a **Grid consumption** sensor.
-3. For electricity cost tracking, add `sensor.karlstadsenergi_spot_price` or `sensor.karlstadsenergi_electricity_price` as the price entity.
+2. Under **Electricity grid**, add a **Grid consumption** source. In the picker, look for `Karlstadsenergi Electricity Consumption` -- this is the external statistic with hourly data imported from the portal.
+3. For cost tracking, a couple of options that could work well:
+   - Use `karlstadsenergi:cost_total_cost_{id}` as a pre-calculated cost statistic based on your actual invoices.
+   - Alternatively, add `sensor.karlstadsenergi_spot_price` as a price entity and let HA calculate cost from consumption times price.
+
+> **Note:** The consumption entity sensor (`sensor.karlstadsenergi_electricity_consumption`) shows year-to-date kWh but is not ideal for the Energy Dashboard since its data can lag days behind. The external statistic is generally a better fit for this purpose.
 
 ### Spot price attributes
 

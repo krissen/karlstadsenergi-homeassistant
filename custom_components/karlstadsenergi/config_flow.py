@@ -35,11 +35,15 @@ from .api import (
 )
 from .const import (
     CONF_AUTH_METHOD,
+    CONF_HISTORY_YEARS,
     CONF_PERSONNUMMER,
     CONF_UPDATE_INTERVAL,
+    DEFAULT_HISTORY_YEARS,
     DEFAULT_UPDATE_INTERVAL,
     DOMAIN,
+    MAX_HISTORY_YEARS,
     MAX_UPDATE_INTERVAL,
+    MIN_HISTORY_YEARS,
     MIN_UPDATE_INTERVAL,
 )
 
@@ -451,15 +455,29 @@ class KarlstadsenergiOptionsFlow(OptionsFlow):
     ) -> ConfigFlowResult:
         errors: dict[str, str] = {}
         if user_input is not None:
-            interval = user_input.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL)
+            interval = int(
+                user_input.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL)
+            )
+            history = int(user_input.get(CONF_HISTORY_YEARS, DEFAULT_HISTORY_YEARS))
             if not (MIN_UPDATE_INTERVAL <= interval <= MAX_UPDATE_INTERVAL):
                 errors["base"] = "invalid_interval"
+            elif not (MIN_HISTORY_YEARS <= history <= MAX_HISTORY_YEARS):
+                errors["base"] = "invalid_history_years"
             else:
-                return self.async_create_entry(title="", data=user_input)
+                coerced = {
+                    **user_input,
+                    CONF_UPDATE_INTERVAL: interval,
+                    CONF_HISTORY_YEARS: history,
+                }
+                return self.async_create_entry(title="", data=coerced)
 
         current_interval = self.config_entry.options.get(
             CONF_UPDATE_INTERVAL,
             DEFAULT_UPDATE_INTERVAL,
+        )
+        current_history = self.config_entry.options.get(
+            CONF_HISTORY_YEARS,
+            DEFAULT_HISTORY_YEARS,
         )
 
         return self.async_show_form(
@@ -476,6 +494,18 @@ class KarlstadsenergiOptionsFlow(OptionsFlow):
                             step=1,
                             mode=NumberSelectorMode.BOX,
                             unit_of_measurement="hours",
+                        )
+                    ),
+                    vol.Required(
+                        CONF_HISTORY_YEARS,
+                        default=current_history,
+                    ): NumberSelector(
+                        NumberSelectorConfig(
+                            min=MIN_HISTORY_YEARS,
+                            max=MAX_HISTORY_YEARS,
+                            step=1,
+                            mode=NumberSelectorMode.BOX,
+                            unit_of_measurement="years",
                         )
                     ),
                 }

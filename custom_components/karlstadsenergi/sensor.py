@@ -32,9 +32,11 @@ from .const import (
     FEE_ENERGY_TAX,
     FEE_FIXED,
     FEE_POWER,
+    FEE_SENSORS,
     FEE_SUM,
     FEE_VAT,
     VERSION,
+    FeeSensorInfo,
     pickup_date_for_service,
     pickup_date_for_type,
     slug_for_waste_type,
@@ -132,6 +134,19 @@ async def async_setup_entry(
             place_id=site_place_id,
         )
     )
+
+    # Cost sensors (one per fee type, always created)
+    for fee_id, fee_info in FEE_SENSORS.items():
+        entities.append(
+            ElectricityCostSensor(
+                coordinator=runtime.consumption_coordinator,
+                customer_id=customer_id,
+                fee_id=fee_id,
+                fee_info=fee_info,
+                address=site_address,
+                place_id=site_place_id,
+            )
+        )
 
     # Spot price sensor (always created -- shows unavailable if API is down)
     entities.append(
@@ -311,18 +326,19 @@ class ElectricityConsumptionSensor(
 ):
     """Sensor for electricity consumption.
 
-    Uses TOTAL_INCREASING state_class for HA Energy Dashboard
-    compatibility. The native_value is the cumulative period total
-    (CurrYearValue from CompareModel, or sum of all daily chart points
-    as fallback). The value increases monotonically within a year and
-    resets in January; TOTAL_INCREASING handles this automatically
-    without requiring a last_reset property.
+    Shows the cumulative period total (CurrYearValue from CompareModel,
+    or sum of all daily chart points as fallback) as an informational
+    sensor. No state_class is set because the portal API provides
+    delayed historical data (hours/days lag), not real-time metering.
+
+    For Energy Dashboard integration, use the external statistic
+    ``karlstadsenergi:electricity_consumption_{customer_id}`` which is
+    imported with correct hourly timestamps by the coordinator.
     """
 
     _attr_has_entity_name = True
     _attr_device_class = SensorDeviceClass.ENERGY
     _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
-    _attr_state_class = SensorStateClass.TOTAL_INCREASING
     _attr_icon = "mdi:flash"
     _attr_suggested_display_precision = 1
     _attr_translation_key = "electricity_consumption"
@@ -457,10 +473,13 @@ class ElectricityConsumptionSensor(
         return attrs
 
 
-def _extract_fee_series(fee_data: dict) -> dict[str, float]:
+def _extract_fee_series(
+    fee_data: dict, months: set[str] | None = None
+) -> dict[str, float]:
     """Extract fee amounts from fee-type consumption response.
 
     Returns dict of series_id -> total SEK for the period.
+    When months is provided, only data points within those months are summed.
     """
     chart = fee_data.get("DetailedConsumptionChart") or {}
     series_list = chart.get("SeriesList") or []
@@ -470,7 +489,14 @@ def _extract_fee_series(fee_data: dict) -> dict[str, float]:
         if not series_id:
             continue
         data_points = series.get("data") or []
-        total = sum(p.get("y", 0) for p in data_points)
+        if months is not None:
+            total = sum(
+                p.get("y", 0)
+                for p in data_points
+                if p.get("dateInterval", "")[:7] in months
+            )
+        else:
+            total = sum(p.get("y", 0) for p in data_points)
         fees[series_id] = round(total, 2)
     return fees
 
@@ -506,7 +532,7 @@ class ElectricityPriceSensor(
 ):
     """Effective electricity price derived from fee breakdown.
 
-    Compatible with HA Energy Dashboard (matches Nordpool/Tibber pattern).
+    Compatible with HA Energy Dashboard.
     """
 
     _attr_has_entity_name = True
@@ -547,43 +573,52 @@ class ElectricityPriceSensor(
             sw_version=VERSION,
         )
 
-    def _get_total_kwh_for_fee_period(self) -> float:
-        """Get total kWh consumption matching the fee data's months only."""
+    def _get_fee_overlap(self) -> tuple[set[str], float]:
+        """Get months with both fee and consumption data, and their total kWh.
+
+        Returns (overlap_months, total_kwh). Using the intersection ensures
+        that fee and consumption cover the same period for price calculation.
+        """
         if not self.coordinator.data:
-            return 0.0
+            return set(), 0.0
         fee_data = self.coordinator.data.get("fee_data") or {}
         fee_months = _extract_fee_months(fee_data)
         if not fee_months:
-            return 0.0
-
+            return set(), 0.0
         consumption = self.coordinator.data.get("consumption") or {}
         chart = consumption.get("DetailedConsumptionChart") or {}
         series_list = chart.get("SeriesList") or []
         if not series_list:
-            return 0.0
-        data_points = series_list[0].get("data") or []
-        return sum(
-            p.get("y", 0)
-            for p in data_points
-            if p.get("dateInterval", "")[:7] in fee_months
-        )
+            return set(), 0.0
+        overlap: set[str] = set()
+        total_kwh = 0.0
+        for p in series_list[0].get("data") or []:
+            date_str = p.get("dateInterval", "")
+            value = p.get("y")
+            if len(date_str) >= 7 and value is not None:
+                month = date_str[:7]
+                if month in fee_months:
+                    overlap.add(month)
+                    total_kwh += float(value)
+        return overlap, total_kwh
 
     @property
     def native_value(self) -> float | None:
         """Return effective energy price in SEK/kWh.
 
-        Calculated as ConsumptionFee (SEK) / consumption (kWh) for the
-        same month(s) that the fee data covers.
+        Calculated as ConsumptionFee (SEK) / consumption (kWh) for
+        months that have both fee and consumption data, ensuring the
+        numerator and denominator cover the same period.
         """
         if not self.coordinator.data:
             return None
+        overlap, total_kwh = self._get_fee_overlap()
+        if total_kwh <= 0:
+            return None
         fee_data = self.coordinator.data.get("fee_data") or {}
-        fees = _extract_fee_series(fee_data)
+        fees = _extract_fee_series(fee_data, months=overlap)
         consumption_fee = fees.get(FEE_CONSUMPTION)
         if consumption_fee is None:
-            return None
-        total_kwh = self._get_total_kwh_for_fee_period()
-        if total_kwh <= 0:
             return None
         return round(consumption_fee / total_kwh, 4)
 
@@ -592,8 +627,8 @@ class ElectricityPriceSensor(
         if not self.coordinator.data:
             return {}
         fee_data = self.coordinator.data.get("fee_data") or {}
-        fees = _extract_fee_series(fee_data)
-        total_kwh = self._get_total_kwh_for_fee_period()
+        overlap, total_kwh = self._get_fee_overlap()
+        fees = _extract_fee_series(fee_data, months=overlap if overlap else None)
         attrs: dict[str, Any] = {
             "consumption_fee_sek": fees.get(FEE_CONSUMPTION),
             "power_fee_sek": fees.get(FEE_POWER),
@@ -609,12 +644,102 @@ class ElectricityPriceSensor(
         )
         if total_kwh and variable_fees:
             attrs["total_variable_price_sek_kwh"] = round(variable_fees / total_kwh, 4)
-        # Expose the fee data's time period so users can see if the price
-        # calculation might be inaccurate due to partial month coverage (M8).
-        fee_months = _extract_fee_months(fee_data)
-        if fee_months:
-            attrs["fee_period_months"] = sorted(fee_months)
+        if overlap:
+            attrs["fee_period_months"] = sorted(overlap)
         return attrs
+
+
+class ElectricityCostSensor(
+    CoordinatorEntity[KarlstadsenergiConsumptionCoordinator],
+    SensorEntity,
+):
+    """Monthly cost sensor for a specific fee type.
+
+    Shows the latest month's fee amount (non-cumulative). Historical
+    depth is provided by async_add_external_statistics in the
+    coordinator rather than via recorder-derived statistics.
+    """
+
+    _attr_has_entity_name = True
+    _attr_device_class = SensorDeviceClass.MONETARY
+    _attr_native_unit_of_measurement = "SEK"
+    _attr_suggested_display_precision = 2
+
+    def __init__(
+        self,
+        coordinator: KarlstadsenergiConsumptionCoordinator,
+        customer_id: str,
+        fee_id: str,
+        fee_info: FeeSensorInfo,
+        address: str = "",
+        place_id: str = "",
+    ) -> None:
+        super().__init__(coordinator)
+        self._customer_id = customer_id
+        self._fee_id = fee_id
+        self._address = address
+        self._place_id = place_id
+        self._attr_unique_id = f"{DOMAIN}_{customer_id}_cost_{fee_info.stat_suffix}"
+        self._attr_icon = fee_info.icon
+        self._attr_translation_key = fee_info.translation_key
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        identifier = (
+            f"{self._customer_id}_{self._place_id}"
+            if self._place_id
+            else self._customer_id
+        )
+        name = (
+            f"Karlstadsenergi ({self._address})" if self._address else "Karlstadsenergi"
+        )
+        return DeviceInfo(
+            identifiers={(DOMAIN, identifier)},
+            name=name,
+            manufacturer="Karlstads Energi",
+            model="Electricity",
+            sw_version=VERSION,
+        )
+
+    def _get_series_points(self) -> list[dict]:
+        """Get data points for this fee type from coordinator data."""
+        if not self.coordinator.data:
+            return []
+        fee_data = self.coordinator.data.get("fee_data") or {}
+        chart = fee_data.get("DetailedConsumptionChart") or {}
+        for series in chart.get("SeriesList") or []:
+            if series.get("id") == self._fee_id:
+                return series.get("data") or []
+        return []
+
+    @property
+    def native_value(self) -> float | None:
+        """Return the latest month's fee amount in SEK."""
+        data_points = self._get_series_points()
+        if not data_points:
+            return None
+        sorted_points = sorted(data_points, key=lambda p: p.get("dateInterval", ""))
+        last_value = sorted_points[-1].get("y")
+        return round(float(last_value), 2) if last_value is not None else None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        data_points = self._get_series_points()
+        if not data_points:
+            return {}
+        monthly: dict[str, float] = {}
+        for point in data_points:
+            date_str = point.get("dateInterval", "")
+            value = point.get("y")
+            if date_str and value is not None:
+                month_key = date_str[:7]
+                monthly[month_key] = round(float(value), 2)
+        if monthly:
+            return {
+                "monthly_breakdown": dict(sorted(monthly.items())),
+                "fee_period_months": sorted(monthly.keys()),
+            }
+        return {}
 
 
 class SpotPriceSensor(

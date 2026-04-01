@@ -98,6 +98,24 @@
       "spot_price": {
         "name": "Spotpris"
       },
+      "consumption_fee": {
+        "name": "Energiavgift"
+      },
+      "power_fee": {
+        "name": "Effektavgift"
+      },
+      "fixed_fee": {
+        "name": "Fast avgift"
+      },
+      "energy_tax": {
+        "name": "Energiskatt"
+      },
+      "vat": {
+        "name": "Moms"
+      },
+      "total_cost": {
+        "name": "Total kostnad"
+      },
       "contract": {
         "name": "Avtal {utility_name}"
       }
@@ -109,15 +127,18 @@
         "title": "Inställningar",
         "description": "Konfigurera uppdateringsinställningar för Karlstadsenergi-integrationen.",
         "data": {
-          "update_interval": "Uppdateringsintervall (timmar)"
+          "update_interval": "Uppdateringsintervall (timmar)",
+          "history_years": "Statistikhistorik (år)"
         },
         "data_description": {
-          "update_interval": "Hur ofta data hämtas från Karlstadsenergi (1-24 timmar)."
+          "update_interval": "Hur ofta data hämtas från Karlstadsenergi (1-24 timmar).",
+          "history_years": "Hur många år av historisk förbruknings- och kostnadsdata som importeras till långtidsstatistik. Mer historik ger rikare grafer i Energi-dashboarden, men den första importen kan ta längre tid med många års timdata (ca 9 000 datapunkter per år). Standard: 2 år."
         }
       }
     },
     "error": {
-      "invalid_interval": "Uppdateringsintervallet måste vara mellan 1 och 24 timmar."
+      "invalid_interval": "Uppdateringsintervallet måste vara mellan 1 och 24 timmar.",
+      "invalid_history_years": "Statistikhistoriken måste vara mellan 1 och 10 år."
     }
   }
 }

@@ -13,6 +13,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from custom_components.karlstadsenergi import (
+    KarlstadsenergiConsumptionCoordinator,
     KarlstadsenergiSpotPriceCoordinator,
     KarlstadsenergiWasteCoordinator,
 )
@@ -487,3 +488,44 @@ class TestWasteCoordinatorUpdate:
             await coord._async_update_data()
 
         coord._save_cookies.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# _widen_start_date
+# ---------------------------------------------------------------------------
+
+
+class TestWidenStartDate:
+    def test_target_date_starts_at_midnight(self) -> None:
+        """Widened StartDate should be at midnight, not inherit current time."""
+        import re
+        from datetime import datetime, timezone
+
+        model = {
+            "StartDate": "/Date(1711920000000)/",
+            "ContractsStartDate": "/Date(1577836800000)/",  # 2020-01-01
+        }
+        result = KarlstadsenergiConsumptionCoordinator._widen_start_date(model, 2)
+        match = re.search(r"/Date\((\d+)\)/", result["StartDate"])
+        assert match
+        epoch_ms = int(match.group(1))
+        dt = datetime.fromtimestamp(epoch_ms / 1000, tz=timezone.utc)
+        assert dt.hour == 0
+        assert dt.minute == 0
+        assert dt.second == 0
+
+    def test_respects_contracts_start_date_lower_bound(self) -> None:
+        """StartDate must not go before ContractsStartDate."""
+        import re
+
+        # ContractsStartDate = 2023-01-01, history_years = 10 → target would be
+        # far before 2023, so ContractsStartDate should win.
+        model = {
+            "StartDate": "/Date(1711920000000)/",
+            "ContractsStartDate": "/Date(1672531200000)/",  # 2023-01-01 UTC
+        }
+        result = KarlstadsenergiConsumptionCoordinator._widen_start_date(model, 10)
+        match = re.search(r"/Date\((\d+)\)/", result["StartDate"])
+        assert match
+        epoch_ms = int(match.group(1))
+        assert epoch_ms == 1672531200000

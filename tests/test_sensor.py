@@ -106,6 +106,55 @@ class TestExtractFeeSeries:
         # Jan 100 + Feb 200 = 300
         assert fees[FEE_CONSUMPTION] == pytest.approx(300.0)
 
+    def test_months_filter_limits_to_specified_months(self) -> None:
+        data = _make_fee_data(
+            [
+                _make_series(
+                    "ConsumptionFee",
+                    [
+                        ("2026-01-01", 100.0),
+                        ("2026-02-01", 200.0),
+                        ("2026-03-01", 300.0),
+                    ],
+                )
+            ]
+        )
+        fees = _extract_fee_series(data, months={"2026-02"})
+        assert fees[FEE_CONSUMPTION] == pytest.approx(200.0)
+
+    def test_months_filter_none_sums_all(self) -> None:
+        data = _make_fee_data(
+            [
+                _make_series(
+                    "ConsumptionFee",
+                    [("2026-01-01", 100.0), ("2026-02-01", 200.0)],
+                )
+            ]
+        )
+        fees = _extract_fee_series(data, months=None)
+        assert fees[FEE_CONSUMPTION] == pytest.approx(300.0)
+
+    def test_months_filter_empty_set_returns_zero(self) -> None:
+        data = _make_fee_data([_make_series("ConsumptionFee", [("2026-01-01", 100.0)])])
+        fees = _extract_fee_series(data, months=set())
+        assert fees[FEE_CONSUMPTION] == pytest.approx(0.0)
+
+    def test_months_filter_partial_overlap(self) -> None:
+        data = _make_fee_data(
+            [
+                _make_series(
+                    "ConsumptionFee",
+                    [
+                        ("2026-01-01", 100.0),
+                        ("2026-02-01", 200.0),
+                        ("2026-03-01", 300.0),
+                    ],
+                )
+            ]
+        )
+        fees = _extract_fee_series(data, months={"2026-01", "2026-03"})
+        assert fees[FEE_CONSUMPTION] == pytest.approx(400.0)
+
     def test_missing_chart_key_returns_empty(self) -> None:
         fees = _extract_fee_series({})
         assert fees == {}

@@ -18,12 +18,14 @@ from homeassistant.const import EntityCategory
 from custom_components.karlstadsenergi.const import DOMAIN
 from custom_components.karlstadsenergi.sensor import (
     ContractSensor,
+    ElectricityCostSensor,
     ElectricityConsumptionSensor,
     ElectricityPriceSensor,
     SpotPriceSensor,
     WasteCollectionSensor,
     WasteCollectionSummary,
 )
+from custom_components.karlstadsenergi.const import FEE_SUM, FEE_SENSORS
 
 
 # ---------------------------------------------------------------------------
@@ -354,6 +356,13 @@ class TestElectricityConsumptionSensor:
     def test_unique_id_format(self) -> None:
         sensor = self._make_sensor()
         assert sensor.unique_id == f"{DOMAIN}_CUST01_electricity"
+
+    def test_no_state_class(self) -> None:
+        """Consumption sensor must not have state_class -- use external statistics."""
+        sensor = self._make_sensor()
+        assert (
+            not hasattr(sensor, "_attr_state_class") or sensor._attr_state_class is None
+        )
 
     def test_translation_key_is_electricity_consumption(self) -> None:
         sensor = self._make_sensor()
@@ -719,3 +728,50 @@ class TestContractSensor:
     def test_entity_category_is_diagnostic(self) -> None:
         sensor = self._make_sensor()
         assert sensor._attr_entity_category == EntityCategory.DIAGNOSTIC
+
+
+# ---------------------------------------------------------------------------
+# ElectricityCostSensor
+# ---------------------------------------------------------------------------
+
+
+class TestElectricityCostSensor:
+    def _make_sensor(self, data: Any = None) -> ElectricityCostSensor:
+        coord = _mock_coord(data)
+        fee_info = FEE_SENSORS[FEE_SUM]
+        return ElectricityCostSensor(
+            coordinator=coord,
+            customer_id="CUST01",
+            fee_id=FEE_SUM,
+            fee_info=fee_info,
+        )
+
+    def test_no_state_class(self) -> None:
+        """Cost sensors must not have state_class -- non-cumulative monthly values."""
+        sensor = self._make_sensor()
+        assert (
+            not hasattr(sensor, "_attr_state_class") or sensor._attr_state_class is None
+        )
+
+    def test_native_value_returns_latest_month(self) -> None:
+        data = {
+            "fee_data": {
+                "DetailedConsumptionChart": {
+                    "SeriesList": [
+                        {
+                            "id": "SUM",
+                            "data": [
+                                {"dateInterval": "2026-01-01", "y": 1000.0},
+                                {"dateInterval": "2026-02-01", "y": 1200.0},
+                            ],
+                        }
+                    ]
+                }
+            }
+        }
+        sensor = self._make_sensor(data)
+        assert sensor.native_value == pytest.approx(1200.0)
+
+    def test_native_value_returns_none_when_no_data(self) -> None:
+        sensor = self._make_sensor(None)
+        assert sensor.native_value is None

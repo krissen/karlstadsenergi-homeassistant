@@ -31,6 +31,7 @@ Config Flow (auth) --> async_setup_entry
   |                                 +> WastePickupTomorrowSensor (per waste type)
   --> ConsumptionCoordinator (1h) ---> ElectricityConsumptionSensor
   |                                 +> ElectricityPriceSensor
+  |                                 +> ElectricityCostSensor (x6 fee types)
   --> ContractCoordinator (24h) -----> ContractSensor (per contract)
   --> SpotPriceCoordinator (15min) --> SpotPriceSensor
   --> Heartbeat timer (every 5 min)
@@ -133,15 +134,50 @@ All consumption data lags ~1 day behind real-time. The portal appears to update 
 
 To request 15-min data, set `IntervalEnum: 6` and `Interval: "QUARTER"` in the ConsumptionModel payload. Note that this returns ~96 points/day (~5500 for the default 2-month window) vs ~24/day for hourly.
 
+### Why the consumption sensor has no state_class
+
+The `ElectricityConsumptionSensor` intentionally omits `state_class`. The portal API provides delayed historical data (hours to days behind real-time), not a live meter feed. Setting `state_class=TOTAL_INCREASING` would cause the recorder to track entity state changes as if it were a real-time meter, producing misleading short-term statistics with gaps and flat lines. Instead, the external statistics (imported with correct hourly timestamps) are the intended source for the Energy Dashboard and history graphs.
+
 ### Long-term statistics import
 
 Hourly consumption data is imported into HA's long-term statistics using `async_add_external_statistics`. This is done in `ConsumptionCoordinator._async_update_data()` after each successful fetch. Key details:
 
-- **Statistic ID:** `karlstadsenergi:electricity_consumption_kwh`
+- **Statistic ID:** `karlstadsenergi:electricity_consumption_{customer_id}` (customer ID from config entry)
 - **Source:** `karlstadsenergi`
-- Each hourly data point becomes a `StatisticsData(start=..., sum=..., state=...)` entry where `sum` is cumulative year-to-date kWh and `state` is the hourly kWh value
+- Each hourly data point becomes a `StatisticData(start=..., sum=..., state=...)` entry where `sum` is a running total starting from 0 at first import and `state` is the hourly kWh value
+- On subsequent imports, `sum` continues from the last imported value via `get_last_statistics`
 - Only new data points (after the last known statistic timestamp) are inserted
 - The `has_mean` / `has_sum` metadata tells HA that this statistic has a cumulative sum, making it compatible with the Energy Dashboard
+
+### Monthly cost statistics import
+
+Fee data is imported into long-term statistics using the same pattern as hourly consumption, but with monthly granularity and SEK instead of kWh. This is implemented in `ConsumptionCoordinator._async_import_fee_statistics()`.
+
+- **Statistic IDs:** `karlstadsenergi:cost_{fee_type}_{customer_id}` -- one per fee type (consumption_fee, power_fee, fixed_fee, energy_tax, vat, total_cost)
+- **Source:** `karlstadsenergi`
+- **Unit:** `SEK` with `unit_class=None` (monetary values have no unit conversion -- `unit_class` must be explicitly set to avoid HA 2026.11 deprecation warning)
+- Each monthly data point (`dateInterval` like `"2026-02-01"`) becomes a `StatisticData` entry with `state` (monthly SEK amount) and `sum` (running cumulative total)
+- The `ElectricityCostSensor` entities have no `state_class` -- their values are non-cumulative monthly snapshots that would produce incorrect recorder statistics if tracked. Historical data is provided entirely by the external statistics import above
+
+### History depth and date range widening
+
+The portal API's default `ConsumptionModel` only covers the last ~2 months (the `StartDate` field is typically set to the beginning of last month). However, the API supports requests going all the way back to the customer's `ContractsStartDate`, which can be 7+ years of data.
+
+The coordinator's `_widen_start_date()` method overrides `StartDate` based on the configurable **history_years** setting (options flow, default 2 years):
+
+1. Calculate target: January 1st of `(current_year - history_years)`
+2. Clamp to `ContractsStartDate` as the lower bound (can't request data before the contract existed)
+3. Replace `StartDate` in the model copy
+
+This widened model is used for hourly consumption on the initial backfill only; subsequent hourly refreshes use the API's default ~2 month window, reducing payload size (19k → 1.4k rows). Fee requests always use the widened model (~25 monthly rows regardless of window) because cost sensors expose `monthly_breakdown` as an entity attribute for dashboard charts. The `get_last_statistics` check ensures only new data points are imported regardless of fetch window.
+
+Observed data volumes for reference (single customer):
+
+| History | Hourly points | Fee points (per type) |
+|---------|--------------|----------------------|
+| 2 months (default API) | ~1,400 | 1 |
+| 2 years | ~19,000 | ~25 |
+| Full contract (~7 years) | ~66,000 | ~83 |
 
 ---
 

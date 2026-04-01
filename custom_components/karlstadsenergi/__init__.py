@@ -8,7 +8,6 @@ import logging
 import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import cast
 
 import aiohttp
 
@@ -17,7 +16,6 @@ from homeassistant.components.recorder.models import StatisticData, StatisticMet
 from homeassistant.components.recorder.statistics import (
     async_add_external_statistics,
     get_last_statistics,
-    statistics_during_period,
 )
 
 try:
@@ -52,10 +50,13 @@ from .api import (
 )
 from .const import (
     CONF_AUTH_METHOD,
+    CONF_HISTORY_YEARS,
     CONF_PERSONNUMMER,
     CONF_UPDATE_INTERVAL,
+    DEFAULT_HISTORY_YEARS,
     DEFAULT_UPDATE_INTERVAL,
     DOMAIN,
+    FEE_SENSORS,
     MAX_UPDATE_INTERVAL,
     MIN_UPDATE_INTERVAL,
     PLATFORMS,
@@ -193,26 +194,64 @@ class KarlstadsenergiConsumptionCoordinator(_CookieSavingCoordinator):
         update_interval_hours: int,
         entry: ConfigEntry,
         customer_id: str = "",
+        history_years: int = DEFAULT_HISTORY_YEARS,
     ) -> None:
         super().__init__(
             hass, api, update_interval_hours, entry, f"{DOMAIN}_consumption"
         )
         self._customer_id = customer_id
+        self._history_years = history_years
         self._statistic_id = f"{DOMAIN}:electricity_consumption_{customer_id}"
+        self._backfill_done = False
+
+    @staticmethod
+    def _widen_start_date(model: dict, history_years: int) -> dict:
+        """Return a copy of the model with StartDate moved back.
+
+        Uses ContractsStartDate as the lower bound (earliest available
+        data). If the calculated date is earlier than ContractsStartDate,
+        ContractsStartDate wins.
+        """
+        widened = {**model}
+        now = datetime.now(tz=timezone.utc)
+        target = datetime(
+            year=now.year - history_years, month=1, day=1, tzinfo=timezone.utc
+        )
+        target_ms = int(target.timestamp() * 1000)
+
+        # Parse ContractsStartDate as lower bound
+        contracts_start = model.get("ContractsStartDate", "")
+        match = re.search(r"/Date\((-?\d+)(?:[+-]\d{4})?\)/", contracts_start)
+        if match:
+            contracts_ms = int(match.group(1))
+            target_ms = max(target_ms, contracts_ms)
+
+        widened["StartDate"] = f"/Date({target_ms})/"
+        return widened
 
     async def _async_update_data(self) -> dict:
         """Fetch electricity consumption data."""
         try:
             consumption = await self.api.async_get_consumption()
 
-            # Get hourly data using the model from the default response
+            # Hourly data: use widened date range for initial backfill, then
+            # narrow (~2 month) window to reduce payload (19k vs 1.4k rows).
+            # Fee data: always use wide range — only ~25 monthly rows, and
+            # cost sensors expose monthly_breakdown as an attribute for Plotly.
             hourly = {}
+            fee_data = {}
             model = consumption.get("ConsumptionModel")
             if model:
+                wide_model = self._widen_start_date(model, self._history_years)
+                fetch_model = wide_model if not self._backfill_done else model
                 try:
-                    hourly = await self.api.async_get_hourly_consumption(model)
+                    hourly = await self.api.async_get_hourly_consumption(fetch_model)
                 except Exception:
                     _LOGGER.debug("Hourly consumption unavailable")
+                try:
+                    fee_data = await self.api.async_get_fee_consumption(wide_model)
+                except Exception:
+                    _LOGGER.debug("Fee consumption unavailable")
 
             service_info = {}
             try:
@@ -220,19 +259,28 @@ class KarlstadsenergiConsumptionCoordinator(_CookieSavingCoordinator):
             except Exception:
                 _LOGGER.debug("GetServiceInfo failed, continuing without it")
 
-            fee_data = {}
-            if model:
-                try:
-                    fee_data = await self.api.async_get_fee_consumption(model)
-                except Exception:
-                    _LOGGER.debug("Fee consumption unavailable")
-
             # Import hourly data into long-term statistics
             if hourly and self._customer_id:
                 try:
                     await self._async_import_statistics(hourly)
                 except Exception:
-                    _LOGGER.debug("Statistics import failed", exc_info=True)
+                    _LOGGER.warning("Statistics import failed", exc_info=True)
+            elif not hourly:
+                _LOGGER.debug("No hourly data to import (empty response)")
+            elif not self._customer_id:
+                _LOGGER.warning("No customer_id set, skipping statistics import")
+
+            # Import monthly fee data into long-term statistics
+            if fee_data and self._customer_id:
+                try:
+                    await self._async_import_fee_statistics(fee_data)
+                except Exception:
+                    _LOGGER.warning("Fee statistics import failed", exc_info=True)
+            elif not fee_data:
+                _LOGGER.debug("No fee data to import (empty response)")
+
+            if not self._backfill_done and (hourly or fee_data):
+                self._backfill_done = True
 
             return {
                 "consumption": consumption,
@@ -252,7 +300,7 @@ class KarlstadsenergiConsumptionCoordinator(_CookieSavingCoordinator):
     @staticmethod
     def _parse_aspnet_date(date_str: str) -> datetime | None:
         """Parse ASP.NET date format '/Date(EPOCH_MS)/' to UTC datetime."""
-        match = re.search(r"/Date\((\d+)\)/", date_str)
+        match = re.search(r"/Date\((\d+)(?:[+-]\d{4})?\)/", date_str)
         if not match:
             return None
         epoch_ms = int(match.group(1))
@@ -285,41 +333,29 @@ class KarlstadsenergiConsumptionCoordinator(_CookieSavingCoordinator):
 
         # Check what's already been imported
         last_stats = await get_instance(self.hass).async_add_executor_job(
-            get_last_statistics, self.hass, 1, statistic_id, True, set()
+            get_last_statistics, self.hass, 1, statistic_id, True, {"sum"}
         )
 
         if last_stats and statistic_id in last_stats:
-            # Continue from last known sum
             last_stat = last_stats[statistic_id][0]
-            last_stats_time = last_stat["start"]
-            last_stats_time_dt = dt_util.utc_from_timestamp(last_stats_time)
-
-            # Query the sum at the point just before our new data starts
-            first_point_dt = self._parse_aspnet_date(data_points[0].get("date", ""))
-            if first_point_dt:
-                query_start = first_point_dt - timedelta(hours=1)
-                stat = await get_instance(self.hass).async_add_executor_job(
-                    statistics_during_period,
-                    self.hass,
-                    query_start,
-                    None,
-                    {statistic_id},
-                    "hour",
-                    None,
-                    {"sum"},
-                )
-                if statistic_id in stat and stat[statistic_id]:
-                    _sum = cast(float, stat[statistic_id][0]["sum"])
-                else:
-                    _sum = 0.0
-            else:
-                _sum = 0.0
+            last_stats_time_dt = dt_util.utc_from_timestamp(last_stat["start"])
+            _sum = last_stat.get("sum", 0.0) or 0.0
+            _LOGGER.debug(
+                "Resuming statistics for %s from %s (sum=%.1f)",
+                statistic_id,
+                last_stats_time_dt,
+                _sum,
+            )
         else:
-            # First import
             last_stats_time_dt = None
             _sum = 0.0
+            _LOGGER.debug(
+                "No existing statistics for %s, starting fresh import",
+                statistic_id,
+            )
 
         statistics: list[StatisticData] = []
+        skipped = 0
         for point in data_points:
             value = point.get("y")
             if value is None:
@@ -331,6 +367,7 @@ class KarlstadsenergiConsumptionCoordinator(_CookieSavingCoordinator):
             point_dt = point_dt.replace(minute=0, second=0, microsecond=0)
             # Skip already-imported points
             if last_stats_time_dt is not None and point_dt <= last_stats_time_dt:
+                skipped += 1
                 continue
             _sum += float(value)
             statistics.append(
@@ -344,10 +381,99 @@ class KarlstadsenergiConsumptionCoordinator(_CookieSavingCoordinator):
         if statistics:
             async_add_external_statistics(self.hass, metadata, statistics)
             _LOGGER.debug(
-                "Imported %d hourly statistics points (last: %s)",
+                "Imported %d hourly statistics points (skipped %d, last: %s)",
                 len(statistics),
+                skipped,
                 statistics[-1].get("start") if statistics else "none",
             )
+        else:
+            _LOGGER.debug(
+                "No new hourly statistics to import (%d data points, %d skipped)",
+                len(data_points),
+                skipped,
+            )
+
+    async def _async_import_fee_statistics(self, fee_data: dict) -> None:
+        """Import monthly fee data into HA long-term statistics.
+
+        Creates one statistic per fee type (consumption fee, power fee, etc.)
+        with monthly granularity. unit_class is explicitly set to None as
+        omitted for monetary values since currencies don't convert.
+        """
+        chart = fee_data.get("DetailedConsumptionChart") or {}
+        series_list = chart.get("SeriesList") or []
+        if not series_list:
+            return
+
+        for series in series_list:
+            series_id = series.get("id", "")
+            if series_id not in FEE_SENSORS:
+                continue
+
+            fee_info = FEE_SENSORS[series_id]
+            statistic_id = f"{DOMAIN}:cost_{fee_info.stat_suffix}_{self._customer_id}"
+            data_points = series.get("data") or []
+            if not data_points:
+                continue
+
+            meta_kwargs: dict = {
+                "has_mean": False,
+                "has_sum": True,
+                "name": f"Karlstadsenergi {fee_info.name}",
+                "source": DOMAIN,
+                "statistic_id": statistic_id,
+                "unit_of_measurement": "SEK",
+                "unit_class": None,
+            }
+            if _MEAN_TYPE_NONE is not None:
+                meta_kwargs["mean_type"] = _MEAN_TYPE_NONE
+            metadata = StatisticMetaData(**meta_kwargs)
+
+            last_stats = await get_instance(self.hass).async_add_executor_job(
+                get_last_statistics, self.hass, 1, statistic_id, True, {"sum"}
+            )
+
+            if last_stats and statistic_id in last_stats:
+                last_stat = last_stats[statistic_id][0]
+                last_stats_time_dt = dt_util.utc_from_timestamp(last_stat["start"])
+                _sum = last_stat.get("sum", 0.0) or 0.0
+            else:
+                last_stats_time_dt = None
+                _sum = 0.0
+
+            statistics: list[StatisticData] = []
+            sorted_points = sorted(data_points, key=lambda p: p.get("dateInterval", ""))
+            for point in sorted_points:
+                value = point.get("y")
+                if value is None:
+                    continue
+                date_str = point.get("dateInterval", "")
+                if not date_str:
+                    continue
+                try:
+                    point_dt = datetime.strptime(date_str[:10], "%Y-%m-%d").replace(
+                        tzinfo=timezone.utc
+                    )
+                except (ValueError, TypeError):
+                    continue
+                if last_stats_time_dt is not None and point_dt <= last_stats_time_dt:
+                    continue
+                _sum += float(value)
+                statistics.append(
+                    StatisticData(
+                        start=point_dt,
+                        state=float(value),
+                        sum=_sum,
+                    )
+                )
+
+            if statistics:
+                async_add_external_statistics(self.hass, metadata, statistics)
+                _LOGGER.debug(
+                    "Imported %d fee statistics points for %s",
+                    len(statistics),
+                    series_id,
+                )
 
 
 class KarlstadsenergiContractCoordinator(_CookieSavingCoordinator):
@@ -514,12 +640,14 @@ async def async_setup_entry(
         entry,
     )
     customer_id = entry.data.get("customer_code") or personnummer
+    history_years = int(entry.options.get(CONF_HISTORY_YEARS, DEFAULT_HISTORY_YEARS))
     consumption_coordinator = KarlstadsenergiConsumptionCoordinator(
         hass,
         api,
         max(update_interval // 6, 1),
         entry,
         customer_id=customer_id,
+        history_years=history_years,
     )
 
     try:

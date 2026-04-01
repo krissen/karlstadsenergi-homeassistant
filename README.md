@@ -13,20 +13,12 @@ A Home Assistant integration for [Karlstads Energi](https://www.karlstadsenergi.
 >
 > It exists because [@krissen](https://github.com/krissen) got new waste bins with a new pickup schedule and kept dragging the wrong ones to the curb on cold Värmland mornings. Automation to the rescue. It's shared here in case someone else in Karlstad has the same problem. If that's you -- välkommen, and good luck.
 
-<table align="center">
-  <tr>
-    <td><img width="450" alt="Button Card with color-coded waste pickup dates" src="docs/images/button-card.png" /></td>
-    <td><img width="450" alt="Built-in entities card with pickup dates and tomorrow alert" src="docs/images/builtin-entities.png" /></td>
-  </tr>
-  <tr>
-    <td><img width="450" alt="Daily electricity consumption chart" src="docs/images/consumption-daily.png" /></td>
-    <td><img width="450" alt="Hourly electricity consumption chart" src="docs/images/consumption-hourly.png" /></td>
-  </tr>
-  <tr>
-    <td><img width="450" alt="Mushroom chips showing days until pickup" src="docs/images/mushroom-chips.png" /></td>
-    <td><img width="450" alt="Calendar view with waste collection events" src="docs/images/calendar.png" /></td>
-  </tr>
-</table>
+<table align="center"><tr>
+  <td><img width="450" alt="Button Card with color-coded waste pickup dates" src="docs/images/button-card.png" /></td>
+  <td><img width="450" alt="Monthly electricity cost breakdown (Plotly)" src="docs/images/cost-monthly-plotly.png" /></td>
+</tr></table>
+
+> *Right: Monthly cost breakdown rendered with [Plotly Graph Card](https://github.com/dbuezas/lovelace-plotly-graph-card). The winter spike? That's [@krissen](https://github.com/krissen) running a full-scale bathroom renovation from November -- turns out power tools don't do wonders for the electricity bill --- especially not when combined with Swedish winters.*
 
 ---
 
@@ -37,7 +29,9 @@ A Home Assistant integration for [Karlstads Energi](https://www.karlstadsenergi.
 - **Pickup reminders** -- Binary sensors for "pickup tomorrow" per waste type
 - **Electricity consumption** -- Daily and hourly consumption data with year-over-year comparison, Energy Dashboard compatible
 - **Electricity price** -- Effective energy price (SEK/kWh) derived from your invoice fee breakdown, Energy Dashboard compatible
+- **Cost breakdown** -- Individual sensors for each invoice fee component: consumption fee, power fee, fixed fee, energy tax, VAT, and total cost (SEK), with monthly long-term statistics for the Energy Dashboard
 - **Spot price** -- Current Nord Pool SE3 spot price (15-minute intervals) from Karlstadsenergi/Evado public API
+- **Historical statistics** -- Hourly consumption and monthly cost data imported into HA long-term statistics with configurable depth (1--10 years, default 2). The portal API has data going back to contract start -- this integration unlocks it for Energy Dashboard graphs and history analysis.
 - **Contract overview** -- Sensors for each contract (grid, trading, waste) with contract type, dates, and identifiers
 - **Computed attributes** -- `days_until_pickup`, `pickup_is_today`, `pickup_is_tomorrow`
 - **Session management** -- Automatic session keepalive (heartbeat), cookie persistence across restarts, and re-authentication on session expiry
@@ -101,19 +95,36 @@ The integration supports two login methods. **Customer number & password is stro
 
 ### Options
 
-After setup, go to **Settings -> Devices & Services -> Karlstadsenergi -> Configure** to change the update interval (default: 6 hours, range: 1--24 hours).
+After setup, go to **Settings -> Devices & Services -> Karlstadsenergi -> Configure** to adjust:
 
-> **Tip:** Waste pickup dates rarely change, so 6--12 hours is usually sufficient. Electricity consumption updates more frequently (1/6 of the waste interval, minimum 1 hour).
+| Setting | Default | Range | Description |
+|---------|---------|-------|-------------|
+| Update interval | 6 hours | 1--24 hours | How often to fetch new data |
+| Statistics history | 2 years | 1--10 years | How far back to import hourly consumption and monthly cost data |
+
+> **Tip:** Waste pickup dates rarely change, so 6--12 hours is usually sufficient. Electricity consumption updates more frequently (1/6 of the waste interval, minimum 1 hour). The history setting controls the initial backfill depth -- the first refresh fetches the full historical range, and subsequent refreshes use a shorter window while still importing any new data points. Two years imports ~17,500 hourly data points; larger values are fine but the initial import takes longer.
 
 ---
 
 ## Entities and automations
+
+<table><tr>
+  <td><img width="420" alt="Built-in entities card with pickup dates and tomorrow alert" src="docs/images/builtin-entities.png" /></td>
+  <td><img width="420" alt="Hourly electricity consumption chart" src="docs/images/consumption-hourly.png" /></td>
+</tr></table>
 
 See **[Entities](docs/user/entities.md)** for a reference of all sensors, calendars, binary sensors, and their attributes, with automation examples.
 
 ---
 
 ## Dashboard examples
+
+<p align="center">
+  <img width="500" alt="Mushroom chips showing days until pickup" src="docs/images/mushroom-chips.png" />
+</p>
+<p align="center">
+  <img width="420" alt="Calendar view with waste collection events" src="docs/images/calendar.png" />
+</p>
 
 See **[Dashboard examples](docs/user/dashboard-examples.md)** for card configurations using Mushroom Cards, Custom Button Card, and the built-in Calendar card.
 

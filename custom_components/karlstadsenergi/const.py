@@ -2,6 +2,7 @@
 
 import datetime
 import hashlib
+from dataclasses import dataclass
 
 from homeassistant.const import Platform
 
@@ -34,6 +35,11 @@ CONF_UPDATE_INTERVAL = "update_interval"
 DEFAULT_UPDATE_INTERVAL = 6  # hours
 MIN_UPDATE_INTERVAL = 1
 MAX_UPDATE_INTERVAL = 24
+
+CONF_HISTORY_YEARS = "history_years"
+DEFAULT_HISTORY_YEARS = 2
+MIN_HISTORY_YEARS = 1
+MAX_HISTORY_YEARS = 10
 
 # Waste type slug mapping (Swedish name -> English entity slug)
 WASTE_TYPE_SLUG: dict[str, str] = {
@@ -105,3 +111,33 @@ FEE_FIXED = "FixFee"
 FEE_ENERGY_TAX = "EnergyTax"
 FEE_VAT = "VAT"
 FEE_SUM = "SUM"
+
+
+@dataclass(frozen=True)
+class FeeSensorInfo:
+    """Metadata for a fee cost sensor."""
+
+    name: str
+    icon: str
+    translation_key: str
+    stat_suffix: str
+
+
+FEE_SENSORS: dict[str, FeeSensorInfo] = {
+    FEE_CONSUMPTION: FeeSensorInfo(
+        "Energiavgift", "mdi:lightning-bolt", "consumption_fee", "consumption_fee"
+    ),
+    FEE_POWER: FeeSensorInfo(
+        "Effektavgift", "mdi:transmission-tower", "power_fee", "power_fee"
+    ),
+    FEE_FIXED: FeeSensorInfo(
+        "Fast avgift", "mdi:currency-usd", "fixed_fee", "fixed_fee"
+    ),
+    FEE_ENERGY_TAX: FeeSensorInfo(
+        "Energiskatt", "mdi:bank", "energy_tax", "energy_tax"
+    ),
+    FEE_VAT: FeeSensorInfo("Moms", "mdi:percent", "vat", "vat"),
+    FEE_SUM: FeeSensorInfo(
+        "Total kostnad", "mdi:cash-multiple", "total_cost", "total_cost"
+    ),
+}

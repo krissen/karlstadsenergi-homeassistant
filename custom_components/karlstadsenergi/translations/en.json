@@ -98,6 +98,24 @@
       "spot_price": {
         "name": "Spot price"
       },
+      "consumption_fee": {
+        "name": "Consumption fee"
+      },
+      "power_fee": {
+        "name": "Power fee"
+      },
+      "fixed_fee": {
+        "name": "Fixed fee"
+      },
+      "energy_tax": {
+        "name": "Energy tax"
+      },
+      "vat": {
+        "name": "VAT"
+      },
+      "total_cost": {
+        "name": "Total cost"
+      },
       "contract": {
         "name": "Contract {utility_name}"
       }
@@ -109,15 +127,18 @@
         "title": "Options",
         "description": "Configure update settings for the Karlstadsenergi integration.",
         "data": {
-          "update_interval": "Update interval (hours)"
+          "update_interval": "Update interval (hours)",
+          "history_years": "Statistics history (years)"
         },
         "data_description": {
-          "update_interval": "How often to fetch new data from Karlstadsenergi (1-24 hours)."
+          "update_interval": "How often to fetch new data from Karlstadsenergi (1-24 hours).",
+          "history_years": "How many years of historical consumption and cost data to import into long-term statistics. More history means richer Energy Dashboard graphs, but the first import may be slow with many years of hourly data (roughly 9,000 data points per year). Default: 2 years."
         }
       }
     },
     "error": {
-      "invalid_interval": "Update interval must be between 1 and 24 hours."
+      "invalid_interval": "Update interval must be between 1 and 24 hours.",
+      "invalid_history_years": "Statistics history must be between 1 and 10 years."
     }
   }
 }
