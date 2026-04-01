@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - **Widened API date range** -- consumption and fee API requests now use the customer's `ContractsStartDate` (capped by the history depth setting) instead of the portal's default ~2 month window, unlocking years of historical data that was previously inaccessible
+- **Consumption sensor is now informational** -- removed `state_class: total_increasing` from the consumption entity sensor. The portal API provides delayed historical data, not real-time metering, making recorder-tracked statistics misleading. For the Energy Dashboard, use the external statistic `karlstadsenergi:electricity_consumption_{id}` which has correct hourly timestamps.
 - **Cost sensors rely on external statistics only** -- removed `state_class: total` from cost sensors; monthly fee values are non-cumulative and would produce incorrect recorder-derived statistics. History is provided entirely by the external statistics import.
 - **Swedish fee statistics metadata** -- long-term statistics for fee components now use Swedish display names
 - **Swedish translations** -- cost sensors and history depth setting translated to Swedish

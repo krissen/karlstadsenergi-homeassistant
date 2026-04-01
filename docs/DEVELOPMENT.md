@@ -134,6 +134,10 @@ All consumption data lags ~1 day behind real-time. The portal appears to update 
 
 To request 15-min data, set `IntervalEnum: 6` and `Interval: "QUARTER"` in the ConsumptionModel payload. Note that this returns ~96 points/day (~5500 for the default 2-month window) vs ~24/day for hourly.
 
+### Why the consumption sensor has no state_class
+
+The `ElectricityConsumptionSensor` intentionally omits `state_class`. The portal API provides delayed historical data (hours to days behind real-time), not a live meter feed. Setting `state_class=TOTAL_INCREASING` would cause the recorder to track entity state changes as if it were a real-time meter, producing misleading short-term statistics with gaps and flat lines. Instead, the external statistics (imported with correct hourly timestamps) are the intended source for the Energy Dashboard and history graphs.
+
 ### Long-term statistics import
 
 Hourly consumption data is imported into HA's long-term statistics using `async_add_external_statistics`. This is done in `ConsumptionCoordinator._async_update_data()` after each successful fetch. Key details:
@@ -153,7 +157,7 @@ Fee data is imported into long-term statistics using the same pattern as hourly 
 - **Source:** `karlstadsenergi`
 - **Unit:** `SEK` with `unit_class=None` (monetary values have no unit conversion -- `unit_class` must be explicitly set to avoid HA 2026.11 deprecation warning)
 - Each monthly data point (`dateInterval` like `"2026-02-01"`) becomes a `StatisticData` entry with `state` (monthly SEK amount) and `sum` (running cumulative total)
-- The corresponding `ElectricityCostSensor` entities use `state_class: total` so they appear in HA's built-in Statistics card. Historical depth beyond the current sensor state is provided by the external statistics import above
+- The `ElectricityCostSensor` entities have no `state_class` -- their values are non-cumulative monthly snapshots that would produce incorrect recorder statistics if tracked. Historical data is provided entirely by the external statistics import above
 
 ### History depth and date range widening
 

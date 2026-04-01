@@ -72,7 +72,7 @@ One calendar entity per waste type, compatible with HA's built-in Calendar card 
 |--------|-------------------|-------|------|--------------|
 | Electricity consumption | `sensor.karlstadsenergi_electricity_consumption` | Year-to-date consumption (kWh) | kWh | `energy` |
 
-Note: the portal API provides historical data only. Consumption data may lag days or weeks behind real-time. The `latest_date` attribute shows the actual date of the most recent data point.
+Note: the portal API provides historical data only. Consumption data may lag days or weeks behind real-time. The `latest_date` attribute shows the actual date of the most recent data point. This sensor is informational -- it does not have a `state_class` and is not directly tracked by the recorder. For energy tracking, see the external statistics below.
 
 ### Long-term statistics
 
@@ -172,19 +172,19 @@ Current Nord Pool electricity spot price for SE3 (Karlstad region), fetched from
 |--------|-------------------|-------|------|
 | Spot price | `sensor.karlstadsenergi_spot_price` | Current spot price | SEK/kWh |
 
-### Energy Dashboard configuration
+### Energy Dashboard
 
-To add these sensors to the HA Energy Dashboard:
+The integration imports hourly consumption and monthly costs as external statistics, which can be used as sources in HA's Energy Dashboard. Since the data comes from the portal API (not a real-time meter), the external statistics with their correct historical timestamps tend to give better results than the entity sensor.
+
+To try this out:
 
 1. Go to **Settings -> Dashboards -> Energy**.
-2. Under **Electricity grid**, add a **Grid consumption** sensor. Two options:
-   - `sensor.karlstadsenergi_electricity_consumption` -- auto-recorded by HA from the sensor state (year-to-date value, sampled at each update)
-   - `Karlstadsenergi Electricity Consumption` (external statistic) -- imported hourly data from the portal API, more granular
-3. For electricity cost tracking, you have three options:
-   - **Price entity:** Add `sensor.karlstadsenergi_spot_price` or `sensor.karlstadsenergi_electricity_price` as the price entity. HA automatically calculates cost from consumption x price.
-   - **Total cost statistic:** Use `karlstadsenergi:cost_total_cost_{id}` as a pre-calculated cost statistic from your actual invoices.
+2. Under **Electricity grid**, add a **Grid consumption** source. In the picker, look for `Karlstadsenergi Electricity Consumption` -- this is the external statistic with hourly data imported from the portal.
+3. For cost tracking, a couple of options that could work well:
+   - Use `karlstadsenergi:cost_total_cost_{id}` as a pre-calculated cost statistic based on your actual invoices.
+   - Alternatively, add `sensor.karlstadsenergi_spot_price` as a price entity and let HA calculate cost from consumption times price.
 
-> **Tip:** The external statistic provides actual hourly consumption values from the portal, while the auto-recorded sensor tracks the cumulative year-to-date value. For the most accurate Energy Dashboard graphs, use the external statistic.
+> **Note:** The consumption entity sensor (`sensor.karlstadsenergi_electricity_consumption`) shows year-to-date kWh but is not ideal for the Energy Dashboard since its data can lag days behind. The external statistic is generally a better fit for this purpose.
 
 ### Spot price attributes
 
