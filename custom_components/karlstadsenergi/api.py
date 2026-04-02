@@ -401,12 +401,22 @@ class KarlstadsenergiApi:
         session: aiohttp.ClientSession,
         pages: tuple[str, ...],
     ) -> None:
-        """Visit ASPX pages to initialize server-side state."""
+        """Visit ASPX pages to initialize server-side state.
+
+        Uses allow_redirects=False and treats 3xx/4xx as auth failures
+        so callers can re-authenticate and retry with a fresh session.
+        """
         for page in pages:
             try:
                 async with asyncio.timeout(REQUEST_TIMEOUT):
-                    async with session.get(f"{BASE_URL}/{page}"):
-                        pass
+                    async with session.get(
+                        f"{BASE_URL}/{page}", allow_redirects=False
+                    ) as resp:
+                        if resp.status in (301, 302, 401, 403):
+                            raise KarlstadsenergiAuthError(
+                                f"Session expired visiting {page} "
+                                f"(status {resp.status})"
+                            )
             except asyncio.TimeoutError as err:
                 raise KarlstadsenergiConnectionError(
                     f"Timeout visiting {page}"
@@ -559,6 +569,27 @@ class KarlstadsenergiApi:
         model = {**consumption_model}
         model["Interval"] = "HOUR"
         model["IntervalEnum"] = 4
+        model["IsPageLoad"] = False
+
+        url = f"{BASE_URL}/Consumption/Consumption.aspx/GetConsumption"
+        result = await self._request(url, {"data": json.dumps(model)})
+        if not isinstance(result, dict):
+            return {}
+        return result
+
+    async def async_get_monthly_consumption(
+        self,
+        consumption_model: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Get monthly consumption (kWh) using the consumption model.
+
+        Returns the same chart structure as hourly/fee but with monthly
+        granularity (~26 data points for 2 years). Lightweight alternative
+        to hourly data for computing electricity price (fee/kWh).
+        """
+        model = {**consumption_model}
+        model["Interval"] = "MONTH"
+        model["IntervalEnum"] = 2
         model["IsPageLoad"] = False
 
         url = f"{BASE_URL}/Consumption/Consumption.aspx/GetConsumption"

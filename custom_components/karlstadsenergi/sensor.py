@@ -576,8 +576,10 @@ class ElectricityPriceSensor(
     def _get_fee_overlap(self) -> tuple[set[str], float]:
         """Get months with both fee and consumption data, and their total kWh.
 
-        Returns (overlap_months, total_kwh). Using the intersection ensures
-        that fee and consumption cover the same period for price calculation.
+        Returns (overlap_months, total_kwh). Uses monthly_kwh data (which
+        covers the full history range, ~26 rows) rather than the OnLoad
+        consumption chart (which only covers the current billing period)
+        so that there is overlap with invoice-based fee data.
         """
         if not self.coordinator.data:
             return set(), 0.0
@@ -585,8 +587,8 @@ class ElectricityPriceSensor(
         fee_months = _extract_fee_months(fee_data)
         if not fee_months:
             return set(), 0.0
-        consumption = self.coordinator.data.get("consumption") or {}
-        chart = consumption.get("DetailedConsumptionChart") or {}
+        monthly = self.coordinator.data.get("monthly_kwh") or {}
+        chart = monthly.get("DetailedConsumptionChart") or {}
         series_list = chart.get("SeriesList") or []
         if not series_list:
             return set(), 0.0

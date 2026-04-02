@@ -434,7 +434,8 @@ class TestElectricityPriceSensor:
         consumption_kwh: float = 250.0,
     ) -> dict[str, Any]:
         return {
-            "consumption": {
+            "consumption": {"ConsumptionModel": {}},
+            "monthly_kwh": {
                 "DetailedConsumptionChart": {
                     "SeriesList": [
                         {
@@ -443,8 +444,7 @@ class TestElectricityPriceSensor:
                             ]
                         }
                     ]
-                },
-                "ConsumptionModel": {},
+                }
             },
             "fee_data": {
                 "DetailedConsumptionChart": {
