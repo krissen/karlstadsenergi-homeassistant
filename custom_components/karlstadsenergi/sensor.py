@@ -470,6 +470,46 @@ class ElectricityConsumptionSensor(
             ]
             attrs["hourly_data_points"] = len(hourly_points)
 
+        # Monthly kWh from wide-range data: latest complete month + YoY
+        monthly_kwh = (
+            self.coordinator.data.get("monthly_kwh") or {}
+            if self.coordinator.data
+            else {}
+        )
+        mkwh_chart = monthly_kwh.get("DetailedConsumptionChart") or {}
+        mkwh_series = mkwh_chart.get("SeriesList") or []
+        if mkwh_series:
+            kwh_by_month: dict[str, float] = {}
+            for p in mkwh_series[0].get("data") or []:
+                di = p.get("dateInterval", "")
+                val = p.get("y")
+                if len(di) >= 7 and val is not None:
+                    kwh_by_month[di[:7]] = round(float(val), 1)
+            today = dt_util.now().date()
+            current_month = today.strftime("%Y-%m")
+            complete = sorted(m for m in kwh_by_month if m < current_month)
+            if complete:
+                latest = complete[-1]
+                attrs["latest_month"] = latest
+                attrs["latest_month_kwh"] = kwh_by_month[latest]
+                # Previous month
+                if len(complete) >= 2:
+                    prev = complete[-2]
+                    attrs["previous_month"] = prev
+                    attrs["previous_month_kwh"] = kwh_by_month[prev]
+                # Same month last year (fall back to previous month)
+                try:
+                    year, mon = latest.split("-")
+                    yoy_key = f"{int(year) - 1}-{mon}"
+                except (ValueError, IndexError):
+                    yoy_key = None
+                if yoy_key and yoy_key in kwh_by_month:
+                    attrs["same_month_last_year"] = yoy_key
+                    attrs["same_month_last_year_kwh"] = kwh_by_month[yoy_key]
+                elif "previous_month_kwh" in attrs:
+                    attrs["same_month_last_year"] = attrs["previous_month"]
+                    attrs["same_month_last_year_kwh"] = attrs["previous_month_kwh"]
+
         return attrs
 
 
