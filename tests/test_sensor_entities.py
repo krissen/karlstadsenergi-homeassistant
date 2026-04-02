@@ -432,6 +432,8 @@ class TestElectricityPriceSensor:
         self,
         consumption_fee: float = 500.0,
         consumption_kwh: float = 250.0,
+        fee_month: str = "2026-02-01",
+        kwh_month: str = "2026-02-01",
     ) -> dict[str, Any]:
         return {
             "consumption": {"ConsumptionModel": {}},
@@ -440,7 +442,7 @@ class TestElectricityPriceSensor:
                     "SeriesList": [
                         {
                             "data": [
-                                {"dateInterval": "2026-03-01", "y": consumption_kwh},
+                                {"dateInterval": kwh_month, "y": consumption_kwh},
                             ]
                         }
                     ]
@@ -451,9 +453,7 @@ class TestElectricityPriceSensor:
                     "SeriesList": [
                         {
                             "id": "ConsumptionFee",
-                            "data": [
-                                {"dateInterval": "2026-03-01", "y": consumption_fee}
-                            ],
+                            "data": [{"dateInterval": fee_month, "y": consumption_fee}],
                         }
                     ]
                 }
@@ -463,8 +463,7 @@ class TestElectricityPriceSensor:
     def test_native_value_returns_fee_divided_by_kwh(self) -> None:
         data = self._make_data(consumption_fee=500.0, consumption_kwh=250.0)
         sensor = self._make_sensor(data)
-        result = sensor.native_value
-        assert result == pytest.approx(2.0, abs=1e-4)
+        assert sensor.native_value == pytest.approx(2.0, abs=1e-4)
 
     def test_native_value_returns_none_when_no_data(self) -> None:
         sensor = self._make_sensor(None)
@@ -480,26 +479,55 @@ class TestElectricityPriceSensor:
         sensor = self._make_sensor(data)
         assert sensor.native_value is None
 
+    def test_native_value_uses_latest_month(self) -> None:
+        """When multiple months overlap, price is from the latest month."""
+        data = {
+            "consumption": {"ConsumptionModel": {}},
+            "monthly_kwh": {
+                "DetailedConsumptionChart": {
+                    "SeriesList": [
+                        {
+                            "data": [
+                                {"dateInterval": "2026-01-01", "y": 1000.0},
+                                {"dateInterval": "2026-02-01", "y": 500.0},
+                            ]
+                        }
+                    ]
+                }
+            },
+            "fee_data": {
+                "DetailedConsumptionChart": {
+                    "SeriesList": [
+                        {
+                            "id": "ConsumptionFee",
+                            "data": [
+                                {"dateInterval": "2026-01-01", "y": 1000.0},
+                                {"dateInterval": "2026-02-01", "y": 600.0},
+                            ],
+                        }
+                    ]
+                }
+            },
+        }
+        sensor = self._make_sensor(data)
+        # Should use Feb: 600/500 = 1.2, not Jan: 1000/1000 = 1.0
+        assert sensor.native_value == pytest.approx(1.2, abs=1e-4)
+
     def test_unique_id_format(self) -> None:
         sensor = self._make_sensor()
         assert sensor.unique_id == f"{DOMAIN}_CUST01_electricity_price"
 
-    def test_extra_state_attributes_contains_fee_breakdown(self) -> None:
+    def test_extra_state_attributes_contains_fee_month(self) -> None:
         data = self._make_data(consumption_fee=500.0, consumption_kwh=250.0)
         sensor = self._make_sensor(data)
         attrs = sensor.extra_state_attributes
+        assert attrs["fee_month"] == "2026-02"
+        assert attrs["consumption_kwh"] == pytest.approx(250.0)
         assert attrs["consumption_fee_sek"] == pytest.approx(500.0)
-
-    def test_extra_state_attributes_total_consumption_kwh(self) -> None:
-        data = self._make_data(consumption_fee=500.0, consumption_kwh=250.0)
-        sensor = self._make_sensor(data)
-        attrs = sensor.extra_state_attributes
-        assert attrs["total_consumption_kwh"] == pytest.approx(250.0)
 
     def test_extra_state_attributes_empty_when_no_data(self) -> None:
         sensor = self._make_sensor(None)
-        attrs = sensor.extra_state_attributes
-        assert attrs == {}
+        assert sensor.extra_state_attributes == {}
 
     def test_no_device_class(self) -> None:
         """Price sensors must not use MONETARY with compound unit SEK/kWh."""
