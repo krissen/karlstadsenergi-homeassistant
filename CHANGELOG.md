@@ -7,36 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-04-01
+
 ### Added
-- **Hourly statistics import** -- hourly consumption data is now imported into HA long-term statistics via `async_add_external_statistics`, making it available in the Energy Dashboard and history graphs
 - **Cost breakdown sensors** -- six new monetary sensors exposing individual fee components from the invoice: consumption fee, power fee, fixed fee, energy tax, VAT, and total cost (SEK)
+- **Hourly statistics import** -- hourly consumption data is now imported into HA long-term statistics via `async_add_external_statistics`, making it available in the Energy Dashboard and history graphs
 - **Monthly cost statistics import** -- fee data is imported into HA long-term statistics (one statistic per fee type), enabling cost tracking in the Energy Dashboard and history graphs
-- **Configurable history depth** -- new options flow setting (1--10 years, default 2) controls how far back hourly consumption and monthly cost data is imported into long-term statistics. The portal API supports data going back to the start of the customer contract (up to ~7 years observed), but the default is 2 years to keep the initial import manageable (~17,500 hourly data points over 2 years, ~8,800 per year). The setting applies to both hourly consumption and monthly fee statistics.
-- **Dark mode icons** -- brand icons and logos for HA's dark mode
-
-### Changed
-- **Widened API date range** -- consumption and fee API requests now use the customer's `ContractsStartDate` (capped by the history depth setting) instead of the portal's default ~2 month window, unlocking years of historical data that was previously inaccessible
-- **Consumption sensor is now informational** -- removed `state_class: total_increasing` from the consumption entity sensor. The portal API provides delayed historical data, not real-time metering, making recorder-tracked statistics misleading. For the Energy Dashboard, use the external statistic `karlstadsenergi:electricity_consumption_{id}` which has correct hourly timestamps.
-- **Cost sensors rely on external statistics only** -- removed `state_class: total` from cost sensors; monthly fee values are non-cumulative and would produce incorrect recorder-derived statistics. History is provided entirely by the external statistics import.
-- **Swedish fee statistics metadata** -- long-term statistics for fee components now use Swedish display names
-- **Swedish translations** -- cost sensors and history depth setting translated to Swedish
-
-### Fixed
-- **Statistics sum continuation** -- subsequent coordinator refreshes would reset the cumulative sum to near-zero, causing negative energy in the Energy Dashboard
-- **Explicit null values** -- API responses with `null` for nested objects no longer cause `KeyError` or `TypeError`
-- **Fee statistics unit_class** -- explicit `unit_class=None` for monetary statistics prevents HA 2026.11 deprecation warning
-- **ASP.NET date parsing** -- date regex now accepts optional timezone offset (e.g. `/Date(1711920000000+0200)/`), preventing silent parse failures
-- **Options flow validation** -- history years setting is now range-checked before saving
-
-### Documentation
-- Cost breakdown sensors and fee statistics reference
-- Plotly Graph Card example for monthly cost visualization (with note on `statistics-graph` 12-month limit)
-
-## [0.2.0] - 2026-03-29
-
-### Added
-- **Electricity price sensor** -- effective energy price (SEK/kWh) derived from fee breakdown, Energy Dashboard compatible
-- **Spot price sensor** -- current Nord Pool SE3 spot price from Evado public API (15-min intervals), Energy Dashboard compatible
+- **Configurable history depth** -- new options flow setting (1--10 years, default 2) controls how far back hourly consumption and monthly cost data is imported into long-term statistics
+- **Electricity price sensor** -- effective energy price (SEK/kWh) derived from fee breakdown
+- **Spot price sensor** -- current Nord Pool SE3 spot price from Evado public API (15-min intervals)
 - **Contract sensors** -- one per contract (Elnät, Elhandel, Renhållning) showing contract type, dates, and net area
 - Calendar entities for waste collection
 - Binary sensors for "pickup tomorrow" per waste type
@@ -45,34 +24,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Detailed waste service data via GetFlexServices (with fallback)
 - Options flow for configurable update interval (1--24 hours)
 - Dashboard card examples (Mushroom, Button Card, built-in HA cards)
+- Dark mode icons
 - Test fixtures based on real API response structures
 
+### Changed
+- **Consumption sensor is now informational** -- removed `state_class: total_increasing` from the consumption entity sensor. The portal API provides delayed historical data, not real-time metering. For the Energy Dashboard, use the external statistic `karlstadsenergi:electricity_consumption_{id}` which has correct hourly timestamps.
+- **Cost sensors rely on external statistics only** -- cost sensors have no `state_class`; monthly fee values are non-cumulative and would produce incorrect recorder-derived statistics. History is provided entirely by the external statistics import.
+- **Widened API date range** -- consumption and fee API requests now use the customer's `ContractsStartDate` (capped by the history depth setting) instead of the portal's default ~2 month window
+- Spot price coordinator is now per-entry (no longer shared via hass.data)
+- Contract sensors now have `entity_category: diagnostic`
+- Config entry title for BankID no longer includes customer name (privacy)
+- Reauth flow uses separate translated steps for password and BankID
+- Swedish translations for cost sensors and history depth setting
+- Cleaned up debug logging for production use
+
 ### Fixed
-- Electricity sensor now uses `state_class: total_increasing` for correct Energy Dashboard integration
+- **Statistics sum continuation** -- subsequent coordinator refreshes would reset the cumulative sum to near-zero, causing negative energy in the Energy Dashboard
+- **Explicit null values** -- API responses with `null` for nested objects no longer cause `KeyError` or `TypeError`
+- **Fee statistics unit_class** -- explicit `unit_class=None` for monetary statistics prevents HA 2026.11 deprecation warning
+- **ASP.NET date parsing** -- date regex now accepts optional timezone offset (e.g. `/Date(1711920000000+0200)/`)
+- **Options flow validation** -- history years setting is now range-checked with dedicated error messages
+- **Date range start time** -- `_widen_start_date` now targets midnight UTC instead of inheriting current time
 - Spot price coordinator properly cleaned up on last config entry unload
 - BankID API responses properly released to prevent connection pool leaks
 - BankID login failure returns to retry flow instead of aborting
 - `pickup_is_today` attribute now correctly returns false for past dates
 - Electricity price sensor returns `0.0` instead of unavailable when fee is zero
-- `DeviceInfo` import updated from deprecated path
-- Removed synchronous file I/O for version constant at module load
+- Removed incorrect `device_class: monetary` from price sensors
 - Config flow properly cleans up API session on abort
 - `ContractId` now redacted in diagnostics exports
-- Differentiated exception handling in spot price coordinator
-- Removed incorrect `device_class: monetary` from price sensors (HA requires ISO 4217 currency code, not compound unit `SEK/kWh`)
-
-### Changed
-- Cleaned up debug logging for production use
-- Spot price coordinator is now per-entry (no longer shared via hass.data)
-- Contract sensors now have `entity_category: diagnostic` (shown under diagnostics in HA)
-- Config entry title for BankID no longer includes customer name (privacy)
-- Reauth flow uses separate translated steps for password and BankID
-- Options dialog title simplified
-- Customer number label no longer includes Swedish parenthetical
 
 ### Documentation
-- Documentation (README, CONTRIBUTING, DEVELOPMENT)
-- Entity reference with automation examples
+- Entity reference with Energy Dashboard setup guide
+- Cost breakdown sensors and fee statistics reference
+- Plotly Graph Card example for monthly cost visualization
 - Dashboard card examples with multiple approaches
 
 ## [0.1.0] - 2026-03-28
