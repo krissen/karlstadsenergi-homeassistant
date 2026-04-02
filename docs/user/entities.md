@@ -68,6 +68,8 @@ One calendar entity per waste type, compatible with HA's built-in Calendar card 
 
 ![Electricity device with consumption, price, and spot price sensors](../images/device-electricity.png)
 
+![Mushroom cards for electricity consumption and price](../images/mushroom-electricity.png)
+
 | Sensor | Entity ID example | State | Unit | Device class |
 |--------|-------------------|-------|------|--------------|
 | Electricity consumption | `sensor.karlstadsenergi_electricity_consumption` | Year-to-date consumption (kWh) | kWh | `energy` |

@@ -478,6 +478,8 @@ entities:
 
 ## 4. Electricity sensors (Mushroom)
 
+![Mushroom cards for electricity consumption and price](../images/mushroom-electricity.png)
+
 > **Note:** Entity IDs in the examples below are illustrative. Your actual entity IDs depend on your configuration. Replace them with the IDs shown in **Settings -> Devices & Services -> Karlstadsenergi**.
 
 ### 4a. Consumption card
