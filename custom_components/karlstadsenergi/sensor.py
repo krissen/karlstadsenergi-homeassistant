@@ -690,10 +690,14 @@ class ElectricityPriceSensor(
         sorted_months = sorted(months_set)
         attrs = {
             "price_source": "period_average",
-            "fee_period": f"{sorted_months[0]} - {sorted_months[-1]}",
+            "fee_month": f"{sorted_months[0]} - {sorted_months[-1]}",
             "months_count": len(sorted_months),
             "consumption_kwh": round(total_kwh, 1),
             "consumption_fee_sek": fees.get(FEE_CONSUMPTION),
+            "power_fee_sek": fees.get(FEE_POWER),
+            "fixed_fee_sek": fees.get(FEE_FIXED),
+            "energy_tax_sek": fees.get(FEE_ENERGY_TAX),
+            "vat_sek": fees.get(FEE_VAT),
             "total_fee_sek": fees.get(FEE_SUM),
         }
         variable = sum(

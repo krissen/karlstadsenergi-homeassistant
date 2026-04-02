@@ -495,9 +495,8 @@ class KarlstadsenergiApi:
 
         pages = ("flex/flexservices.aspx",)
         session = await self._ensure_session()
-        await self._visit_pages(session, pages)
-
         try:
+            await self._visit_pages(session, pages)
             result = await self._request(URL_FLEX_SERVICES, retry_auth=False)
         except KarlstadsenergiAuthError:
             self._authenticated = False
@@ -542,10 +541,9 @@ class KarlstadsenergiApi:
 
         pages = ("start.aspx", "consumption/consumption.aspx")
         session = await self._ensure_session()
-        await self._visit_pages(session, pages)
-
         url = f"{BASE_URL}/Consumption/Consumption.aspx/GetConsumptionViewModelOnLoad"
         try:
+            await self._visit_pages(session, pages)
             result = await self._request(url, retry_auth=False)
         except KarlstadsenergiAuthError:
             self._authenticated = False
@@ -592,8 +590,20 @@ class KarlstadsenergiApi:
         model["IntervalEnum"] = 2
         model["IsPageLoad"] = False
 
+        pages = ("consumption/consumption.aspx",)
         url = f"{BASE_URL}/Consumption/Consumption.aspx/GetConsumption"
-        result = await self._request(url, {"data": json.dumps(model)})
+        try:
+            result = await self._request(
+                url, {"data": json.dumps(model)}, retry_auth=False
+            )
+        except KarlstadsenergiAuthError:
+            self._authenticated = False
+            await self.authenticate()
+            session = await self._ensure_session()
+            await self._visit_pages(session, pages)
+            result = await self._request(
+                url, {"data": json.dumps(model)}, retry_auth=False
+            )
         if not isinstance(result, dict):
             return {}
         return result
@@ -619,9 +629,8 @@ class KarlstadsenergiApi:
 
         pages = ("contract/contracts.aspx",)
         session = await self._ensure_session()
-        await self._visit_pages(session, pages)
-
         try:
+            await self._visit_pages(session, pages)
             result = await self._request(
                 URL_CONTRACT_DETAILS,
                 {"usePlaces": site_ids},
@@ -659,8 +668,20 @@ class KarlstadsenergiApi:
         model["IntervalEnum"] = 2
         model["IsPageLoad"] = False
 
+        pages = ("consumption/consumption.aspx",)
         url = f"{BASE_URL}/Consumption/Consumption.aspx/GetConsumption"
-        result = await self._request(url, {"data": json.dumps(model)})
+        try:
+            result = await self._request(
+                url, {"data": json.dumps(model)}, retry_auth=False
+            )
+        except KarlstadsenergiAuthError:
+            self._authenticated = False
+            await self.authenticate()
+            session = await self._ensure_session()
+            await self._visit_pages(session, pages)
+            result = await self._request(
+                url, {"data": json.dumps(model)}, retry_auth=False
+            )
         if not isinstance(result, dict):
             return {}
         return result
