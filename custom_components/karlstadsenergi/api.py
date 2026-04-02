@@ -396,6 +396,26 @@ class KarlstadsenergiApi:
 
     # ── Authenticated API requests ───────────────────────────
 
+    async def _visit_pages(
+        self,
+        session: aiohttp.ClientSession,
+        pages: tuple[str, ...],
+    ) -> None:
+        """Visit ASPX pages to initialize server-side state."""
+        for page in pages:
+            try:
+                async with asyncio.timeout(REQUEST_TIMEOUT):
+                    async with session.get(f"{BASE_URL}/{page}"):
+                        pass
+            except asyncio.TimeoutError as err:
+                raise KarlstadsenergiConnectionError(
+                    f"Timeout visiting {page}"
+                ) from err
+            except aiohttp.ClientError as err:
+                raise KarlstadsenergiConnectionError(
+                    f"Connection error visiting {page}: {err}"
+                ) from err
+
     async def _request(
         self,
         url: str,
@@ -462,17 +482,20 @@ class KarlstadsenergiApi:
         """
         if not self._authenticated:
             await self.authenticate()
-        session = await self._ensure_session()
-        try:
-            async with asyncio.timeout(REQUEST_TIMEOUT):
-                async with session.get(f"{BASE_URL}/flex/flexservices.aspx"):
-                    pass
-        except (KarlstadsenergiAuthError, KarlstadsenergiApiError):
-            raise
-        except Exception:
-            _LOGGER.debug("Failed to visit flex page")
 
-        result = await self._request(URL_FLEX_SERVICES)
+        pages = ("flex/flexservices.aspx",)
+        session = await self._ensure_session()
+        await self._visit_pages(session, pages)
+
+        try:
+            result = await self._request(URL_FLEX_SERVICES, retry_auth=False)
+        except KarlstadsenergiAuthError:
+            self._authenticated = False
+            await self.authenticate()
+            session = await self._ensure_session()
+            await self._visit_pages(session, pages)
+            result = await self._request(URL_FLEX_SERVICES, retry_auth=False)
+
         if not isinstance(result, list):
             return []
         return result
@@ -504,30 +527,23 @@ class KarlstadsenergiApi:
         Visits start.aspx + consumption.aspx to initialize server state,
         then calls GetConsumptionViewModelOnLoad.
         """
-        # Ensure authenticated first
         if not self._authenticated:
             await self.authenticate()
 
+        pages = ("start.aspx", "consumption/consumption.aspx")
         session = await self._ensure_session()
-        # Visit pages to initialize server-side state (same session).
-        # Each page gets its own timeout so a slow first page doesn't
-        # starve the second.
-        for page in ("start.aspx", "consumption/consumption.aspx"):
-            try:
-                async with asyncio.timeout(REQUEST_TIMEOUT):
-                    async with session.get(f"{BASE_URL}/{page}"):
-                        pass
-            except asyncio.TimeoutError as err:
-                raise KarlstadsenergiConnectionError(
-                    f"Timeout visiting {page}"
-                ) from err
-            except aiohttp.ClientError as err:
-                raise KarlstadsenergiConnectionError(
-                    f"Connection error visiting {page}: {err}"
-                ) from err
+        await self._visit_pages(session, pages)
 
         url = f"{BASE_URL}/Consumption/Consumption.aspx/GetConsumptionViewModelOnLoad"
-        result = await self._request(url)
+        try:
+            result = await self._request(url, retry_auth=False)
+        except KarlstadsenergiAuthError:
+            self._authenticated = False
+            await self.authenticate()
+            session = await self._ensure_session()
+            await self._visit_pages(session, pages)
+            result = await self._request(url, retry_auth=False)
+
         if not isinstance(result, dict):
             return {}
         return result
@@ -569,18 +585,28 @@ class KarlstadsenergiApi:
         """
         if not self._authenticated:
             await self.authenticate()
-        session = await self._ensure_session()
-        try:
-            async with asyncio.timeout(REQUEST_TIMEOUT):
-                async with session.get(f"{BASE_URL}/contract/contracts.aspx"):
-                    pass
-        except Exception:
-            _LOGGER.debug("Failed to visit contracts page")
 
-        result = await self._request(
-            URL_CONTRACT_DETAILS,
-            {"usePlaces": site_ids},
-        )
+        pages = ("contract/contracts.aspx",)
+        session = await self._ensure_session()
+        await self._visit_pages(session, pages)
+
+        try:
+            result = await self._request(
+                URL_CONTRACT_DETAILS,
+                {"usePlaces": site_ids},
+                retry_auth=False,
+            )
+        except KarlstadsenergiAuthError:
+            self._authenticated = False
+            await self.authenticate()
+            session = await self._ensure_session()
+            await self._visit_pages(session, pages)
+            result = await self._request(
+                URL_CONTRACT_DETAILS,
+                {"usePlaces": site_ids},
+                retry_auth=False,
+            )
+
         if not isinstance(result, list):
             return []
         return result
