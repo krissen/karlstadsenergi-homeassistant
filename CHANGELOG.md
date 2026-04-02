@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **Electricity price sensor always showing "unknown"** -- the sensor calculated price by intersecting fee data (invoice-based, lagging ~1 month) with the OnLoad consumption chart (current billing period only), which never overlap. Now fetches monthly kWh with the same wide date range as fee data, ensuring overlap.
-- **Session re-authentication losing server state** -- when a session expired mid-update, `_request()` re-authenticated but the required ASP.NET page visits were not redone with the new session, causing empty API responses. Page visits now detect expired sessions (`allow_redirects=False`) and are redone after re-authentication.
+- **Session re-authentication losing server state** -- when a session expired mid-update, `_request()` re-authenticated but the required ASP.NET page visits were not redone with the new session, causing empty API responses. Page visits now detect expired sessions (`allow_redirects=False`) and are redone after re-authentication. All API methods that depend on page visits (consumption, flex services, contracts, monthly kWh, fee data) use this pattern.
 
 ### Changed
 - **Electricity price uses latest invoiced month** -- price sensor now shows the most recent month's effective price instead of averaging over the full history. Falls back to period average when the latest month is unavailable. New `price_source` attribute indicates which method is used (`latest_month` or `period_average`).

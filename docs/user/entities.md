@@ -98,6 +98,12 @@ The integration fetches historical data going back as far as the **Statistics hi
 | `monthly_consumption` | dict | Monthly breakdown (`{"2026-01": 450.2, ...}`) |
 | `latest_date` | string | Date of the most recent data point |
 | `latest_daily_kwh` | float | kWh value for the most recent data point |
+| `latest_month` | string | Most recent complete month (`"2026-03"`) |
+| `latest_month_kwh` | float | Consumption for latest complete month (kWh) |
+| `previous_month` | string | Month before latest (`"2026-02"`) |
+| `previous_month_kwh` | float | Consumption for previous month (kWh) |
+| `same_month_last_year` | string | Same month one year back (`"2025-03"`), falls back to previous month if unavailable |
+| `same_month_last_year_kwh` | float | Consumption for that month (kWh) |
 | `hourly_consumption` | list | Last 24 hours (`[{"time": "...", "kWh": 1.2}, ...]`) |
 | `hourly_data_points` | int | Total number of hourly data points |
 
@@ -105,7 +111,7 @@ The integration fetches historical data going back as far as the **Statistics hi
 
 ## Electricity price sensor
 
-Derived from your invoice fee breakdown. This is a historical/retrospective price calculated from past invoices, not a real-time price. Use this or the spot price sensor as the price entity in the **Energy Dashboard**.
+Derived from your invoice fee breakdown. Shows the latest invoiced month's effective price. Falls back to a period average when the latest month is unavailable. The `price_source` attribute indicates which method was used. Use this or the spot price sensor as the price entity in the **Energy Dashboard**.
 
 | Sensor | Entity ID example | State | Unit |
 |--------|-------------------|-------|------|
@@ -115,15 +121,17 @@ Derived from your invoice fee breakdown. This is a historical/retrospective pric
 
 | Attribute | Type | Description |
 |-----------|------|-------------|
-| `consumption_fee_sek` | float | Energy charge for the period (SEK) |
+| `price_source` | string | `"latest_month"` (primary) or `"period_average"` (fallback) |
+| `fee_month` | string | Month used for calculation (`"2026-02"`) or period range for average |
+| `consumption_kwh` | float | kWh for the fee period |
+| `consumption_fee_sek` | float | Energy charge (SEK) |
 | `power_fee_sek` | float | Grid power fee (SEK) |
 | `fixed_fee_sek` | float | Fixed monthly fee (SEK) |
 | `energy_tax_sek` | float | Energy tax (SEK) |
 | `vat_sek` | float | VAT (SEK) |
-| `total_invoice_sek` | float | Total invoice amount (SEK) |
-| `total_consumption_kwh` | float | Consumption for the fee period (kWh) |
+| `total_fee_sek` | float | Total fee amount (SEK) |
 | `total_variable_price_sek_kwh` | float | All variable costs per kWh (energy + grid + tax, ex VAT) |
-| `fee_period_months` | list | Months covered by the fee data (e.g. `["2026-01", "2026-02"]`) |
+| `months_count` | int | Only present when `price_source` is `"period_average"` |
 
 ---
 
