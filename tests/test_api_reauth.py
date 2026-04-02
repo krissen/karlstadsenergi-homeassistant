@@ -42,7 +42,9 @@ def _make_page_visit_session() -> MagicMock:
 
     def _make_cm(*args, **kwargs):
         cm = MagicMock()
-        cm.__aenter__ = AsyncMock(return_value=MagicMock())
+        resp = MagicMock()
+        resp.status = 200
+        cm.__aenter__ = AsyncMock(return_value=resp)
         cm.__aexit__ = AsyncMock(return_value=False)
         return cm
 

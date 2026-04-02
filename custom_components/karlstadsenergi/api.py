@@ -403,8 +403,8 @@ class KarlstadsenergiApi:
     ) -> None:
         """Visit ASPX pages to initialize server-side state.
 
-        Uses allow_redirects=False and treats 3xx/4xx as auth failures
-        so callers can re-authenticate and retry with a fresh session.
+        Uses allow_redirects=False and treats 301/302/401/403 as auth
+        failures so callers can re-authenticate and retry.
         """
         for page in pages:
             try:
@@ -452,7 +452,9 @@ class KarlstadsenergiApi:
                     self._authenticated = False
                     await self.authenticate()
                     return await self._request(url, json_data, retry_auth=False)
-                raise KarlstadsenergiAuthError("Session expired and re-auth failed")
+                raise KarlstadsenergiAuthError(
+                    f"Session expired (status {resp.status})"
+                )
 
             if resp.status != 200:
                 raise KarlstadsenergiApiError(f"API returned status {resp.status}")

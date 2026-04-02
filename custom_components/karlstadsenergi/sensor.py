@@ -386,11 +386,10 @@ class ElectricityConsumptionSensor(
         portal API only provides historical data. The ``latest_date``
         attribute exposes the actual data date so users can judge staleness.
         """
-        consumption = (
-            self.coordinator.data.get("consumption") or {}
-            if self.coordinator.data
-            else {}
-        )
+        if self.coordinator.data:
+            consumption = self.coordinator.data.get("consumption") or {}
+        else:
+            consumption = {}
         # Primary: use official period total from CompareModel
         compare = consumption.get("CompareModel") or {}
         curr_year_value = compare.get("CurrYearValue")
@@ -412,11 +411,10 @@ class ElectricityConsumptionSensor(
     def extra_state_attributes(self) -> dict[str, Any]:
         attrs: dict[str, Any] = {}
 
-        consumption = (
-            self.coordinator.data.get("consumption") or {}
-            if self.coordinator.data
-            else {}
-        )
+        if self.coordinator.data:
+            consumption = self.coordinator.data.get("consumption") or {}
+        else:
+            consumption = {}
 
         # Comparison data
         compare = consumption.get("CompareModel") or {}
@@ -471,11 +469,10 @@ class ElectricityConsumptionSensor(
             attrs["hourly_data_points"] = len(hourly_points)
 
         # Monthly kWh from wide-range data: latest complete month + YoY
-        monthly_kwh = (
-            self.coordinator.data.get("monthly_kwh") or {}
-            if self.coordinator.data
-            else {}
-        )
+        if self.coordinator.data:
+            monthly_kwh = self.coordinator.data.get("monthly_kwh") or {}
+        else:
+            monthly_kwh = {}
         mkwh_chart = monthly_kwh.get("DetailedConsumptionChart") or {}
         mkwh_series = mkwh_chart.get("SeriesList") or []
         if mkwh_series:

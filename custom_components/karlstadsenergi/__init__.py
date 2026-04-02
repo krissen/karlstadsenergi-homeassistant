@@ -250,16 +250,22 @@ class KarlstadsenergiConsumptionCoordinator(_CookieSavingCoordinator):
                 fetch_model = wide_model if not self._backfill_done else model
                 try:
                     hourly = await self.api.async_get_hourly_consumption(fetch_model)
+                except KarlstadsenergiAuthError:
+                    raise
                 except Exception:
                     _LOGGER.debug("Hourly consumption unavailable")
                 try:
                     fee_data = await self.api.async_get_fee_consumption(wide_model)
+                except KarlstadsenergiAuthError:
+                    raise
                 except Exception:
                     _LOGGER.debug("Fee consumption unavailable")
                 try:
                     monthly_kwh = await self.api.async_get_monthly_consumption(
                         wide_model
                     )
+                except KarlstadsenergiAuthError:
+                    raise
                 except Exception:
                     _LOGGER.debug("Monthly consumption unavailable")
 
