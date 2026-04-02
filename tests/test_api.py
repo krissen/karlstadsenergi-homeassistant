@@ -1293,9 +1293,7 @@ class TestAsyncGetFlexServices:
         mock_session = MagicMock()
         mock_session.closed = False
         cm = MagicMock()
-        cm.__aenter__ = AsyncMock(
-            side_effect=aiohttp.ClientError("network error")
-        )
+        cm.__aenter__ = AsyncMock(side_effect=aiohttp.ClientError("network error"))
         cm.__aexit__ = AsyncMock(return_value=False)
         mock_session.get = MagicMock(return_value=cm)
         api._session = mock_session
