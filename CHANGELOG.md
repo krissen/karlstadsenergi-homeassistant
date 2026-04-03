@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-04-03
+
+### Fixed
+- **Electricity price sensor always showing "unknown"** -- the sensor calculated price by intersecting fee data (invoice-based, lagging ~1 month) with the OnLoad consumption chart (current billing period only), which never overlap. Now fetches monthly kWh with the same wide date range as fee data, ensuring overlap.
+- **Session re-authentication losing server state** -- when a session expired mid-update, `_request()` re-authenticated but the required ASP.NET page visits were not redone with the new session, causing empty API responses. Page visits now detect expired sessions (`allow_redirects=False`) and are redone after re-authentication. All API methods that depend on page visits (consumption, flex services, contracts, monthly kWh, fee data) use this pattern.
+
+### Changed
+- **Electricity price uses latest invoiced month** -- price sensor now shows the most recent month's effective price instead of averaging over the full history. Falls back to period average when the latest month is unavailable. New `price_source` attribute indicates which method is used (`latest_month` or `period_average`).
+- **Simplified price sensor attributes** -- shows single-month fee breakdown (`fee_month`, `consumption_kwh`, per-fee amounts) instead of cumulative multi-year totals.
+
+### Added
+- **Monthly kWh comparison attributes** on consumption sensor -- `latest_month_kwh`, `previous_month_kwh`, `same_month_last_year_kwh` for year-over-year comparison in Lovelace cards. Falls back to previous month when same-month-last-year is unavailable.
+- **`async_get_monthly_consumption` API method** -- lightweight endpoint (~26 rows) fetching monthly kWh data independently of hourly metering access.
+
 ## [0.2.0] - 2026-04-01
 
 ### Added
@@ -86,6 +100,7 @@ First working release.
 - Two DataUpdateCoordinators (waste: 6h, consumption: 1h intervals)
 - HACS compatible (custom repository)
 
-[Unreleased]: https://github.com/krissen/karlstadsenergi-homeassistant/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/krissen/karlstadsenergi-homeassistant/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/krissen/karlstadsenergi-homeassistant/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/krissen/karlstadsenergi-homeassistant/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/krissen/karlstadsenergi-homeassistant/releases/tag/v0.1.0

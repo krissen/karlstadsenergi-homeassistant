@@ -236,22 +236,38 @@ class KarlstadsenergiConsumptionCoordinator(_CookieSavingCoordinator):
 
             # Hourly data: use widened date range for initial backfill, then
             # narrow (~2 month) window to reduce payload (19k vs 1.4k rows).
-            # Fee data: always use wide range — only ~25 monthly rows, and
-            # cost sensors expose monthly_breakdown as an attribute for Plotly.
+            # Fee data + monthly consumption: always use wide range so that
+            # the electricity price sensor can compute fee/kWh from
+            # overlapping months. Monthly consumption is a lightweight
+            # alternative to hourly (~26 rows) and doesn't require the
+            # user to have ordered hourly metering.
             hourly = {}
             fee_data = {}
+            monthly_kwh = {}
             model = consumption.get("ConsumptionModel")
             if model:
                 wide_model = self._widen_start_date(model, self._history_years)
                 fetch_model = wide_model if not self._backfill_done else model
                 try:
                     hourly = await self.api.async_get_hourly_consumption(fetch_model)
+                except KarlstadsenergiAuthError:
+                    raise
                 except Exception:
                     _LOGGER.debug("Hourly consumption unavailable")
                 try:
                     fee_data = await self.api.async_get_fee_consumption(wide_model)
+                except KarlstadsenergiAuthError:
+                    raise
                 except Exception:
                     _LOGGER.debug("Fee consumption unavailable")
+                try:
+                    monthly_kwh = await self.api.async_get_monthly_consumption(
+                        wide_model
+                    )
+                except KarlstadsenergiAuthError:
+                    raise
+                except Exception:
+                    _LOGGER.debug("Monthly consumption unavailable")
 
             service_info = {}
             try:
@@ -287,6 +303,7 @@ class KarlstadsenergiConsumptionCoordinator(_CookieSavingCoordinator):
                 "hourly": hourly,
                 "service_info": service_info,
                 "fee_data": fee_data,
+                "monthly_kwh": monthly_kwh,
             }
         except KarlstadsenergiAuthError as err:
             raise ConfigEntryAuthFailed(f"Authentication failed: {err}") from err

@@ -14,7 +14,7 @@ Some examples require custom frontend cards from HACS:
 
 | Card | HACS name | Required by |
 |------|-----------|-------------|
-| [Mushroom](https://github.com/piitaya/lovelace-mushroom) | `lovelace-mushroom` | Approaches 1a--1c |
+| [Mushroom](https://github.com/piitaya/lovelace-mushroom) | `lovelace-mushroom` | Approaches 1a--1c, 4a--4b |
 | [card-mod](https://github.com/thomasloven/lovelace-card-mod) | `lovelace-card-mod` | Approach 1b (background tinting) |
 | [Custom Button Card](https://github.com/custom-cards/button-card) | `lovelace-button-card` | Approach 2 |
 
@@ -472,6 +472,59 @@ entities:
   - entity: sensor.karlstadsenergi_plastic_paper_packaging
     name: Plast/Papper
     icon: mdi:package-variant
+```
+
+---
+
+## 4. Electricity sensors (Mushroom)
+
+![Mushroom cards for electricity consumption and price](../images/mushroom-electricity.png)
+
+> **Note:** Entity IDs in the examples below are illustrative. Your actual entity IDs depend on your configuration. Replace them with the IDs shown in **Settings -> Devices & Services -> Karlstadsenergi**.
+
+### 4a. Consumption card
+
+Shows the latest complete month's consumption with year-over-year comparison. Falls back to previous month when same-month-last-year is unavailable.
+
+```yaml
+- type: custom:mushroom-template-card
+  entity: sensor.karlstadsenergi_electricity_consumption
+  primary: >-
+    {% set e = 'sensor.karlstadsenergi_electricity_consumption' %}
+    {% set kwh = state_attr(e, 'latest_month_kwh') %}
+    {% set ref = state_attr(e, 'same_month_last_year_kwh') or state_attr(e, 'previous_month_kwh') %}
+    {% if kwh and ref and ref > 0 %}{% set d = ((kwh - ref) / ref * 100) | round(0) %}{{ state_attr(e, 'latest_month') }}: {{ kwh | round(0) }} kWh ({% if d > 0 %}+{% endif %}{{ d }}%)
+    {% elif kwh %}{{ state_attr(e, 'latest_month') }}: {{ kwh | round(0) }} kWh
+    {% else %}Elförbrukning{% endif %}
+  secondary: >-
+    {% set e = 'sensor.karlstadsenergi_electricity_consumption' %}
+    {% set ym = state_attr(e, 'same_month_last_year') or state_attr(e, 'previous_month') %}
+    {% set ref = state_attr(e, 'same_month_last_year_kwh') or state_attr(e, 'previous_month_kwh') %}
+    {% if ym and ref %}jfr {{ ym }}: {{ ref | round(0) }} kWh
+    {% else %}—{% endif %}
+  icon: mdi:flash
+  icon_color: amber
+```
+
+### 4b. Electricity price card
+
+Shows the latest invoiced month's total fee and effective variable price per kWh.
+
+```yaml
+- type: custom:mushroom-template-card
+  entity: sensor.karlstadsenergi_electricity_price
+  primary: >-
+    {% set total = state_attr('sensor.karlstadsenergi_electricity_price', 'total_fee_sek') %}
+    {% set month = state_attr('sensor.karlstadsenergi_electricity_price', 'fee_month') %}
+    {% if total and month %}{{ month }}: {{ total | round(0) }} kr
+    {% else %}Elpris{% endif %}
+  secondary: >-
+    {% set price = state_attr('sensor.karlstadsenergi_electricity_price', 'total_variable_price_sek_kwh') %}
+    {% set kwh = state_attr('sensor.karlstadsenergi_electricity_price', 'consumption_kwh') %}
+    {% if price and kwh %}Totalpris {{ price | round(2) }} kr/kWh · {{ kwh | round(0) }} kWh
+    {% else %}—{% endif %}
+  icon: mdi:currency-usd
+  icon_color: green
 ```
 
 ---

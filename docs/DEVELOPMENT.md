@@ -123,12 +123,13 @@ The `GetConsumption` endpoint accepts an `IntervalEnum` parameter that controls 
 
 | IntervalEnum | Interval | Description |
 |---|---|---|
+| 2 | MONTH | Monthly totals |
 | 3 | DAY | Daily totals (default) |
 | 4 | HOUR | Hourly consumption |
 | 5 | WEEK | Weekly totals |
 | 6 | QUARTER | 15-minute intervals |
 
-The integration currently fetches DAY (for the main sensor) and HOUR (for the `hourly_consumption` attribute). **15-minute data is available** from the API but not yet exposed -- can be added on request.
+The integration fetches DAY (for the main sensor), HOUR (for the `hourly_consumption` attribute and long-term statistics), and MONTH (for the electricity price sensor's fee/kWh calculation). **15-minute data is available** from the API but not yet exposed -- can be added on request.
 
 All consumption data lags ~1 day behind real-time. The portal appears to update once per day, likely when meter data is imported from the grid operator.
 
@@ -169,7 +170,7 @@ The coordinator's `_widen_start_date()` method overrides `StartDate` based on th
 2. Clamp to `ContractsStartDate` as the lower bound (can't request data before the contract existed)
 3. Replace `StartDate` in the model copy
 
-This widened model is used for hourly consumption on the initial backfill only; subsequent hourly refreshes use the API's default ~2 month window, reducing payload size (19k → 1.4k rows). Fee requests always use the widened model (~25 monthly rows regardless of window) because cost sensors expose `monthly_breakdown` as an entity attribute for dashboard charts. The `get_last_statistics` check ensures only new data points are imported regardless of fetch window.
+This widened model is used for hourly consumption on the initial backfill only; subsequent hourly refreshes use the API's default ~2 month window, reducing payload size (19k → 1.4k rows). Fee and monthly kWh requests always use the widened model (~25 monthly rows regardless of window) because they need historical overlap for the electricity price sensor. The `get_last_statistics` check ensures only new data points are imported regardless of fetch window.
 
 Observed data volumes for reference (single customer):
 
@@ -188,6 +189,7 @@ The server session times out after ~15 minutes. The integration handles this wit
 1. **Heartbeat** -- keepalive request every 5 minutes
 2. **Cookie persistence** -- cookies saved to config entry, restored on HA restart
 3. **Auto-reauth** -- password users re-authenticate automatically on session expiry; BankID users get a reauth prompt
+4. **Page-visit retry** -- when a session expires mid-request, `_visit_pages()` detects it via `allow_redirects=False` and raises `KarlstadsenergiAuthError`. All methods that depend on page visits (`async_get_consumption`, `async_get_flex_services`, `async_get_contract_details`, `async_get_monthly_consumption`, `async_get_fee_consumption`) catch this error, re-authenticate, redo page visits, and retry the API call.
 
 ---
 

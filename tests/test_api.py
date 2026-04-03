@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import aiohttp
 import pytest
 
 from custom_components.karlstadsenergi.api import (
@@ -13,6 +14,7 @@ from custom_components.karlstadsenergi.api import (
     KarlstadsenergiApi,
     KarlstadsenergiApiError,
     KarlstadsenergiAuthError,
+    KarlstadsenergiConnectionError,
     _parse_aspnet_response,
 )
 
@@ -1282,8 +1284,8 @@ class TestAsyncGetFlexServices:
         api.authenticate.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_page_visit_exception_is_swallowed(self) -> None:
-        """Exception from the flex page GET must not propagate."""
+    async def test_page_visit_connection_error_propagates(self) -> None:
+        """Connection error from the flex page GET propagates as KarlstadsenergiConnectionError."""
         api = KarlstadsenergiApi("1234567890", AUTH_PASSWORD, "pass")
         api._authenticated = True
         api._request = AsyncMock(return_value=[{"ServiceId": 2}])
@@ -1291,14 +1293,13 @@ class TestAsyncGetFlexServices:
         mock_session = MagicMock()
         mock_session.closed = False
         cm = MagicMock()
-        cm.__aenter__ = AsyncMock(side_effect=Exception("network error"))
+        cm.__aenter__ = AsyncMock(side_effect=aiohttp.ClientError("network error"))
         cm.__aexit__ = AsyncMock(return_value=False)
         mock_session.get = MagicMock(return_value=cm)
         api._session = mock_session
 
-        # Should not raise; exception from page visit is swallowed
-        result = await api.async_get_flex_services()
-        assert result == [{"ServiceId": 2}]
+        with pytest.raises(KarlstadsenergiConnectionError):
+            await api.async_get_flex_services()
 
 
 # ---------------------------------------------------------------------------
