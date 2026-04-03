@@ -41,7 +41,7 @@ All or some sensors show "unavailable" in Home Assistant.
 
 ### Electricity price sensor shows "unknown"
 
-The `sensor.karlstadsenergi_electricity_price` sensor stays at "unknown" instead of showing a value.
+The Electricity price sensor (e.g. `sensor.karlstadsenergi_electricity_price_12345`; entity IDs vary by installation) stays at "unknown" instead of showing a value.
 
 **Why this happens:**
 
@@ -118,7 +118,7 @@ The consumption sensor shows old data, or consumption values are missing.
 
 ### Spot price sensor shows stale data
 
-The spot price sensor (`sensor.karlstadsenergi_spot_price`) updates every 15 minutes from a public Evado API endpoint. This sensor does not require authentication.
+The spot price sensor (e.g. `sensor.karlstadsenergi_spot_price`) updates every 15 minutes from a public Evado API endpoint. This sensor does not require authentication.
 
 **If the spot price stops updating:**
 
@@ -167,11 +167,11 @@ Go to Developer Tools > States (Settings > Developer Tools > States in HA 2026.2
 
 ### 7. Affected entity IDs (helpful)
 
-List the specific entity IDs that are affected, e.g.:
+List the specific entity IDs that are affected. Find your actual entity IDs in Developer Tools > States. Examples:
 ```
-sensor.karlstadsenergi_food_and_residual_waste_*
-sensor.karlstadsenergi_electricity_consumption_*
-sensor.karlstadsenergi_electricity_price_*
+sensor.karlstadsenergi_mat_och_restavfall
+sensor.karlstadsenergi_electricity_consumption_12345
+sensor.karlstadsenergi_electricity_price_12345
 ```
 
 ---

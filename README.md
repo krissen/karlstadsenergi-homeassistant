@@ -149,9 +149,9 @@ See the **[Troubleshooting guide](docs/user/troubleshooting.md)** for solutions 
 
 The portal API provides historical consumption data only. Depending on your meter and billing cycle, data may lag days or weeks behind real-time. The `latest_date` attribute on the electricity consumption sensor shows the actual date of the most recent data point -- use this to judge how current the data is.
 
-### Electricity consumption and Energy Dashboard accuracy
+### Electricity consumption and Energy Dashboard
 
-The consumption sensor uses `state_class: total_increasing` with the cumulative year-to-date value (`CurrYearValue`) from the portal API. This value increases monotonically within a year and resets in January -- `total_increasing` handles the annual reset correctly. However, if Karlstadsenergi retroactively corrects `CurrYearValue` downward (e.g. a billing adjustment), HA's long-term statistics will ignore the lower value and the Energy Dashboard may show inflated totals. This is a known limitation of `total_increasing` with an API source that is not a physical meter counter. No such corrections have been observed in practice.
+The consumption sensor is informational only (no `state_class`) because the portal API provides delayed historical data, not real-time metering. For the Energy Dashboard, use the external statistic `karlstadsenergi:electricity_consumption_<customer_id>`, which is imported with correct hourly timestamps. See the [Troubleshooting guide](docs/user/troubleshooting.md#energy-dashboard-shows-incorrect-consumption-or-cost-values) for details on choosing the right statistic.
 
 ### Orphaned entity registry entries
 
