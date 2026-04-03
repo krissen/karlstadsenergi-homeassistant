@@ -139,30 +139,7 @@ See **[Advanced usage](docs/user/advanced.md)** for service calls, manual data r
 
 ## Troubleshooting
 
-### BankID authentication fails
-
-- Make sure you are signing with the correct personnummer in BankID.
-- The BankID start token has a limited validity window. If it expires, click Submit again to start a new BankID attempt.
-- If re-authentication is triggered (session expired), you will need to manually sign in with BankID again.
-
-### Sensors show "unavailable"
-
-- The Karlstads Energi portal may be temporarily down for maintenance.
-- Your session may have expired. The integration will attempt to re-authenticate automatically. For BankID users, a re-authentication prompt will appear in Home Assistant notifications.
-- Check the Home Assistant logs for error details.
-
-### Consumption data is missing
-
-- Electricity consumption data requires that the server-side session state is properly initialized. The integration handles this by visiting required pages before making API calls.
-- Not all customer accounts have electricity services. If you only have waste collection, this is expected.
-
-### Update interval
-
-- Waste data updates at the configured interval (default: 6 hours).
-- Electricity consumption and fee data updates 6x more frequently (default: 1 hour).
-- Contract data updates once per day.
-- Spot prices update every 15 minutes (public API, no authentication required).
-- To trigger an immediate refresh, use the `homeassistant.update_entity` service.
+See the **[Troubleshooting guide](docs/user/troubleshooting.md)** for solutions to common issues (sensors unavailable, missing data, authentication problems, Energy Dashboard setup).
 
 ---
 
