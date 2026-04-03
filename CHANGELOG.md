@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.2.1] - 2026-04-02
+## [0.2.1] - 2026-04-03
 
 ### Fixed
 - **Electricity price sensor always showing "unknown"** -- the sensor calculated price by intersecting fee data (invoice-based, lagging ~1 month) with the OnLoad consumption chart (current billing period only), which never overlap. Now fetches monthly kWh with the same wide date range as fee data, ensuring overlap.
