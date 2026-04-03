@@ -139,30 +139,7 @@ See **[Advanced usage](docs/user/advanced.md)** for service calls, manual data r
 
 ## Troubleshooting
 
-### BankID authentication fails
-
-- Make sure you are signing with the correct personnummer in BankID.
-- The BankID start token has a limited validity window. If it expires, click Submit again to start a new BankID attempt.
-- If re-authentication is triggered (session expired), you will need to manually sign in with BankID again.
-
-### Sensors show "unavailable"
-
-- The Karlstads Energi portal may be temporarily down for maintenance.
-- Your session may have expired. The integration will attempt to re-authenticate automatically. For BankID users, a re-authentication prompt will appear in Home Assistant notifications.
-- Check the Home Assistant logs for error details.
-
-### Consumption data is missing
-
-- Electricity consumption data requires that the server-side session state is properly initialized. The integration handles this by visiting required pages before making API calls.
-- Not all customer accounts have electricity services. If you only have waste collection, this is expected.
-
-### Update interval
-
-- Waste data updates at the configured interval (default: 6 hours).
-- Electricity consumption and fee data updates 6x more frequently (default: 1 hour).
-- Contract data updates once per day.
-- Spot prices update every 15 minutes (public API, no authentication required).
-- To trigger an immediate refresh, use the `homeassistant.update_entity` service.
+See the **[Troubleshooting guide](docs/user/troubleshooting.md)** for solutions to common issues (sensors unavailable, missing data, authentication problems, Energy Dashboard setup).
 
 ---
 
@@ -172,9 +149,9 @@ See **[Advanced usage](docs/user/advanced.md)** for service calls, manual data r
 
 The portal API provides historical consumption data only. Depending on your meter and billing cycle, data may lag days or weeks behind real-time. The `latest_date` attribute on the electricity consumption sensor shows the actual date of the most recent data point -- use this to judge how current the data is.
 
-### Electricity consumption and Energy Dashboard accuracy
+### Electricity consumption and Energy Dashboard
 
-The consumption sensor uses `state_class: total_increasing` with the cumulative year-to-date value (`CurrYearValue`) from the portal API. This value increases monotonically within a year and resets in January -- `total_increasing` handles the annual reset correctly. However, if Karlstadsenergi retroactively corrects `CurrYearValue` downward (e.g. a billing adjustment), HA's long-term statistics will ignore the lower value and the Energy Dashboard may show inflated totals. This is a known limitation of `total_increasing` with an API source that is not a physical meter counter. No such corrections have been observed in practice.
+The consumption sensor is informational only (no `state_class`) because the portal API provides delayed historical data, not real-time metering. For the Energy Dashboard, use the external statistic `karlstadsenergi:electricity_consumption_<customer_id>`, which is imported with correct hourly timestamps. See the [Troubleshooting guide](docs/user/troubleshooting.md#energy-dashboard-shows-incorrect-consumption-or-cost-values) for details on choosing the right statistic.
 
 ### Orphaned entity registry entries
 

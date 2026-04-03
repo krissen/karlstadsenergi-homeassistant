@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Troubleshooting Guide
+    url: https://github.com/krissen/karlstadsenergi-homeassistant/blob/HEAD/docs/user/troubleshooting.md
+    about: Check the troubleshooting guide before opening an issue
+  - name: Documentation
+    url: https://github.com/krissen/karlstadsenergi-homeassistant/tree/HEAD/docs/user
+    about: Entity reference, dashboard examples, and advanced usage

@@ -1,0 +1,101 @@
+name: Bug Report
+description: Report a bug with the Karlstadsenergi integration
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug! Please fill out the fields below so we can diagnose the issue quickly.
+
+        **Before submitting**, please check the [Troubleshooting Guide](https://github.com/krissen/karlstadsenergi-homeassistant/blob/HEAD/docs/user/troubleshooting.md):
+        - [ ] I checked that the [Karlstads Energi portal](https://minasidor.karlstadsenergi.se) is accessible
+        - [ ] I checked the Home Assistant logs for errors (Settings > System > Logs)
+        - [ ] I restarted Home Assistant and the issue persists
+
+        **Note:** This integration uses a reverse-engineered API. If the portal itself is down or has changed, the integration cannot work until the portal is restored or the integration is updated.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What happened? What did you expect to happen?
+      placeholder: |
+        The electricity price sensor has been showing "unknown" for two days, even though I can see fee data on the portal.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: feature-area
+    attributes:
+      label: Feature area
+      description: Which part of the integration is affected?
+      options:
+        - Waste collection (pickup dates, calendar, alerts)
+        - Electricity consumption
+        - Electricity price
+        - Cost breakdown
+        - Spot price
+        - Contracts
+        - Authentication / session
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: affected-sensors
+    attributes:
+      label: Affected sensors or entities
+      description: |
+        Which entity IDs are affected? Find them in Developer Tools > States (Settings > Developer Tools > States in HA 2026.2+), search for "karlstadsenergi".
+      placeholder: "sensor.karlstadsenergi_electricity_price_12345"
+    validations:
+      required: false
+
+  - type: input
+    id: integration-version
+    attributes:
+      label: Integration version
+      description: |
+        Settings > Devices & Services > click Karlstadsenergi > three-dot menu (top right) > About.
+      placeholder: "0.2.1"
+    validations:
+      required: true
+
+  - type: input
+    id: ha-version
+    attributes:
+      label: Home Assistant version
+      description: Found in Settings > About, or click the version number at the bottom of the sidebar
+      placeholder: "2026.4.1"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: auth-method
+    attributes:
+      label: Authentication method
+      description: How did you log in to the integration?
+      options:
+        - Customer number & password
+        - Mobile BankID
+    validations:
+      required: true
+
+  - type: textarea
+    id: ha-logs
+    attributes:
+      label: Home Assistant log errors
+      description: |
+        Settings > System > Logs. Search for "karlstadsenergi" and copy any relevant entries.
+      render: text
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional context
+      description: Anything else that might help (screenshots, steps to reproduce, things you already tried).
+    validations:
+      required: false
