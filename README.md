@@ -119,12 +119,13 @@ See **[Entities](docs/user/entities.md)** for a reference of all sensors, calend
 
 ## Dashboard examples
 
-<p align="center">
-  <img width="500" alt="Mushroom chips showing days until pickup" src="docs/images/mushroom-chips.png" />
-</p>
-<p align="center">
-  <img width="420" alt="Calendar view with waste collection events" src="docs/images/calendar.png" />
-</p>
+<table align="center"><tr>
+  <td><img width="420" alt="Mushroom chips showing days until pickup" src="docs/images/mushroom-chips.png" /></td>
+  <td><img width="420" alt="Calendar view with waste collection events" src="docs/images/calendar.png" /></td>
+</tr><tr>
+  <td><img width="420" alt="Mushroom cards with monthly consumption and cost" src="docs/images/mushroom-electricity.png" /></td>
+  <td><img width="420" alt="Entities card with consumption, invoice price and spot price" src="docs/images/electricity.png" /></td>
+</tr></table>
 
 See **[Dashboard examples](docs/user/dashboard-examples.md)** for card configurations using Mushroom Cards, Custom Button Card, and the built-in Calendar card.
 
