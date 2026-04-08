@@ -688,6 +688,71 @@ class KarlstadsenergiApi:
             return {}
         return result
 
+    async def async_get_utility_consumption(
+        self,
+        consumption_model: dict[str, Any],
+        utility_id: str,
+    ) -> dict[str, Any]:
+        """Get consumption data for a specific utility type.
+
+        Modifies the consumption model to switch utility (e.g. "E" for
+        electricity, "F" for district heating) and fetches daily
+        consumption via GetConsumption.
+        """
+        model = {**consumption_model}
+        model["UtilityId"] = utility_id
+        model["IsUtilityChange"] = True
+        model["IsPageLoad"] = False
+
+        pages = ("consumption/consumption.aspx",)
+        url = f"{BASE_URL}/Consumption/Consumption.aspx/GetConsumption"
+        try:
+            result = await self._request(
+                url, {"data": json.dumps(model)}, retry_auth=False
+            )
+        except KarlstadsenergiAuthError:
+            self._authenticated = False
+            await self.authenticate()
+            session = await self._ensure_session()
+            await self._visit_pages(session, pages)
+            result = await self._request(
+                url, {"data": json.dumps(model)}, retry_auth=False
+            )
+        if not isinstance(result, dict):
+            return {}
+        return result
+
+    async def async_get_consumption_custom(
+        self,
+        consumption_model: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Send a pre-configured consumption model to GetConsumption.
+
+        The caller is responsible for setting UtilityId, Loadoptions,
+        Interval, etc. on the model before calling this method.
+        """
+        pages = ("consumption/consumption.aspx",)
+        url = f"{BASE_URL}/Consumption/Consumption.aspx/GetConsumption"
+        try:
+            result = await self._request(
+                url,
+                {"data": json.dumps(consumption_model)},
+                retry_auth=False,
+            )
+        except KarlstadsenergiAuthError:
+            self._authenticated = False
+            await self.authenticate()
+            session = await self._ensure_session()
+            await self._visit_pages(session, pages)
+            result = await self._request(
+                url,
+                {"data": json.dumps(consumption_model)},
+                retry_auth=False,
+            )
+        if not isinstance(result, dict):
+            return {}
+        return result
+
     async def async_heartbeat(self) -> bool:
         """Send heartbeat to keep session alive."""
         session = await self._ensure_session()

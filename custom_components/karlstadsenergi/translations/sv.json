@@ -92,6 +92,36 @@
       "electricity_consumption": {
         "name": "Elförbrukning"
       },
+      "district_heating_consumption": {
+        "name": "Fjärrvärmeförbrukning"
+      },
+      "district_heating_price": {
+        "name": "Fjärrvärmepris"
+      },
+      "dh_consumption_fee": {
+        "name": "FV energiavgift"
+      },
+      "dh_power_fee": {
+        "name": "FV effektavgift"
+      },
+      "dh_fixed_fee": {
+        "name": "FV fast avgift"
+      },
+      "dh_energy_tax": {
+        "name": "FV energiskatt"
+      },
+      "dh_vat": {
+        "name": "FV moms"
+      },
+      "dh_total_cost": {
+        "name": "FV total kostnad"
+      },
+      "district_heating_flow": {
+        "name": "FV flöde"
+      },
+      "district_heating_dt": {
+        "name": "FV temperaturdifferens"
+      },
       "electricity_price": {
         "name": "Elpris"
       },
