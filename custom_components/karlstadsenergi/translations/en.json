@@ -92,6 +92,36 @@
       "electricity_consumption": {
         "name": "Electricity consumption"
       },
+      "district_heating_consumption": {
+        "name": "District heating consumption"
+      },
+      "district_heating_price": {
+        "name": "District heating price"
+      },
+      "dh_consumption_fee": {
+        "name": "DH consumption fee"
+      },
+      "dh_power_fee": {
+        "name": "DH power fee"
+      },
+      "dh_fixed_fee": {
+        "name": "DH fixed fee"
+      },
+      "dh_energy_tax": {
+        "name": "DH energy tax"
+      },
+      "dh_vat": {
+        "name": "DH VAT"
+      },
+      "dh_total_cost": {
+        "name": "DH total cost"
+      },
+      "district_heating_flow": {
+        "name": "District heating flow"
+      },
+      "district_heating_dt": {
+        "name": "District heating dT"
+      },
       "electricity_price": {
         "name": "Electricity price"
       },

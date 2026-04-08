@@ -76,6 +76,7 @@ class KarlstadsenergiData:
     api: KarlstadsenergiApi
     waste_coordinator: KarlstadsenergiWasteCoordinator
     consumption_coordinator: KarlstadsenergiConsumptionCoordinator
+    district_heating_coordinator: KarlstadsenergiDistrictHeatingCoordinator
     contract_coordinator: KarlstadsenergiContractCoordinator
     spot_price_coordinator: KarlstadsenergiSpotPriceCoordinator
     setup_options: dict
@@ -493,6 +494,322 @@ class KarlstadsenergiConsumptionCoordinator(_CookieSavingCoordinator):
                 )
 
 
+class KarlstadsenergiDistrictHeatingCoordinator(_CookieSavingCoordinator):
+    """Coordinator for district heating (fjärrvärme) consumption data.
+
+    Uses the same GetConsumption endpoint as electricity but with
+    UtilityId "F" instead of "E". The consumption model is obtained
+    from GetConsumptionViewModelOnLoad and then modified for DH.
+    """
+
+    UTILITY_ID = "F"
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        api: KarlstadsenergiApi,
+        update_interval_hours: int,
+        entry: ConfigEntry,
+        customer_id: str = "",
+        history_years: int = DEFAULT_HISTORY_YEARS,
+    ) -> None:
+        super().__init__(
+            hass, api, update_interval_hours, entry, f"{DOMAIN}_district_heating"
+        )
+        self._customer_id = customer_id
+        self._history_years = history_years
+        self._statistic_id = f"{DOMAIN}:district_heating_consumption_{customer_id}"
+        self._backfill_done = False
+
+    @staticmethod
+    def _has_district_heating(model: dict) -> bool:
+        """Check if the consumption model includes district heating."""
+        node = model.get("SelectedSiteGroupNode") or {}
+        for utility in node.get("Utilities") or []:
+            if utility.get("UtilityId") == "F":
+                return True
+        return False
+
+    @staticmethod
+    def _prepare_dh_model(model: dict, history_years: int = 0) -> dict:
+        """Return a copy of the consumption model configured for DH.
+
+        Sets UtilityId to F, marks the utility switch, and optionally
+        widens the date range for historical backfill.
+        """
+        dh = {**model}
+        dh["UtilityId"] = "F"
+        dh["IsUtilityChange"] = True
+        dh["IsPageLoad"] = False
+        if history_years > 0:
+            dh = KarlstadsenergiConsumptionCoordinator._widen_start_date(
+                dh, history_years
+            )
+        return dh
+
+    async def _async_update_data(self) -> dict:
+        """Fetch district heating consumption data."""
+        try:
+            # Get the base consumption model (visits required pages)
+            consumption = await self.api.async_get_consumption()
+            model = consumption.get("ConsumptionModel")
+            if not model:
+                _LOGGER.debug("No ConsumptionModel available for DH")
+                return {"available": False}
+
+            if not self._has_district_heating(model):
+                _LOGGER.debug("No district heating utility found in model")
+                return {"available": False}
+
+            # Fetch daily DH consumption
+            dh_daily = await self.api.async_get_utility_consumption(
+                model, self.UTILITY_ID
+            )
+
+            # Fetch hourly DH consumption (for statistics import)
+            dh_hourly = {}
+            dh_model = self._prepare_dh_model(model, self._history_years)
+            fetch_model = dh_model if not self._backfill_done else self._prepare_dh_model(model)
+            try:
+                dh_hourly = await self.api.async_get_hourly_consumption(fetch_model)
+            except KarlstadsenergiAuthError:
+                raise
+            except Exception:
+                _LOGGER.debug("DH hourly consumption unavailable")
+
+            # Fetch monthly DH consumption
+            dh_monthly = {}
+            wide_dh_model = self._prepare_dh_model(model, self._history_years)
+            try:
+                dh_monthly = await self.api.async_get_monthly_consumption(
+                    wide_dh_model
+                )
+            except KarlstadsenergiAuthError:
+                raise
+            except Exception:
+                _LOGGER.debug("DH monthly consumption unavailable")
+
+            # Fetch DH fee/cost breakdown (SEK by month)
+            dh_fee = {}
+            try:
+                dh_fee = await self.api.async_get_fee_consumption(wide_dh_model)
+            except KarlstadsenergiAuthError:
+                raise
+            except Exception:
+                _LOGGER.debug("DH fee consumption unavailable")
+
+            # Fetch DH flow data (m³)
+            dh_flow = {}
+            try:
+                flow_model = self._prepare_dh_model(model)
+                flow_model["Loadoptions"] = ["Flow"]
+                dh_flow = await self.api.async_get_consumption_custom(flow_model)
+            except KarlstadsenergiAuthError:
+                raise
+            except Exception:
+                _LOGGER.debug("DH flow data unavailable")
+
+            # Fetch DH temperature difference (dT)
+            dh_dt = {}
+            try:
+                dt_model = self._prepare_dh_model(model)
+                dt_model["Loadoptions"] = ["DT"]
+                dh_dt = await self.api.async_get_consumption_custom(dt_model)
+            except KarlstadsenergiAuthError:
+                raise
+            except Exception:
+                _LOGGER.debug("DH dT data unavailable")
+
+            # Import hourly DH data into long-term statistics
+            if dh_hourly and self._customer_id:
+                try:
+                    await self._async_import_dh_statistics(dh_hourly)
+                except Exception:
+                    _LOGGER.warning("DH statistics import failed", exc_info=True)
+
+            # Import monthly DH fee data into long-term statistics
+            if dh_fee and self._customer_id:
+                try:
+                    await self._async_import_dh_fee_statistics(dh_fee)
+                except Exception:
+                    _LOGGER.warning("DH fee statistics import failed", exc_info=True)
+
+            if not self._backfill_done and (dh_hourly or dh_fee):
+                self._backfill_done = True
+
+            return {
+                "available": True,
+                "consumption": dh_daily,
+                "hourly": dh_hourly,
+                "monthly_kwh": dh_monthly,
+                "fee_data": dh_fee,
+                "flow": dh_flow,
+                "dt": dh_dt,
+            }
+        except KarlstadsenergiAuthError as err:
+            raise ConfigEntryAuthFailed(f"Authentication failed: {err}") from err
+        except KarlstadsenergiConnectionError as err:
+            raise UpdateFailed(f"Connection error: {err}") from err
+        except KarlstadsenergiApiError as err:
+            raise UpdateFailed(f"API error: {err}") from err
+        finally:
+            self._save_cookies()
+
+    async def _async_import_dh_statistics(self, hourly_data: dict) -> None:
+        """Import hourly DH consumption data into HA long-term statistics."""
+        chart = hourly_data.get("DetailedConsumptionChart") or {}
+        series_list = chart.get("SeriesList") or []
+        if not series_list:
+            return
+        data_points = series_list[0].get("data") or []
+        if not data_points:
+            return
+
+        statistic_id = self._statistic_id
+        meta_kwargs: dict = {
+            "has_mean": False,
+            "has_sum": True,
+            "name": "Karlstadsenergi District Heating Consumption",
+            "source": DOMAIN,
+            "statistic_id": statistic_id,
+            "unit_of_measurement": UnitOfEnergy.KILO_WATT_HOUR,
+        }
+        if _MEAN_TYPE_NONE is not None:
+            meta_kwargs["mean_type"] = _MEAN_TYPE_NONE
+        if _ENERGY_UNIT_CLASS is not None:
+            meta_kwargs["unit_class"] = _ENERGY_UNIT_CLASS
+        metadata = StatisticMetaData(**meta_kwargs)
+
+        last_stats = await get_instance(self.hass).async_add_executor_job(
+            get_last_statistics, self.hass, 1, statistic_id, True, {"sum"}
+        )
+
+        if last_stats and statistic_id in last_stats:
+            last_stat = last_stats[statistic_id][0]
+            last_stats_time_dt = dt_util.utc_from_timestamp(last_stat["start"])
+            _sum = last_stat.get("sum", 0.0) or 0.0
+        else:
+            last_stats_time_dt = None
+            _sum = 0.0
+
+        statistics: list[StatisticData] = []
+        skipped = 0
+        for point in data_points:
+            value = point.get("y")
+            if value is None:
+                continue
+            point_dt = KarlstadsenergiConsumptionCoordinator._parse_aspnet_date(
+                point.get("date", "")
+            )
+            if point_dt is None:
+                continue
+            point_dt = point_dt.replace(minute=0, second=0, microsecond=0)
+            if last_stats_time_dt is not None and point_dt <= last_stats_time_dt:
+                skipped += 1
+                continue
+            _sum += float(value)
+            statistics.append(
+                StatisticData(
+                    start=point_dt,
+                    state=float(value),
+                    sum=_sum,
+                )
+            )
+
+        if statistics:
+            async_add_external_statistics(self.hass, metadata, statistics)
+            _LOGGER.debug(
+                "Imported %d DH hourly statistics points (skipped %d)",
+                len(statistics),
+                skipped,
+            )
+
+    async def _async_import_dh_fee_statistics(self, fee_data: dict) -> None:
+        """Import monthly DH fee data into HA long-term statistics.
+
+        Creates one statistic per fee type with monthly granularity,
+        mirroring the electricity fee statistics but prefixed with dh_.
+        """
+        chart = fee_data.get("DetailedConsumptionChart") or {}
+        series_list = chart.get("SeriesList") or []
+        if not series_list:
+            return
+
+        for series in series_list:
+            series_id = series.get("id", "")
+            if series_id not in FEE_SENSORS:
+                continue
+
+            fee_info = FEE_SENSORS[series_id]
+            statistic_id = (
+                f"{DOMAIN}:dh_cost_{fee_info.stat_suffix}_{self._customer_id}"
+            )
+            data_points = series.get("data") or []
+            if not data_points:
+                continue
+
+            meta_kwargs: dict = {
+                "has_mean": False,
+                "has_sum": True,
+                "name": f"Karlstadsenergi DH {fee_info.name}",
+                "source": DOMAIN,
+                "statistic_id": statistic_id,
+                "unit_of_measurement": "SEK",
+                "unit_class": None,
+            }
+            if _MEAN_TYPE_NONE is not None:
+                meta_kwargs["mean_type"] = _MEAN_TYPE_NONE
+            metadata = StatisticMetaData(**meta_kwargs)
+
+            last_stats = await get_instance(self.hass).async_add_executor_job(
+                get_last_statistics, self.hass, 1, statistic_id, True, {"sum"}
+            )
+
+            if last_stats and statistic_id in last_stats:
+                last_stat = last_stats[statistic_id][0]
+                last_stats_time_dt = dt_util.utc_from_timestamp(last_stat["start"])
+                _sum = last_stat.get("sum", 0.0) or 0.0
+            else:
+                last_stats_time_dt = None
+                _sum = 0.0
+
+            statistics: list[StatisticData] = []
+            sorted_points = sorted(
+                data_points, key=lambda p: p.get("dateInterval", "")
+            )
+            for point in sorted_points:
+                value = point.get("y")
+                if value is None:
+                    continue
+                date_str = point.get("dateInterval", "")
+                if not date_str:
+                    continue
+                try:
+                    point_dt = datetime.strptime(date_str[:10], "%Y-%m-%d").replace(
+                        tzinfo=timezone.utc
+                    )
+                except (ValueError, TypeError):
+                    continue
+                if last_stats_time_dt is not None and point_dt <= last_stats_time_dt:
+                    continue
+                _sum += float(value)
+                statistics.append(
+                    StatisticData(
+                        start=point_dt,
+                        state=float(value),
+                        sum=_sum,
+                    )
+                )
+
+            if statistics:
+                async_add_external_statistics(self.hass, metadata, statistics)
+                _LOGGER.debug(
+                    "Imported %d DH fee statistics points for %s",
+                    len(statistics),
+                    series_id,
+                )
+
+
 class KarlstadsenergiContractCoordinator(_CookieSavingCoordinator):
     """Coordinator for contract details (daily refresh)."""
 
@@ -685,6 +1002,20 @@ async def async_setup_entry(
         # work even if the electricity API is temporarily unavailable.
         _LOGGER.warning("Could not fetch consumption data: %s", err)
 
+    # District heating coordinator (same interval as electricity consumption)
+    district_heating_coordinator = KarlstadsenergiDistrictHeatingCoordinator(
+        hass,
+        api,
+        max(update_interval // 6, 1),
+        entry,
+        customer_id=customer_id,
+        history_years=history_years,
+    )
+    try:
+        await district_heating_coordinator.async_config_entry_first_refresh()
+    except Exception as err:
+        _LOGGER.warning("Could not fetch district heating data: %s", err)
+
     # Extract site_id from consumption data for contract fetching
     site_ids: list[str] = []
     if consumption_coordinator.data:
@@ -717,6 +1048,7 @@ async def async_setup_entry(
         api=api,
         waste_coordinator=waste_coordinator,
         consumption_coordinator=consumption_coordinator,
+        district_heating_coordinator=district_heating_coordinator,
         contract_coordinator=contract_coordinator,
         spot_price_coordinator=spot_price_coordinator,
         setup_options=dict(entry.options),
