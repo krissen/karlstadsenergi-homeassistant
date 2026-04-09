@@ -578,12 +578,12 @@ class KarlstadsenergiDistrictHeatingCoordinator(_UtilityConsumptionCoordinator):
         )
         self._electricity_coordinator = electricity_coordinator
 
-    @staticmethod
-    def _has_district_heating(model: dict) -> bool:
+    @classmethod
+    def _has_district_heating(cls, model: dict) -> bool:
         """Check if the consumption model includes district heating."""
         node = model.get("SelectedSiteGroupNode") or {}
         for utility in node.get("Utilities") or []:
-            if utility.get("UtilityId") == "F":
+            if utility.get("UtilityId") == cls.UTILITY_ID:
                 return True
         return False
 
@@ -613,9 +613,13 @@ class KarlstadsenergiDistrictHeatingCoordinator(_UtilityConsumptionCoordinator):
                 _LOGGER.debug("No ConsumptionModel available for DH")
                 return {"available": False}
 
-            node = model.get("SelectedSiteGroupNode") or {}
-            utility_ids = [u.get("UtilityId", "?") for u in node.get("Utilities") or []]
-            _LOGGER.info("Account utilities: %s", ", ".join(utility_ids) or "none")
+            if not getattr(self, "_logged_utilities", False):
+                node = model.get("SelectedSiteGroupNode") or {}
+                utility_ids = [
+                    u.get("UtilityId", "?") for u in node.get("Utilities") or []
+                ]
+                _LOGGER.info("Account utilities: %s", ", ".join(utility_ids) or "none")
+                self._logged_utilities = True
 
             if not self._has_district_heating(model):
                 return {"available": False}

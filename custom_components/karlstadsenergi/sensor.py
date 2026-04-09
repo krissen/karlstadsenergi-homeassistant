@@ -947,9 +947,12 @@ class _UtilityCostSensor(
             f"{DOMAIN}_{customer_id}_{unique_id_prefix}_{fee_info.stat_suffix}"
         )
         self._attr_icon = fee_info.icon
-        self._attr_translation_key = (
-            f"{translation_key_prefix}_{fee_info.translation_key}"
-        )
+        if translation_key_prefix:
+            self._attr_translation_key = (
+                f"{translation_key_prefix}_{fee_info.translation_key}"
+            )
+        else:
+            self._attr_translation_key = fee_info.translation_key
 
     def _get_series_points(self) -> list[dict]:
         """Get data points for this fee type from coordinator data."""
@@ -1014,8 +1017,6 @@ class ElectricityCostSensor(_UtilityCostSensor):
             unique_id_prefix="cost",
             translation_key_prefix="",
         )
-        # Override: electricity uses fee_info.translation_key directly (no prefix)
-        self._attr_translation_key = fee_info.translation_key
 
     @property
     def device_info(self) -> DeviceInfo:
