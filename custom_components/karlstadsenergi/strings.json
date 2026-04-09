@@ -120,7 +120,7 @@
         "name": "District heating flow"
       },
       "district_heating_dt": {
-        "name": "District heating dT"
+        "name": "District heating temperature difference"
       },
       "electricity_price": {
         "name": "Electricity price"

@@ -243,77 +243,86 @@ async def async_setup_entry(
 
     # District heating sensors: only created when account has DH.
     # Uses the listener pattern (like waste/contracts) so entities
-    # appear when DH data becomes available.
-    dh_entities_added = False
+    # appear when DH data becomes available. Flow/dT are tracked
+    # separately so they can appear on a later update if data arrives
+    # after the initial DH refresh (e.g. transient API failure).
+    dh_base_added = False
+    dh_flow_added = False
+    dh_dt_added = False
 
     def _add_dh_entities() -> None:
-        nonlocal dh_entities_added
-        if dh_entities_added or not runtime.district_heating_coordinator.data:
+        nonlocal dh_base_added, dh_flow_added, dh_dt_added
+        if not runtime.district_heating_coordinator.data:
             return
         if not runtime.district_heating_coordinator.data.get("available"):
             return
         dh_coord = runtime.district_heating_coordinator
         new_entities: list[SensorEntity] = []
 
-        new_entities.append(
-            DistrictHeatingConsumptionSensor(
-                coordinator=dh_coord,
-                customer_id=customer_id,
-                address=site_address,
-                place_id=site_place_id,
-            )
-        )
-        new_entities.append(
-            DistrictHeatingPriceSensor(
-                coordinator=dh_coord,
-                customer_id=customer_id,
-                address=site_address,
-                place_id=site_place_id,
-            )
-        )
-        for fee_id, fee_info in FEE_SENSORS.items():
+        if not dh_base_added:
             new_entities.append(
-                DistrictHeatingCostSensor(
+                DistrictHeatingConsumptionSensor(
                     coordinator=dh_coord,
                     customer_id=customer_id,
-                    fee_id=fee_id,
-                    fee_info=fee_info,
                     address=site_address,
                     place_id=site_place_id,
                 )
             )
+            new_entities.append(
+                DistrictHeatingPriceSensor(
+                    coordinator=dh_coord,
+                    customer_id=customer_id,
+                    address=site_address,
+                    place_id=site_place_id,
+                )
+            )
+            for fee_id, fee_info in FEE_SENSORS.items():
+                new_entities.append(
+                    DistrictHeatingCostSensor(
+                        coordinator=dh_coord,
+                        customer_id=customer_id,
+                        fee_id=fee_id,
+                        fee_info=fee_info,
+                        address=site_address,
+                        place_id=site_place_id,
+                    )
+                )
+            dh_base_added = True
 
         # Flow/dT: only if API returned data (Loadoptions are unverified)
         dh_data = dh_coord.data
-        flow = dh_data.get("flow") or {}
-        if (flow.get("DetailedConsumptionChart") or {}).get("SeriesList"):
-            new_entities.append(
-                DistrictHeatingFlowSensor(
-                    coordinator=dh_coord,
-                    customer_id=customer_id,
-                    address=site_address,
-                    place_id=site_place_id,
+        if not dh_flow_added:
+            flow = dh_data.get("flow") or {}
+            if (flow.get("DetailedConsumptionChart") or {}).get("SeriesList"):
+                new_entities.append(
+                    DistrictHeatingFlowSensor(
+                        coordinator=dh_coord,
+                        customer_id=customer_id,
+                        address=site_address,
+                        place_id=site_place_id,
+                    )
                 )
-            )
-        dt_data = dh_data.get("dt") or {}
-        if (dt_data.get("DetailedConsumptionChart") or {}).get("SeriesList"):
-            new_entities.append(
-                DistrictHeatingDtSensor(
-                    coordinator=dh_coord,
-                    customer_id=customer_id,
-                    address=site_address,
-                    place_id=site_place_id,
+                dh_flow_added = True
+        if not dh_dt_added:
+            dt_data = dh_data.get("dt") or {}
+            if (dt_data.get("DetailedConsumptionChart") or {}).get("SeriesList"):
+                new_entities.append(
+                    DistrictHeatingDtSensor(
+                        coordinator=dh_coord,
+                        customer_id=customer_id,
+                        address=site_address,
+                        place_id=site_place_id,
+                    )
                 )
-            )
+                dh_dt_added = True
 
         if new_entities:
             async_add_entities(new_entities)
-            dh_entities_added = True
 
     dh_data = runtime.district_heating_coordinator.data
     if dh_data and dh_data.get("available"):
         _add_dh_entities()
-    else:
+    if not (dh_base_added and dh_flow_added and dh_dt_added):
         unsub_dh = runtime.district_heating_coordinator.async_add_listener(
             _add_dh_entities
         )
@@ -584,8 +593,8 @@ class _UtilityConsumptionSensor(
             monthly: dict[str, float] = {}
             for point in data_points:
                 date_str = point.get("dateInterval", "")
-                value = point.get("y", 0)
-                if date_str and value:
+                value = point.get("y")
+                if date_str and value is not None:
                     month_key = date_str[:7]
                     monthly[month_key] = monthly.get(month_key, 0) + value
             if monthly:
@@ -1106,7 +1115,7 @@ class DistrictHeatingFlowSensor(
         if not data_points:
             return None
         total = sum(p.get("y", 0) for p in data_points if p.get("y") is not None)
-        return round(float(total), 1) if total else None
+        return round(float(total), 1)
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
@@ -1123,8 +1132,8 @@ class DistrictHeatingFlowSensor(
             monthly: dict[str, float] = {}
             for point in data_points:
                 date_str = point.get("dateInterval", "")
-                value = point.get("y", 0)
-                if date_str and value:
+                value = point.get("y")
+                if date_str and value is not None:
                     month_key = date_str[:7]
                     monthly[month_key] = monthly.get(month_key, 0) + value
             if monthly:
