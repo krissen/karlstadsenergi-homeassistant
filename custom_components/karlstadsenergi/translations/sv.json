@@ -99,28 +99,28 @@
         "name": "Fjärrvärmepris"
       },
       "dh_consumption_fee": {
-        "name": "FV energiavgift"
+        "name": "Fjärrvärme energiavgift"
       },
       "dh_power_fee": {
-        "name": "FV effektavgift"
+        "name": "Fjärrvärme effektavgift"
       },
       "dh_fixed_fee": {
-        "name": "FV fast avgift"
+        "name": "Fjärrvärme fast avgift"
       },
       "dh_energy_tax": {
-        "name": "FV energiskatt"
+        "name": "Fjärrvärme energiskatt"
       },
       "dh_vat": {
-        "name": "FV moms"
+        "name": "Fjärrvärme moms"
       },
       "dh_total_cost": {
-        "name": "FV total kostnad"
+        "name": "Fjärrvärme total kostnad"
       },
       "district_heating_flow": {
-        "name": "FV flöde"
+        "name": "Fjärrvärme flöde"
       },
       "district_heating_dt": {
-        "name": "FV temperaturdifferens"
+        "name": "Fjärrvärme temperaturdifferens"
       },
       "electricity_price": {
         "name": "Elpris"

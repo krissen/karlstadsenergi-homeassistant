@@ -99,22 +99,22 @@
         "name": "District heating price"
       },
       "dh_consumption_fee": {
-        "name": "DH consumption fee"
+        "name": "District heating energy fee"
       },
       "dh_power_fee": {
-        "name": "DH power fee"
+        "name": "District heating power fee"
       },
       "dh_fixed_fee": {
-        "name": "DH fixed fee"
+        "name": "District heating fixed fee"
       },
       "dh_energy_tax": {
-        "name": "DH energy tax"
+        "name": "District heating energy tax"
       },
       "dh_vat": {
-        "name": "DH VAT"
+        "name": "District heating VAT"
       },
       "dh_total_cost": {
-        "name": "DH total cost"
+        "name": "District heating total cost"
       },
       "district_heating_flow": {
         "name": "District heating flow"
