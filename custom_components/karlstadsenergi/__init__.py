@@ -613,8 +613,11 @@ class KarlstadsenergiDistrictHeatingCoordinator(_UtilityConsumptionCoordinator):
                 _LOGGER.debug("No ConsumptionModel available for DH")
                 return {"available": False}
 
+            node = model.get("SelectedSiteGroupNode") or {}
+            utility_ids = [u.get("UtilityId", "?") for u in node.get("Utilities") or []]
+            _LOGGER.info("Account utilities: %s", ", ".join(utility_ids) or "none")
+
             if not self._has_district_heating(model):
-                _LOGGER.debug("No district heating utility found in model")
                 return {"available": False}
 
             # Fetch daily DH consumption (includes CompareModel for sensor)
