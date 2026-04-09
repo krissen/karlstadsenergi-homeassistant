@@ -174,6 +174,72 @@ Each statistic tracks both the monthly value (`state`) and a running cumulative 
 
 ---
 
+## District heating sensors
+
+> **Note:** District heating sensors are only created if your Karlstadsenergi account includes district heating (fjärrvärme). If you only have electricity, no DH sensors will appear. DH sensors are grouped under a separate device: **Karlstadsenergi Fjärrvärme**.
+
+### District heating consumption
+
+| Sensor | Entity ID example | State | Unit | Device class |
+|--------|-------------------|-------|------|--------------|
+| Consumption | `sensor.karlstadsenergi_fjarrvarme_fjarrvarmeforbr` | Year-to-date consumption | kWh | `energy` |
+
+Like the electricity consumption sensor, this shows historical data from the portal API. For energy tracking, use the external statistic `karlstadsenergi:district_heating_consumption_{id}`.
+
+### District heating price
+
+| Sensor | Entity ID example | State | Unit |
+|--------|-------------------|-------|------|
+| Price | `sensor.karlstadsenergi_fjarrvarme_fjvpris` | Effective price | SEK/kWh |
+
+Derived from fee breakdown, same calculation method as the electricity price sensor.
+
+### District heating cost breakdown
+
+| Sensor | State | Unit |
+|--------|-------|------|
+| District heating energy fee | Latest month energy charge | SEK |
+| District heating power fee | Latest month power fee | SEK |
+| District heating fixed fee | Latest month fixed fee | SEK |
+| District heating energy tax | Latest month energy tax | SEK |
+| District heating VAT | Latest month VAT | SEK |
+| District heating total cost | Latest month total | SEK |
+
+Monthly DH fee data is imported into long-term statistics (prefixed `karlstadsenergi:dh_cost_*`).
+
+### District heating flow (experimental)
+
+| Sensor | State | Unit | State class |
+|--------|-------|------|-------------|
+| District heating flow | Cumulative flow volume | m³ | `total_increasing` |
+
+> **Note:** This sensor uses an unverified API parameter (`Loadoptions: ["Flow"]`). It only appears if the API returns data. If you see this sensor, please report whether the values look reasonable.
+
+### District heating temperature difference (experimental)
+
+| Sensor | State | Unit | State class |
+|--------|-------|------|-------------|
+| District heating temperature difference | Latest daily average dT | °C | `measurement` |
+
+Shows the temperature difference between supply and return water. A higher dT means more efficient heat extraction.
+
+> **Note:** This sensor uses an unverified API parameter (`Loadoptions: ["DT"]`). It only appears if the API returns data.
+
+### District heating sensor attributes
+
+The consumption sensor has the same attributes as the electricity consumption sensor (monthly breakdown, hourly data, year-over-year comparison). The price and cost sensors mirror their electricity equivalents.
+
+The temperature difference sensor includes additional attributes:
+
+| Attribute | Type | Description |
+|-----------|------|-------------|
+| `period_average_dt` | float | Average dT for the period (°C) |
+| `period_min_dt` | float | Minimum daily dT (°C) |
+| `period_max_dt` | float | Maximum daily dT (°C) |
+| `monthly_average_dt` | dict | Monthly average dT (`{"2026-01": 42.5, ...}`) |
+
+---
+
 ## Spot price sensor
 
 Current Nord Pool electricity spot price for SE3 (Karlstad region), fetched from Karlstadsenergi's public Evado API every 15 minutes. No authentication required.
