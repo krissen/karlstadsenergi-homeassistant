@@ -688,41 +688,7 @@ class KarlstadsenergiApi:
             return {}
         return result
 
-    async def async_get_utility_consumption(
-        self,
-        consumption_model: dict[str, Any],
-        utility_id: str,
-    ) -> dict[str, Any]:
-        """Get consumption data for a specific utility type.
-
-        Modifies the consumption model to switch utility (e.g. "E" for
-        electricity, "F" for district heating) and fetches daily
-        consumption via GetConsumption.
-        """
-        model = {**consumption_model}
-        model["UtilityId"] = utility_id
-        model["IsUtilityChange"] = True
-        model["IsPageLoad"] = False
-
-        pages = ("consumption/consumption.aspx",)
-        url = f"{BASE_URL}/Consumption/Consumption.aspx/GetConsumption"
-        try:
-            result = await self._request(
-                url, {"data": json.dumps(model)}, retry_auth=False
-            )
-        except KarlstadsenergiAuthError:
-            self._authenticated = False
-            await self.authenticate()
-            session = await self._ensure_session()
-            await self._visit_pages(session, pages)
-            result = await self._request(
-                url, {"data": json.dumps(model)}, retry_auth=False
-            )
-        if not isinstance(result, dict):
-            return {}
-        return result
-
-    async def async_get_consumption_custom(
+    async def async_get_consumption_with_model(
         self,
         consumption_model: dict[str, Any],
     ) -> dict[str, Any]:
