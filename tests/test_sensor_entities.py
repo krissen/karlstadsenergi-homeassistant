@@ -18,6 +18,11 @@ from homeassistant.const import EntityCategory
 from custom_components.karlstadsenergi.const import DOMAIN
 from custom_components.karlstadsenergi.sensor import (
     ContractSensor,
+    DistrictHeatingConsumptionSensor,
+    DistrictHeatingCostSensor,
+    DistrictHeatingDtSensor,
+    DistrictHeatingFlowSensor,
+    DistrictHeatingPriceSensor,
     ElectricityCostSensor,
     ElectricityConsumptionSensor,
     ElectricityPriceSensor,
@@ -803,3 +808,254 @@ class TestElectricityCostSensor:
     def test_native_value_returns_none_when_no_data(self) -> None:
         sensor = self._make_sensor(None)
         assert sensor.native_value is None
+
+
+# ---------------------------------------------------------------------------
+# District Heating Consumption Sensor
+# ---------------------------------------------------------------------------
+
+
+class TestDistrictHeatingConsumptionSensor:
+    def _make_sensor(self, data: Any = None) -> DistrictHeatingConsumptionSensor:
+        coord = _mock_coord(data)
+        return DistrictHeatingConsumptionSensor(coordinator=coord, customer_id="CUST01")
+
+    def test_unique_id(self) -> None:
+        sensor = self._make_sensor()
+        assert sensor.unique_id == f"{DOMAIN}_CUST01_district_heating"
+
+    def test_native_value_from_compare_model(self) -> None:
+        data = {
+            "available": True,
+            "consumption": {
+                "CompareModel": {"CurrYearValue": 12345.6},
+                "DetailedConsumptionChart": {"SeriesList": []},
+            },
+        }
+        sensor = self._make_sensor(data)
+        assert sensor.native_value == pytest.approx(12345.6, abs=0.001)
+
+    def test_native_value_fallback_to_chart_sum(self) -> None:
+        data = {
+            "available": True,
+            "consumption": {
+                "DetailedConsumptionChart": {
+                    "SeriesList": [{"data": [{"y": 100.0}, {"y": 200.0}, {"y": 50.5}]}]
+                }
+            },
+        }
+        sensor = self._make_sensor(data)
+        assert sensor.native_value == pytest.approx(350.5, abs=0.001)
+
+    def test_available_false_when_no_dh(self) -> None:
+        data = {"available": False}
+        sensor = self._make_sensor(data)
+        assert sensor.available is False
+
+    def test_available_true_when_dh_present(self) -> None:
+        data = {"available": True, "consumption": {}}
+        sensor = self._make_sensor(data)
+        coord = sensor.coordinator
+        coord.last_update_success = True
+        assert sensor.available is True
+
+    def test_device_info_uses_dh_identifier(self) -> None:
+        sensor = DistrictHeatingConsumptionSensor(
+            coordinator=_mock_coord(None),
+            customer_id="CUST01",
+            address="Testgatan 1",
+            place_id="P001",
+        )
+        info = sensor.device_info
+        assert (DOMAIN, "CUST01_P001_dh") in info["identifiers"]
+        assert "Fjärrvärme" in info["name"]
+
+    def test_icon_is_radiator(self) -> None:
+        sensor = self._make_sensor()
+        assert sensor.icon == "mdi:radiator"
+
+
+# ---------------------------------------------------------------------------
+# District Heating Price Sensor
+# ---------------------------------------------------------------------------
+
+
+class TestDistrictHeatingPriceSensor:
+    def _make_sensor(self, data: Any = None) -> DistrictHeatingPriceSensor:
+        coord = _mock_coord(data)
+        return DistrictHeatingPriceSensor(coordinator=coord, customer_id="CUST01")
+
+    def test_unique_id(self) -> None:
+        sensor = self._make_sensor()
+        assert sensor.unique_id == f"{DOMAIN}_CUST01_district_heating_price"
+
+    def test_available_false_when_no_dh(self) -> None:
+        data = {"available": False}
+        sensor = self._make_sensor(data)
+        assert sensor.available is False
+
+    def test_native_value_none_when_no_data(self) -> None:
+        sensor = self._make_sensor(None)
+        assert sensor.native_value is None
+
+
+# ---------------------------------------------------------------------------
+# District Heating Cost Sensor
+# ---------------------------------------------------------------------------
+
+
+class TestDistrictHeatingCostSensor:
+    def _make_sensor(self, data: Any = None) -> DistrictHeatingCostSensor:
+        coord = _mock_coord(data)
+        fee_info = FEE_SENSORS[FEE_SUM]
+        return DistrictHeatingCostSensor(
+            coordinator=coord,
+            customer_id="CUST01",
+            fee_id=FEE_SUM,
+            fee_info=fee_info,
+        )
+
+    def test_unique_id(self) -> None:
+        sensor = self._make_sensor()
+        assert sensor.unique_id == f"{DOMAIN}_CUST01_dh_cost_total_cost"
+
+    def test_translation_key_has_dh_prefix(self) -> None:
+        sensor = self._make_sensor()
+        assert sensor.translation_key == "dh_total_cost"
+
+    def test_native_value_returns_latest_month(self) -> None:
+        data = {
+            "available": True,
+            "fee_data": {
+                "DetailedConsumptionChart": {
+                    "SeriesList": [
+                        {
+                            "id": "SUM",
+                            "data": [
+                                {"dateInterval": "2026-01-01", "y": 1000.0},
+                                {"dateInterval": "2026-02-01", "y": 1200.0},
+                            ],
+                        }
+                    ]
+                }
+            },
+        }
+        sensor = self._make_sensor(data)
+        assert sensor.native_value == pytest.approx(1200.0)
+
+    def test_available_false_when_no_dh(self) -> None:
+        data = {"available": False}
+        sensor = self._make_sensor(data)
+        assert sensor.available is False
+
+
+# ---------------------------------------------------------------------------
+# District Heating Flow Sensor
+# ---------------------------------------------------------------------------
+
+
+class TestDistrictHeatingFlowSensor:
+    def _make_sensor(self, data: Any = None) -> DistrictHeatingFlowSensor:
+        coord = _mock_coord(data)
+        return DistrictHeatingFlowSensor(coordinator=coord, customer_id="CUST01")
+
+    def test_unique_id(self) -> None:
+        sensor = self._make_sensor()
+        assert sensor.unique_id == f"{DOMAIN}_CUST01_district_heating_flow"
+
+    def test_state_class_is_total_increasing(self) -> None:
+        from homeassistant.components.sensor import SensorStateClass
+
+        sensor = self._make_sensor()
+        assert sensor.state_class == SensorStateClass.TOTAL_INCREASING
+
+    def test_native_value_sums_data_points(self) -> None:
+        data = {
+            "available": True,
+            "flow": {
+                "DetailedConsumptionChart": {
+                    "SeriesList": [{"data": [{"y": 10.5}, {"y": 20.3}, {"y": 5.2}]}]
+                }
+            },
+        }
+        sensor = self._make_sensor(data)
+        assert sensor.native_value == pytest.approx(36.0, abs=0.1)
+
+    def test_available_false_when_empty_series(self) -> None:
+        data = {
+            "available": True,
+            "flow": {"DetailedConsumptionChart": {"SeriesList": []}},
+        }
+        sensor = self._make_sensor(data)
+        assert sensor.available is False
+
+
+# ---------------------------------------------------------------------------
+# District Heating dT Sensor
+# ---------------------------------------------------------------------------
+
+
+class TestDistrictHeatingDtSensor:
+    def _make_sensor(self, data: Any = None) -> DistrictHeatingDtSensor:
+        coord = _mock_coord(data)
+        return DistrictHeatingDtSensor(coordinator=coord, customer_id="CUST01")
+
+    def test_unique_id(self) -> None:
+        sensor = self._make_sensor()
+        assert sensor.unique_id == f"{DOMAIN}_CUST01_district_heating_dt"
+
+    def test_state_class_is_measurement(self) -> None:
+        from homeassistant.components.sensor import SensorStateClass
+
+        sensor = self._make_sensor()
+        assert sensor.state_class == SensorStateClass.MEASUREMENT
+
+    def test_native_value_is_latest_point(self) -> None:
+        data = {
+            "available": True,
+            "dt": {
+                "DetailedConsumptionChart": {
+                    "SeriesList": [
+                        {
+                            "data": [
+                                {"dateInterval": "2026-03-01", "y": 42.5},
+                                {"dateInterval": "2026-03-02", "y": 38.2},
+                            ]
+                        }
+                    ]
+                }
+            },
+        }
+        sensor = self._make_sensor(data)
+        assert sensor.native_value == pytest.approx(38.2, abs=0.1)
+
+    def test_available_false_when_empty_series(self) -> None:
+        data = {
+            "available": True,
+            "dt": {"DetailedConsumptionChart": {"SeriesList": []}},
+        }
+        sensor = self._make_sensor(data)
+        assert sensor.available is False
+
+    def test_extra_attributes_include_period_stats(self) -> None:
+        data = {
+            "available": True,
+            "dt": {
+                "DetailedConsumptionChart": {
+                    "SeriesList": [
+                        {
+                            "data": [
+                                {"dateInterval": "2026-03-01", "y": 40.0},
+                                {"dateInterval": "2026-03-02", "y": 50.0},
+                                {"dateInterval": "2026-03-03", "y": 30.0},
+                            ]
+                        }
+                    ]
+                }
+            },
+        }
+        sensor = self._make_sensor(data)
+        attrs = sensor.extra_state_attributes
+        assert attrs["period_average_dt"] == pytest.approx(40.0, abs=0.1)
+        assert attrs["period_min_dt"] == pytest.approx(30.0, abs=0.1)
+        assert attrs["period_max_dt"] == pytest.approx(50.0, abs=0.1)

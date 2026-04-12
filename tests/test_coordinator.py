@@ -14,6 +14,7 @@ import pytest
 
 from custom_components.karlstadsenergi import (
     KarlstadsenergiConsumptionCoordinator,
+    KarlstadsenergiDistrictHeatingCoordinator,
     KarlstadsenergiSpotPriceCoordinator,
     KarlstadsenergiWasteCoordinator,
 )
@@ -529,3 +530,185 @@ class TestWidenStartDate:
         assert match
         epoch_ms = int(match.group(1))
         assert epoch_ms == 1672531200000
+
+
+# ---------------------------------------------------------------------------
+# District Heating Coordinator
+# ---------------------------------------------------------------------------
+
+
+def _make_el_coordinator(model: dict | None = None) -> MagicMock:
+    """Create a mock electricity coordinator with optional consumption model."""
+    coord = MagicMock()
+    if model is not None:
+        coord.data = {"consumption": {"ConsumptionModel": model}}
+    else:
+        coord.data = None
+    return coord
+
+
+def _dh_model_with_utilities(*utility_ids: str) -> dict:
+    """Build a minimal consumption model with given utility IDs."""
+    return {
+        "SiteId": "site-99",
+        "SiteName": "Testgatan 1",
+        "StartDate": "/Date(1711920000000)/",
+        "ContractsStartDate": "/Date(1672531200000)/",
+        "SelectedSiteGroupNode": {
+            "Utilities": [{"UtilityId": uid} for uid in utility_ids]
+        },
+    }
+
+
+class TestDistrictHeatingCoordinatorAvailability:
+    """Test that DH coordinator correctly detects availability."""
+
+    @pytest.mark.asyncio
+    async def test_returns_unavailable_when_no_electricity_data(self) -> None:
+        hass = _make_hass()
+        api = _make_api()
+        entry = _make_entry()
+        el_coord = _make_el_coordinator(model=None)
+
+        coord = KarlstadsenergiDistrictHeatingCoordinator(
+            hass,
+            api,
+            1,
+            entry,
+            electricity_coordinator=el_coord,
+            customer_id="CUST01",
+        )
+        result = await coord._async_update_data()
+        assert result["available"] is False
+
+    @pytest.mark.asyncio
+    async def test_returns_unavailable_when_no_dh_utility(self) -> None:
+        hass = _make_hass()
+        api = _make_api()
+        entry = _make_entry()
+        el_coord = _make_el_coordinator(model=_dh_model_with_utilities("E"))
+
+        coord = KarlstadsenergiDistrictHeatingCoordinator(
+            hass,
+            api,
+            1,
+            entry,
+            electricity_coordinator=el_coord,
+            customer_id="CUST01",
+        )
+        result = await coord._async_update_data()
+        assert result["available"] is False
+
+    @pytest.mark.asyncio
+    async def test_returns_available_when_dh_utility_present(self) -> None:
+        hass = _make_hass()
+        api = _make_api()
+        entry = _make_entry()
+        model = _dh_model_with_utilities("E", "F")
+        el_coord = _make_el_coordinator(model=model)
+
+        dh_response = {"DetailedConsumptionChart": {"SeriesList": []}}
+        api.async_get_consumption_with_model = AsyncMock(return_value=dh_response)
+        api.async_get_hourly_consumption = AsyncMock(return_value={})
+        api.async_get_monthly_consumption = AsyncMock(return_value={})
+        api.async_get_fee_consumption = AsyncMock(return_value={})
+
+        coord = KarlstadsenergiDistrictHeatingCoordinator(
+            hass,
+            api,
+            1,
+            entry,
+            electricity_coordinator=el_coord,
+            customer_id="CUST01",
+        )
+        result = await coord._async_update_data()
+        assert result["available"] is True
+
+    @pytest.mark.asyncio
+    async def test_reads_model_from_electricity_coordinator(self) -> None:
+        """DH coordinator should NOT call async_get_consumption itself."""
+        hass = _make_hass()
+        api = _make_api()
+        entry = _make_entry()
+        model = _dh_model_with_utilities("E", "F")
+        el_coord = _make_el_coordinator(model=model)
+
+        api.async_get_consumption = AsyncMock()
+        api.async_get_consumption_with_model = AsyncMock(return_value={})
+        api.async_get_hourly_consumption = AsyncMock(return_value={})
+        api.async_get_monthly_consumption = AsyncMock(return_value={})
+        api.async_get_fee_consumption = AsyncMock(return_value={})
+
+        coord = KarlstadsenergiDistrictHeatingCoordinator(
+            hass,
+            api,
+            1,
+            entry,
+            electricity_coordinator=el_coord,
+            customer_id="CUST01",
+        )
+        await coord._async_update_data()
+
+        # async_get_consumption should NOT have been called (no duplicate API call)
+        api.async_get_consumption.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_prepares_model_with_utility_id_f(self) -> None:
+        """DH coordinator should set UtilityId=F on the consumption model."""
+        hass = _make_hass()
+        api = _make_api()
+        entry = _make_entry()
+        model = _dh_model_with_utilities("E", "F")
+        el_coord = _make_el_coordinator(model=model)
+
+        import json
+
+        captured_models: list[dict] = []
+
+        async def _capture_model(m: dict) -> dict:
+            captured_models.append(json.loads(m["data"]) if "data" in m else m)
+            return {}
+
+        api.async_get_consumption_with_model = AsyncMock(return_value={})
+        api.async_get_hourly_consumption = AsyncMock(side_effect=_capture_model)
+        api.async_get_monthly_consumption = AsyncMock(return_value={})
+        api.async_get_fee_consumption = AsyncMock(return_value={})
+
+        coord = KarlstadsenergiDistrictHeatingCoordinator(
+            hass,
+            api,
+            1,
+            entry,
+            electricity_coordinator=el_coord,
+            customer_id="CUST01",
+        )
+        await coord._async_update_data()
+
+        # The hourly call should have received a model with UtilityId=F
+        assert len(captured_models) == 1
+        assert captured_models[0]["UtilityId"] == "F"
+        assert captured_models[0]["IsUtilityChange"] is True
+
+
+class TestDistrictHeatingHasUtility:
+    def test_detects_dh_utility(self) -> None:
+        model = _dh_model_with_utilities("E", "F")
+        assert KarlstadsenergiDistrictHeatingCoordinator._has_district_heating(model)
+
+    def test_no_dh_when_only_electricity(self) -> None:
+        model = _dh_model_with_utilities("E")
+        assert not KarlstadsenergiDistrictHeatingCoordinator._has_district_heating(
+            model
+        )
+
+    def test_no_dh_when_empty_utilities(self) -> None:
+        model = {"SelectedSiteGroupNode": {"Utilities": []}}
+        assert not KarlstadsenergiDistrictHeatingCoordinator._has_district_heating(
+            model
+        )
+
+    def test_no_dh_when_missing_node(self) -> None:
+        model = {}
+        assert not KarlstadsenergiDistrictHeatingCoordinator._has_district_heating(
+            model
+        )

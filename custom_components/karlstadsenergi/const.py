@@ -8,7 +8,7 @@ from homeassistant.const import Platform
 
 DOMAIN = "karlstadsenergi"
 NAME = "Karlstadsenergi"
-VERSION = "0.2.1"
+VERSION = "0.3.0-rc2"
 
 PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.CALENDAR, Platform.BINARY_SENSOR]
 

@@ -76,6 +76,7 @@ class KarlstadsenergiData:
     api: KarlstadsenergiApi
     waste_coordinator: KarlstadsenergiWasteCoordinator
     consumption_coordinator: KarlstadsenergiConsumptionCoordinator
+    district_heating_coordinator: KarlstadsenergiDistrictHeatingCoordinator
     contract_coordinator: KarlstadsenergiContractCoordinator
     spot_price_coordinator: KarlstadsenergiSpotPriceCoordinator
     setup_options: dict
@@ -184,8 +185,16 @@ class KarlstadsenergiWasteCoordinator(_CookieSavingCoordinator):
             self._save_cookies()
 
 
-class KarlstadsenergiConsumptionCoordinator(_CookieSavingCoordinator):
-    """Coordinator for electricity consumption data."""
+# ── Shared utility consumption coordinator ──────────────────────
+
+
+class _UtilityConsumptionCoordinator(_CookieSavingCoordinator):
+    """Base coordinator for utility consumption data.
+
+    Shared by electricity and district heating coordinators. Provides
+    date widening, ASP.NET date parsing, and long-term statistics import.
+    Subclasses implement ``_async_update_data`` with utility-specific logic.
+    """
 
     def __init__(
         self,
@@ -193,15 +202,23 @@ class KarlstadsenergiConsumptionCoordinator(_CookieSavingCoordinator):
         api: KarlstadsenergiApi,
         update_interval_hours: int,
         entry: ConfigEntry,
-        customer_id: str = "",
-        history_years: int = DEFAULT_HISTORY_YEARS,
+        *,
+        utility_label: str,
+        customer_id: str,
+        history_years: int,
+        stat_name: str,
+        stat_prefix: str,
+        fee_stat_prefix: str,
     ) -> None:
         super().__init__(
-            hass, api, update_interval_hours, entry, f"{DOMAIN}_consumption"
+            hass, api, update_interval_hours, entry, f"{DOMAIN}_{utility_label}"
         )
+        self._utility_label = utility_label
         self._customer_id = customer_id
         self._history_years = history_years
-        self._statistic_id = f"{DOMAIN}:electricity_consumption_{customer_id}"
+        self._stat_name = stat_name
+        self._statistic_id = f"{DOMAIN}:{stat_prefix}_{customer_id}"
+        self._fee_stat_prefix = fee_stat_prefix
         self._backfill_done = False
 
     @staticmethod
@@ -229,91 +246,6 @@ class KarlstadsenergiConsumptionCoordinator(_CookieSavingCoordinator):
         widened["StartDate"] = f"/Date({target_ms})/"
         return widened
 
-    async def _async_update_data(self) -> dict:
-        """Fetch electricity consumption data."""
-        try:
-            consumption = await self.api.async_get_consumption()
-
-            # Hourly data: use widened date range for initial backfill, then
-            # narrow (~2 month) window to reduce payload (19k vs 1.4k rows).
-            # Fee data + monthly consumption: always use wide range so that
-            # the electricity price sensor can compute fee/kWh from
-            # overlapping months. Monthly consumption is a lightweight
-            # alternative to hourly (~26 rows) and doesn't require the
-            # user to have ordered hourly metering.
-            hourly = {}
-            fee_data = {}
-            monthly_kwh = {}
-            model = consumption.get("ConsumptionModel")
-            if model:
-                wide_model = self._widen_start_date(model, self._history_years)
-                fetch_model = wide_model if not self._backfill_done else model
-                try:
-                    hourly = await self.api.async_get_hourly_consumption(fetch_model)
-                except KarlstadsenergiAuthError:
-                    raise
-                except Exception:
-                    _LOGGER.debug("Hourly consumption unavailable")
-                try:
-                    fee_data = await self.api.async_get_fee_consumption(wide_model)
-                except KarlstadsenergiAuthError:
-                    raise
-                except Exception:
-                    _LOGGER.debug("Fee consumption unavailable")
-                try:
-                    monthly_kwh = await self.api.async_get_monthly_consumption(
-                        wide_model
-                    )
-                except KarlstadsenergiAuthError:
-                    raise
-                except Exception:
-                    _LOGGER.debug("Monthly consumption unavailable")
-
-            service_info = {}
-            try:
-                service_info = await self.api.async_get_service_info()
-            except Exception:
-                _LOGGER.debug("GetServiceInfo failed, continuing without it")
-
-            # Import hourly data into long-term statistics
-            if hourly and self._customer_id:
-                try:
-                    await self._async_import_statistics(hourly)
-                except Exception:
-                    _LOGGER.warning("Statistics import failed", exc_info=True)
-            elif not hourly:
-                _LOGGER.debug("No hourly data to import (empty response)")
-            elif not self._customer_id:
-                _LOGGER.warning("No customer_id set, skipping statistics import")
-
-            # Import monthly fee data into long-term statistics
-            if fee_data and self._customer_id:
-                try:
-                    await self._async_import_fee_statistics(fee_data)
-                except Exception:
-                    _LOGGER.warning("Fee statistics import failed", exc_info=True)
-            elif not fee_data:
-                _LOGGER.debug("No fee data to import (empty response)")
-
-            if not self._backfill_done and (hourly or fee_data):
-                self._backfill_done = True
-
-            return {
-                "consumption": consumption,
-                "hourly": hourly,
-                "service_info": service_info,
-                "fee_data": fee_data,
-                "monthly_kwh": monthly_kwh,
-            }
-        except KarlstadsenergiAuthError as err:
-            raise ConfigEntryAuthFailed(f"Authentication failed: {err}") from err
-        except KarlstadsenergiConnectionError as err:
-            raise UpdateFailed(f"Connection error: {err}") from err
-        except KarlstadsenergiApiError as err:
-            raise UpdateFailed(f"API error: {err}") from err
-        finally:
-            self._save_cookies()
-
     @staticmethod
     def _parse_aspnet_date(date_str: str) -> datetime | None:
         """Parse ASP.NET date format '/Date(EPOCH_MS)/' to UTC datetime."""
@@ -323,7 +255,7 @@ class KarlstadsenergiConsumptionCoordinator(_CookieSavingCoordinator):
         epoch_ms = int(match.group(1))
         return datetime.fromtimestamp(epoch_ms / 1000, tz=timezone.utc)
 
-    async def _async_import_statistics(self, hourly_data: dict) -> None:
+    async def _async_import_consumption_statistics(self, hourly_data: dict) -> None:
         """Import hourly consumption data into HA long-term statistics."""
         chart = hourly_data.get("DetailedConsumptionChart") or {}
         series_list = chart.get("SeriesList") or []
@@ -337,7 +269,7 @@ class KarlstadsenergiConsumptionCoordinator(_CookieSavingCoordinator):
         meta_kwargs: dict = {
             "has_mean": False,
             "has_sum": True,
-            "name": "Karlstadsenergi Electricity Consumption",
+            "name": f"Karlstadsenergi {self._stat_name}",
             "source": DOMAIN,
             "statistic_id": statistic_id,
             "unit_of_measurement": UnitOfEnergy.KILO_WATT_HOUR,
@@ -348,7 +280,6 @@ class KarlstadsenergiConsumptionCoordinator(_CookieSavingCoordinator):
             meta_kwargs["unit_class"] = _ENERGY_UNIT_CLASS
         metadata = StatisticMetaData(**meta_kwargs)
 
-        # Check what's already been imported
         last_stats = await get_instance(self.hass).async_add_executor_job(
             get_last_statistics, self.hass, 1, statistic_id, True, {"sum"}
         )
@@ -428,7 +359,10 @@ class KarlstadsenergiConsumptionCoordinator(_CookieSavingCoordinator):
                 continue
 
             fee_info = FEE_SENSORS[series_id]
-            statistic_id = f"{DOMAIN}:cost_{fee_info.stat_suffix}_{self._customer_id}"
+            statistic_id = (
+                f"{DOMAIN}:{self._fee_stat_prefix}"
+                f"_{fee_info.stat_suffix}_{self._customer_id}"
+            )
             data_points = series.get("data") or []
             if not data_points:
                 continue
@@ -491,6 +425,298 @@ class KarlstadsenergiConsumptionCoordinator(_CookieSavingCoordinator):
                     len(statistics),
                     series_id,
                 )
+
+
+# ── Electricity coordinator ─────────────────────────────────────
+
+
+class KarlstadsenergiConsumptionCoordinator(_UtilityConsumptionCoordinator):
+    """Coordinator for electricity consumption data."""
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        api: KarlstadsenergiApi,
+        update_interval_hours: int,
+        entry: ConfigEntry,
+        customer_id: str = "",
+        history_years: int = DEFAULT_HISTORY_YEARS,
+    ) -> None:
+        super().__init__(
+            hass,
+            api,
+            update_interval_hours,
+            entry,
+            utility_label="consumption",
+            customer_id=customer_id,
+            history_years=history_years,
+            stat_name="Electricity Consumption",
+            stat_prefix="electricity_consumption",
+            fee_stat_prefix="cost",
+        )
+
+    async def _async_update_data(self) -> dict:
+        """Fetch electricity consumption data."""
+        try:
+            consumption = await self.api.async_get_consumption()
+
+            # Hourly data: use widened date range for initial backfill, then
+            # narrow (~2 month) window to reduce payload (19k vs 1.4k rows).
+            # Fee data + monthly consumption: always use wide range so that
+            # the electricity price sensor can compute fee/kWh from
+            # overlapping months. Monthly consumption is a lightweight
+            # alternative to hourly (~26 rows) and doesn't require the
+            # user to have ordered hourly metering.
+            hourly = {}
+            fee_data = {}
+            monthly_kwh = {}
+            model = consumption.get("ConsumptionModel")
+            if model:
+                wide_model = self._widen_start_date(model, self._history_years)
+                fetch_model = wide_model if not self._backfill_done else model
+                try:
+                    hourly = await self.api.async_get_hourly_consumption(fetch_model)
+                except KarlstadsenergiAuthError:
+                    raise
+                except Exception:
+                    _LOGGER.debug("Hourly consumption unavailable")
+                try:
+                    fee_data = await self.api.async_get_fee_consumption(wide_model)
+                except KarlstadsenergiAuthError:
+                    raise
+                except Exception:
+                    _LOGGER.debug("Fee consumption unavailable")
+                try:
+                    monthly_kwh = await self.api.async_get_monthly_consumption(
+                        wide_model
+                    )
+                except KarlstadsenergiAuthError:
+                    raise
+                except Exception:
+                    _LOGGER.debug("Monthly consumption unavailable")
+
+            service_info = {}
+            try:
+                service_info = await self.api.async_get_service_info()
+            except Exception:
+                _LOGGER.debug("GetServiceInfo failed, continuing without it")
+
+            # Import hourly data into long-term statistics
+            if hourly and self._customer_id:
+                try:
+                    await self._async_import_consumption_statistics(hourly)
+                except Exception:
+                    _LOGGER.warning("Statistics import failed", exc_info=True)
+            elif not hourly:
+                _LOGGER.debug("No hourly data to import (empty response)")
+            elif not self._customer_id:
+                _LOGGER.warning("No customer_id set, skipping statistics import")
+
+            # Import monthly fee data into long-term statistics
+            if fee_data and self._customer_id:
+                try:
+                    await self._async_import_fee_statistics(fee_data)
+                except Exception:
+                    _LOGGER.warning("Fee statistics import failed", exc_info=True)
+            elif not fee_data:
+                _LOGGER.debug("No fee data to import (empty response)")
+
+            if not self._backfill_done and (hourly or fee_data):
+                self._backfill_done = True
+
+            return {
+                "consumption": consumption,
+                "hourly": hourly,
+                "service_info": service_info,
+                "fee_data": fee_data,
+                "monthly_kwh": monthly_kwh,
+            }
+        except KarlstadsenergiAuthError as err:
+            raise ConfigEntryAuthFailed(f"Authentication failed: {err}") from err
+        except KarlstadsenergiConnectionError as err:
+            raise UpdateFailed(f"Connection error: {err}") from err
+        except KarlstadsenergiApiError as err:
+            raise UpdateFailed(f"API error: {err}") from err
+        finally:
+            self._save_cookies()
+
+
+# ── District heating coordinator ────────────────────────────────
+
+
+class KarlstadsenergiDistrictHeatingCoordinator(_UtilityConsumptionCoordinator):
+    """Coordinator for district heating (fjärrvärme) consumption data.
+
+    Uses the same GetConsumption endpoint as electricity but with
+    UtilityId "F" instead of "E". Reads the base consumption model
+    from the electricity coordinator to avoid duplicate API calls.
+    """
+
+    UTILITY_ID = "F"
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        api: KarlstadsenergiApi,
+        update_interval_hours: int,
+        entry: ConfigEntry,
+        electricity_coordinator: KarlstadsenergiConsumptionCoordinator,
+        customer_id: str = "",
+        history_years: int = DEFAULT_HISTORY_YEARS,
+    ) -> None:
+        super().__init__(
+            hass,
+            api,
+            update_interval_hours,
+            entry,
+            utility_label="district_heating",
+            customer_id=customer_id,
+            history_years=history_years,
+            stat_name="District Heating Consumption",
+            stat_prefix="district_heating_consumption",
+            fee_stat_prefix="dh_cost",
+        )
+        self._electricity_coordinator = electricity_coordinator
+
+    @classmethod
+    def _has_district_heating(cls, model: dict) -> bool:
+        """Check if the consumption model includes district heating."""
+        node = model.get("SelectedSiteGroupNode") or {}
+        for utility in node.get("Utilities") or []:
+            if utility.get("UtilityId") == cls.UTILITY_ID:
+                return True
+        return False
+
+    def _prepare_dh_model(self, model: dict, history_years: int = 0) -> dict:
+        """Return a copy of the consumption model configured for DH."""
+        dh = {**model}
+        dh["UtilityId"] = self.UTILITY_ID
+        dh["IsUtilityChange"] = True
+        dh["IsPageLoad"] = False
+        if history_years > 0:
+            dh = self._widen_start_date(dh, history_years)
+        return dh
+
+    def _get_base_model(self) -> dict | None:
+        """Read the base consumption model from the electricity coordinator."""
+        el_data = self._electricity_coordinator.data
+        if not el_data:
+            return None
+        consumption = el_data.get("consumption") or {}
+        return consumption.get("ConsumptionModel")
+
+    async def _async_update_data(self) -> dict:
+        """Fetch district heating consumption data."""
+        try:
+            model = self._get_base_model()
+            if not model:
+                _LOGGER.debug("No ConsumptionModel available for DH")
+                return {"available": False}
+
+            if not getattr(self, "_logged_utilities", False):
+                node = model.get("SelectedSiteGroupNode") or {}
+                utility_ids = [
+                    u.get("UtilityId", "?") for u in node.get("Utilities") or []
+                ]
+                _LOGGER.info("Account utilities: %s", ", ".join(utility_ids) or "none")
+                self._logged_utilities = True
+
+            if not self._has_district_heating(model):
+                return {"available": False}
+
+            # Fetch daily DH consumption (includes CompareModel for sensor)
+            dh_daily_model = self._prepare_dh_model(model)
+            dh_consumption = await self.api.async_get_consumption_with_model(
+                dh_daily_model
+            )
+
+            # Prepare DH models for historical data
+            wide_dh_model = self._prepare_dh_model(model, self._history_years)
+            fetch_model = wide_dh_model if not self._backfill_done else dh_daily_model
+
+            # Fetch hourly DH consumption (for statistics import)
+            dh_hourly = {}
+            try:
+                dh_hourly = await self.api.async_get_hourly_consumption(fetch_model)
+            except KarlstadsenergiAuthError:
+                raise
+            except Exception:
+                _LOGGER.debug("DH hourly consumption unavailable")
+
+            # Fetch monthly DH consumption
+            dh_monthly = {}
+            try:
+                dh_monthly = await self.api.async_get_monthly_consumption(wide_dh_model)
+            except KarlstadsenergiAuthError:
+                raise
+            except Exception:
+                _LOGGER.debug("DH monthly consumption unavailable")
+
+            # Fetch DH fee/cost breakdown (SEK by month)
+            dh_fee = {}
+            try:
+                dh_fee = await self.api.async_get_fee_consumption(wide_dh_model)
+            except KarlstadsenergiAuthError:
+                raise
+            except Exception:
+                _LOGGER.debug("DH fee consumption unavailable")
+
+            # Fetch DH flow data (m³)
+            dh_flow = {}
+            try:
+                flow_model = self._prepare_dh_model(model)
+                flow_model["Loadoptions"] = ["Flow"]
+                dh_flow = await self.api.async_get_consumption_with_model(flow_model)
+            except KarlstadsenergiAuthError:
+                raise
+            except Exception:
+                _LOGGER.debug("DH flow data unavailable")
+
+            # Fetch DH temperature difference (dT)
+            dh_dt = {}
+            try:
+                dt_model = self._prepare_dh_model(model)
+                dt_model["Loadoptions"] = ["DT"]
+                dh_dt = await self.api.async_get_consumption_with_model(dt_model)
+            except KarlstadsenergiAuthError:
+                raise
+            except Exception:
+                _LOGGER.debug("DH dT data unavailable")
+
+            # Import hourly DH data into long-term statistics
+            if dh_hourly and self._customer_id:
+                try:
+                    await self._async_import_consumption_statistics(dh_hourly)
+                except Exception:
+                    _LOGGER.warning("DH statistics import failed", exc_info=True)
+
+            # Import monthly DH fee data into long-term statistics
+            if dh_fee and self._customer_id:
+                try:
+                    await self._async_import_fee_statistics(dh_fee)
+                except Exception:
+                    _LOGGER.warning("DH fee statistics import failed", exc_info=True)
+
+            if not self._backfill_done and (dh_hourly or dh_fee):
+                self._backfill_done = True
+
+            return {
+                "available": True,
+                "consumption": dh_consumption,
+                "hourly": dh_hourly,
+                "monthly_kwh": dh_monthly,
+                "fee_data": dh_fee,
+                "flow": dh_flow,
+                "dt": dh_dt,
+            }
+        except KarlstadsenergiAuthError as err:
+            raise ConfigEntryAuthFailed(f"Authentication failed: {err}") from err
+        except KarlstadsenergiConnectionError as err:
+            raise UpdateFailed(f"Connection error: {err}") from err
+        except KarlstadsenergiApiError as err:
+            raise UpdateFailed(f"API error: {err}") from err
+        finally:
+            self._save_cookies()
 
 
 class KarlstadsenergiContractCoordinator(_CookieSavingCoordinator):
@@ -685,6 +911,22 @@ async def async_setup_entry(
         # work even if the electricity API is temporarily unavailable.
         _LOGGER.warning("Could not fetch consumption data: %s", err)
 
+    # District heating coordinator: reads the base model from the electricity
+    # coordinator to avoid duplicate page visits and API calls.
+    district_heating_coordinator = KarlstadsenergiDistrictHeatingCoordinator(
+        hass,
+        api,
+        max(update_interval // 6, 1),
+        entry,
+        electricity_coordinator=consumption_coordinator,
+        customer_id=customer_id,
+        history_years=history_years,
+    )
+    try:
+        await district_heating_coordinator.async_config_entry_first_refresh()
+    except Exception as err:
+        _LOGGER.warning("Could not fetch district heating data: %s", err)
+
     # Extract site_id from consumption data for contract fetching
     site_ids: list[str] = []
     if consumption_coordinator.data:
@@ -717,6 +959,7 @@ async def async_setup_entry(
         api=api,
         waste_coordinator=waste_coordinator,
         consumption_coordinator=consumption_coordinator,
+        district_heating_coordinator=district_heating_coordinator,
         contract_coordinator=contract_coordinator,
         spot_price_coordinator=spot_price_coordinator,
         setup_options=dict(entry.options),
