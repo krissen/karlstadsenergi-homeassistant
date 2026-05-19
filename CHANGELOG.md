@@ -7,9 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
-- **Now available in HACS default** -- search "Karlstadsenergi" directly in HACS; the custom-repository step is no longer required.
-
 ### Added
 - **District heating (fjärrvärme) support** -- consumption, price, cost breakdown, flow, and temperature difference sensors for accounts with district heating. Separate HA device ("Karlstadsenergi Fjärrvärme"). Long-term statistics import for DH consumption and fees. Based on @bazuz's contribution (#7).
 - **District heating flow sensor** (m³) -- cumulative water flow volume (*unverified: depends on API support for `Loadoptions: ["Flow"]`*)
@@ -17,10 +14,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Account utility type logging** -- available utilities (E = electricity, F = district heating) logged at info level on each DH coordinator update
 
 ### Changed
+- **Now available in HACS default** -- search "Karlstadsenergi" directly in HACS; the custom-repository step is no longer required.
 - **Shared coordinator base class** -- electricity and district heating coordinators share `_UtilityConsumptionCoordinator` for statistics import, date widening, and ASP.NET date parsing
 - **Shared sensor base classes** -- `_UtilityConsumptionSensor`, `_UtilityPriceSensor`, `_UtilityCostSensor` eliminate duplication between electricity and DH sensors
 - **DH coordinator reads base model from electricity coordinator** -- avoids duplicate page visits and API calls
 - **Conditional DH entity creation** -- DH sensors only created when account has district heating (listener pattern)
+
+### Removed
+- **Duplicate brand assets at package root** -- icon/logo PNGs (light + dark, `@1x` + `@2x`) removed from the package root; `brand/` is the supported location since HA 2026.3 (~290 KB smaller install footprint).
 
 ## [0.2.1] - 2026-04-03
 
