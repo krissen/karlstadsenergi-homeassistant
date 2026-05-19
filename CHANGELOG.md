@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Now available in HACS default** -- search "Karlstadsenergi" directly in HACS; the custom-repository step is no longer required.
+
 ### Added
 - **District heating (fjärrvärme) support** -- consumption, price, cost breakdown, flow, and temperature difference sensors for accounts with district heating. Separate HA device ("Karlstadsenergi Fjärrvärme"). Long-term statistics import for DH consumption and fees. Based on @bazuz's contribution (#7).
 - **District heating flow sensor** (m³) -- cumulative water flow volume (*unverified: depends on API support for `Loadoptions: ["Flow"]`*)
