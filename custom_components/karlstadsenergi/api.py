@@ -610,14 +610,6 @@ class KarlstadsenergiApi:
             return {}
         return result
 
-    async def async_get_service_info(self) -> dict[str, Any]:
-        """Get service/meter info."""
-        url = f"{BASE_URL}/consumption/consumption.aspx/GetServiceInfo"
-        result = await self._request(url)
-        if not isinstance(result, dict):
-            return {}
-        return result
-
     async def async_get_contract_details(
         self,
         site_ids: list[str],

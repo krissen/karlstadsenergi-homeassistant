@@ -495,12 +495,6 @@ class KarlstadsenergiConsumptionCoordinator(_UtilityConsumptionCoordinator):
                 except Exception:
                     _LOGGER.debug("Monthly consumption unavailable")
 
-            service_info = {}
-            try:
-                service_info = await self.api.async_get_service_info()
-            except Exception:
-                _LOGGER.debug("GetServiceInfo failed, continuing without it")
-
             # Import hourly data into long-term statistics
             if hourly and self._customer_id:
                 try:
@@ -527,7 +521,6 @@ class KarlstadsenergiConsumptionCoordinator(_UtilityConsumptionCoordinator):
             return {
                 "consumption": consumption,
                 "hourly": hourly,
-                "service_info": service_info,
                 "fee_data": fee_data,
                 "monthly_kwh": monthly_kwh,
             }

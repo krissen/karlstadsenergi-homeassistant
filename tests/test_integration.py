@@ -103,7 +103,6 @@ def _make_api(*, auth_error: bool = False, connection_error: bool = False) -> Ma
         }
     )
     api.async_get_hourly_consumption = AsyncMock(return_value={"hours": []})
-    api.async_get_service_info = AsyncMock(return_value={"info": "ok"})
     api.async_get_fee_consumption = AsyncMock(return_value={"fees": []})
 
     # Contract coordinator methods
@@ -662,7 +661,6 @@ class TestConsumptionCoordinatorUpdate:
 
         assert "consumption" in result
         assert "hourly" in result
-        assert "service_info" in result
         assert "fee_data" in result
 
     @pytest.mark.asyncio
@@ -716,41 +714,6 @@ class TestConsumptionCoordinatorUpdate:
 
         api.async_get_hourly_consumption.assert_not_called()
         assert result["hourly"] == {}
-
-    @pytest.mark.asyncio
-    async def test_service_info_included_in_result(self) -> None:
-        hass = MagicMock()
-        hass.loop = MagicMock()
-        hass.config_entries = MagicMock()
-        api = _make_api()
-        api.async_get_service_info = AsyncMock(return_value={"NetAreaCode": "SE3"})
-        entry = MagicMock()
-        entry.data = {"session_cookies": {}}
-
-        coord = KarlstadsenergiConsumptionCoordinator(hass, api, 1, entry)
-        result = await coord._async_update_data()
-
-        assert result["service_info"] == {"NetAreaCode": "SE3"}
-
-    @pytest.mark.asyncio
-    async def test_service_info_empty_on_failure(self) -> None:
-        """service_info failure is non-fatal; result key present but empty."""
-        from custom_components.karlstadsenergi.api import KarlstadsenergiConnectionError
-
-        hass = MagicMock()
-        hass.loop = MagicMock()
-        hass.config_entries = MagicMock()
-        api = _make_api()
-        api.async_get_service_info = AsyncMock(
-            side_effect=KarlstadsenergiConnectionError("service info down")
-        )
-        entry = MagicMock()
-        entry.data = {"session_cookies": {}}
-
-        coord = KarlstadsenergiConsumptionCoordinator(hass, api, 1, entry)
-        result = await coord._async_update_data()
-
-        assert result["service_info"] == {}
 
     @pytest.mark.asyncio
     async def test_fee_data_included_in_result(self) -> None:
