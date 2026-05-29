@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 - **Duplicate brand assets at package root** -- icon/logo PNGs (light + dark, `@1x` + `@2x`) removed from the package root; `brand/` is the supported location since HA 2026.3 (~290 KB smaller install footprint).
+- **Unused `GetServiceInfo` API call** -- the endpoint's response was never consumed by any entity (its `NetAreaCode` is already exposed via the contract sensor). Removing it drops a recurring debug log line and one HTTP request per consumption update.
 
 ## [0.2.1] - 2026-04-03
 
