@@ -14,8 +14,8 @@ A Home Assistant integration for [Karlstads Energi](https://www.karlstadsenergi.
 > It exists because [@krissen](https://github.com/krissen) got new waste bins with a new pickup schedule and kept dragging the wrong ones to the curb on cold Värmland mornings. Automation to the rescue. It's shared here in case someone else in Karlstad has the same problem. If that's you -- välkommen, and good luck.
 
 <table align="center"><tr>
-  <td><img width="450" alt="Button Card with color-coded waste pickup dates" src="docs/images/button-card.png" /></td>
-  <td><img width="450" alt="Monthly electricity cost breakdown (Plotly)" src="docs/images/cost-monthly-plotly.png" /></td>
+  <td><img width="450" alt="Button Card with color-coded waste pickup dates" src="https://raw.githubusercontent.com/krissen/karlstadsenergi-homeassistant/main/docs/images/button-card.png" /></td>
+  <td><img width="450" alt="Monthly electricity cost breakdown (Plotly)" src="https://raw.githubusercontent.com/krissen/karlstadsenergi-homeassistant/main/docs/images/cost-monthly-plotly.png" /></td>
 </tr></table>
 
 > *Right: Monthly cost breakdown rendered with [Plotly Graph Card](https://github.com/dbuezas/lovelace-plotly-graph-card). The winter spike? That's [@krissen](https://github.com/krissen) running a full-scale bathroom renovation from November -- turns out power tools don't do wonders for the electricity bill --- especially not when combined with Swedish winters.*
@@ -106,8 +106,8 @@ After setup, go to **Settings -> Devices & Services -> Karlstadsenergi -> Config
 ## Entities and automations
 
 <table><tr>
-  <td><img width="420" alt="Built-in entities card with pickup dates and tomorrow alert" src="docs/images/builtin-entities.png" /></td>
-  <td><img width="420" alt="Hourly electricity consumption chart" src="docs/images/consumption-hourly.png" /></td>
+  <td><img width="420" alt="Built-in entities card with pickup dates and tomorrow alert" src="https://raw.githubusercontent.com/krissen/karlstadsenergi-homeassistant/main/docs/images/builtin-entities.png" /></td>
+  <td><img width="420" alt="Hourly electricity consumption chart" src="https://raw.githubusercontent.com/krissen/karlstadsenergi-homeassistant/main/docs/images/consumption-hourly.png" /></td>
 </tr></table>
 
 See **[Entities](docs/user/entities.md)** for a reference of all sensors, calendars, binary sensors, and their attributes, with automation examples.
@@ -117,11 +117,11 @@ See **[Entities](docs/user/entities.md)** for a reference of all sensors, calend
 ## Dashboard examples
 
 <table align="center"><tr>
-  <td><img width="420" alt="Mushroom chips showing days until pickup" src="docs/images/mushroom-chips.png" /></td>
-  <td><img width="420" alt="Calendar view with waste collection events" src="docs/images/calendar.png" /></td>
+  <td><img width="420" alt="Mushroom chips showing days until pickup" src="https://raw.githubusercontent.com/krissen/karlstadsenergi-homeassistant/main/docs/images/mushroom-chips.png" /></td>
+  <td><img width="420" alt="Calendar view with waste collection events" src="https://raw.githubusercontent.com/krissen/karlstadsenergi-homeassistant/main/docs/images/calendar.png" /></td>
 </tr><tr>
-  <td><img width="420" alt="Mushroom cards with monthly consumption and cost" src="docs/images/mushroom-electricity.png" /></td>
-  <td><img width="420" alt="Entities card with consumption, invoice price and spot price" src="docs/images/electricity.png" /></td>
+  <td><img width="420" alt="Mushroom cards with monthly consumption and cost" src="https://raw.githubusercontent.com/krissen/karlstadsenergi-homeassistant/main/docs/images/mushroom-electricity.png" /></td>
+  <td><img width="420" alt="Entities card with consumption, invoice price and spot price" src="https://raw.githubusercontent.com/krissen/karlstadsenergi-homeassistant/main/docs/images/electricity.png" /></td>
 </tr></table>
 
 See **[Dashboard examples](docs/user/dashboard-examples.md)** for card configurations using Mushroom Cards, Custom Button Card, and the built-in Calendar card.
