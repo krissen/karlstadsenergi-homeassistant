@@ -1,7 +1,7 @@
 # Karlstadsenergi for Home Assistant
 
 [![GitHub Release][releases-shield]][releases]
-[![License][license-shield]](LICENSE)
+[![License][license-shield]][license]
 
 [![hacs][hacsbadge]][hacs]
 [![Project Maintenance][maintenance-shield]][user_profile]
@@ -179,6 +179,7 @@ All data is retrieved from the [Karlstads Energi customer portal](https://minasi
 [hacs]: https://hacs.xyz
 [hacsbadge]: https://img.shields.io/badge/HACS-Default-blue.svg?style=for-the-badge
 [license-shield]: https://img.shields.io/github/license/krissen/karlstadsenergi-homeassistant.svg?style=for-the-badge
+[license]: https://github.com/krissen/karlstadsenergi-homeassistant/blob/main/LICENSE
 [maintenance-shield]: https://img.shields.io/badge/maintainer-%40krissen-blue.svg?style=for-the-badge
 [releases-shield]: https://img.shields.io/github/release/krissen/karlstadsenergi-homeassistant.svg?style=for-the-badge
 [releases]: https://github.com/krissen/karlstadsenergi-homeassistant/releases
