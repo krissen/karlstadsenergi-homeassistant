@@ -867,6 +867,12 @@ async def async_setup_entry(
     elif auth_method == AUTH_PASSWORD:
         try:
             await api.authenticate()
+        except KarlstadsenergiAuthError as err:
+            # Credentials are wrong (or the account is locked) -- surface a reauth
+            # flow and stop retrying, rather than hammering the portal login on the
+            # ConfigEntryNotReady schedule (which can trigger a lockout).
+            await api.async_close()
+            raise ConfigEntryAuthFailed(f"Authentication failed: {err}") from err
         except KarlstadsenergiApiError as err:
             await api.async_close()
             raise ConfigEntryNotReady(f"Could not authenticate: {err}") from err

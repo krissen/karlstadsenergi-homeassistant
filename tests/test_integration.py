@@ -445,6 +445,42 @@ class TestAsyncSetupEntryAuthFailure:
 
         api.async_close.assert_called_once()
 
+    @pytest.mark.asyncio
+    async def test_initial_password_auth_error_raises_config_entry_auth_failed(
+        self,
+    ) -> None:
+        """Invalid credentials with no saved cookies must surface reauth
+        (ConfigEntryAuthFailed), not retry indefinitely as ConfigEntryNotReady --
+        otherwise the portal login is hammered on the retry schedule and can lock
+        the account."""
+        from homeassistant.exceptions import ConfigEntryAuthFailed
+
+        from custom_components.karlstadsenergi.api import KarlstadsenergiAuthError
+
+        hass = _make_hass()
+        entry = _make_entry(
+            data={
+                CONF_PERSONNUMMER: "123456",
+                CONF_AUTH_METHOD: AUTH_PASSWORD,
+                "password": "wrong",
+            }
+        )
+        api = _make_api()
+        api.authenticate = AsyncMock(
+            side_effect=KarlstadsenergiAuthError("bad credentials")
+        )
+
+        with (
+            patch(
+                "custom_components.karlstadsenergi.KarlstadsenergiApi",
+                return_value=api,
+            ),
+            pytest.raises(ConfigEntryAuthFailed),
+        ):
+            await async_setup_entry(hass, entry)
+
+        api.async_close.assert_called_once()
+
 
 # ---------------------------------------------------------------------------
 # async_setup_entry -- connection failure (ConfigEntryNotReady)
