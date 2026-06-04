@@ -63,10 +63,10 @@ class KarlstadsenergiAuthError(KarlstadsenergiApiError):
 
 
 class KarlstadsenergiAccountLockedError(KarlstadsenergiAuthError):
-    """The portal reports the account is temporarily locked (LoginResultStatus 7).
+    """The portal reports the account is locked (LoginResultStatus 7).
 
     Distinct from a wrong-credentials failure: the credentials may be correct,
-    so re-entering them will not help until the lockout clears.
+    so re-entering them will not help while the account is locked.
     """
 
 
@@ -209,7 +209,7 @@ class KarlstadsenergiApi:
             status_name = LOGIN_RESULT_STATUS.get(login_status, "Unknown")
             if login_status == LOGIN_STATUS_LOCKED_ACCOUNT:
                 raise KarlstadsenergiAccountLockedError(
-                    f"Account temporarily locked (LoginResultStatus={login_status})"
+                    f"Account locked (LoginResultStatus={login_status})"
                 )
             raise KarlstadsenergiAuthError(
                 f"Authentication failed: Result={status}, "

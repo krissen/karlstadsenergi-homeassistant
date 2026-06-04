@@ -69,7 +69,7 @@
     },
     "error": {
       "invalid_auth": "Invalid credentials",
-      "account_locked": "Account temporarily locked from repeated sign-in attempts. Wait a few minutes, then try again.",
+      "account_locked": "This account is locked by Karlstadsenergi. Check the account in the customer portal, then try again.",
       "invalid_personnummer": "Invalid personnummer. Enter 10 or 12 digits.",
       "cannot_connect": "Could not connect to Karlstadsenergi",
       "bankid_pending": "BankID not yet signed. Open BankID app and try again.",

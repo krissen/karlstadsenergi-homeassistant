@@ -69,7 +69,7 @@
     },
     "error": {
       "invalid_auth": "Felaktiga inloggningsuppgifter",
-      "account_locked": "Kontot är tillfälligt låst efter upprepade inloggningsförsök. Vänta några minuter och försök igen.",
+      "account_locked": "Det här kontot är låst hos Karlstadsenergi. Kontrollera kontot i kundportalen och försök igen.",
       "invalid_personnummer": "Ogiltigt personnummer. Ange 10 eller 12 siffror.",
       "cannot_connect": "Kunde inte ansluta till Karlstadsenergi",
       "bankid_pending": "BankID inte signerat ännu. Öppna BankID-appen och försök igen.",
