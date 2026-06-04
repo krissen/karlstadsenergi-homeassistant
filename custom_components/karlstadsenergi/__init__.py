@@ -99,6 +99,7 @@ class _CookieSavingCoordinator(DataUpdateCoordinator[dict]):
         super().__init__(
             hass,
             _LOGGER,
+            config_entry=entry,
             name=name,
             update_interval=timedelta(hours=update_interval_hours),
         )
@@ -743,10 +744,11 @@ class KarlstadsenergiContractCoordinator(_CookieSavingCoordinator):
 class KarlstadsenergiSpotPriceCoordinator(DataUpdateCoordinator[dict]):
     """Coordinator for Evado public spot prices (15-minute refresh)."""
 
-    def __init__(self, hass: HomeAssistant) -> None:
+    def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         super().__init__(
             hass,
             _LOGGER,
+            config_entry=entry,
             name=f"{DOMAIN}_spot_price",
             update_interval=timedelta(minutes=15),
         )
@@ -942,7 +944,7 @@ async def async_setup_entry(
         _LOGGER.warning("Could not fetch contract data: %s", err)
 
     # Spot price coordinator (15 min interval, public API, no auth).
-    spot_price_coordinator = KarlstadsenergiSpotPriceCoordinator(hass)
+    spot_price_coordinator = KarlstadsenergiSpotPriceCoordinator(hass, entry)
     try:
         await spot_price_coordinator.async_config_entry_first_refresh()
     except Exception as err:
