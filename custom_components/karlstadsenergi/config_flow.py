@@ -159,10 +159,18 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
                 }
 
                 if self.source == "reauth":
-                    return self.async_update_and_abort(
-                        self._get_reauth_entry(),
+                    reauth_entry = self._get_reauth_entry()
+                    result = self.async_update_and_abort(
+                        reauth_entry,
                         data=new_data,
                     )
+                    # Reload explicitly: the update listener only reloads on
+                    # options changes, and an entry that failed setup has no
+                    # listener registered yet.
+                    self.hass.config_entries.async_schedule_reload(
+                        reauth_entry.entry_id
+                    )
+                    return result
 
                 return self.async_create_entry(
                     title=f"Karlstadsenergi ({customer_number})",
@@ -414,10 +422,16 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
             }
 
             if self.source == "reauth":
-                return self.async_update_and_abort(
-                    self._get_reauth_entry(),
+                reauth_entry = self._get_reauth_entry()
+                result = self.async_update_and_abort(
+                    reauth_entry,
                     data=new_data,
                 )
+                # Reload explicitly: the update listener only reloads on
+                # options changes, and an entry that failed setup has no
+                # listener registered yet.
+                self.hass.config_entries.async_schedule_reload(reauth_entry.entry_id)
+                return result
 
             return self.async_create_entry(title=title, data=new_data)
 
