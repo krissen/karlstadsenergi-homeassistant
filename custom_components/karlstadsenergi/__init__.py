@@ -6,7 +6,7 @@ import asyncio
 import json
 import logging
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 
 import aiohttp
@@ -80,6 +80,7 @@ class KarlstadsenergiData:
     contract_coordinator: KarlstadsenergiContractCoordinator
     spot_price_coordinator: KarlstadsenergiSpotPriceCoordinator
     setup_options: dict
+    setup_data: dict = field(default_factory=dict)
 
 
 type KarlstadsenergiConfigEntry = ConfigEntry[KarlstadsenergiData]
@@ -958,6 +959,7 @@ async def async_setup_entry(
         contract_coordinator=contract_coordinator,
         spot_price_coordinator=spot_price_coordinator,
         setup_options=dict(entry.options),
+        setup_data={k: v for k, v in entry.data.items() if k != "session_cookies"},
     )
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -998,6 +1000,9 @@ async def _async_reload_entry(
     hass: HomeAssistant,
     entry: KarlstadsenergiConfigEntry,
 ) -> None:
-    """Reload entry on options change (ignores data-only updates like cookie saves)."""
-    if dict(entry.options) != entry.runtime_data.setup_options:
+    """Reload on options or credential changes; ignore cookie-only data saves."""
+    options_changed = dict(entry.options) != entry.runtime_data.setup_options
+    current_data = {k: v for k, v in entry.data.items() if k != "session_cookies"}
+    data_changed = current_data != entry.runtime_data.setup_data
+    if options_changed or data_changed:
         await hass.config_entries.async_reload(entry.entry_id)
