@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **Locked accounts are distinguished from wrong credentials** -- the portal's `LoginResultStatus=7` (account temporarily locked, typically after repeated failed sign-ins) now shows a specific "account locked, wait and try again" message instead of the generic "invalid credentials". The credentials may be correct, so misreporting them as wrong was misleading.
 - **Authentication failure now surfaces reauth instead of retrying forever** -- when setup fails because credentials are invalid (and no saved session is available), the integration raises `ConfigEntryAuthFailed` to start a reauthentication flow, instead of `ConfigEntryNotReady`. Previously this path retried the portal login indefinitely on HA's schedule, which never prompted the user and could trigger a portal-side account lockout. Transient connection errors still raise `ConfigEntryNotReady` (retry).
 
 ### Changed
