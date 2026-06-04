@@ -24,6 +24,8 @@ from custom_components.karlstadsenergi.api import (
     AUTH_PASSWORD,
     BANKID_COMPLETE,
 )
+from homeassistant.config_entries import ConfigEntryState
+
 from custom_components.karlstadsenergi.config_flow import KarlstadsenergiConfigFlow
 from custom_components.karlstadsenergi.const import (
     CONF_AUTH_METHOD,
@@ -60,6 +62,9 @@ def _make_entry(
     }
     entry.options = options or {}
     entry.runtime_data = None
+    # Coordinators are created with config_entry=entry, so async_config_entry_first_refresh
+    # validates the entry state during setup.
+    entry.state = ConfigEntryState.SETUP_IN_PROGRESS
     entry.async_on_unload = MagicMock()
     entry.add_update_listener = MagicMock(return_value=MagicMock())
     return entry
@@ -1427,6 +1432,12 @@ class TestDeferredWasteEntityRegistration:
 
 
 class TestAsyncReloadEntry:
+    # Non-cookie credential snapshot matching the default _make_entry() data.
+    _BASE_DATA = {
+        CONF_PERSONNUMMER: "199001011234",
+        CONF_AUTH_METHOD: AUTH_BANKID,
+    }
+
     @pytest.mark.asyncio
     async def test_reload_triggered_when_options_changed(self) -> None:
         """_async_reload_entry must call async_reload when options differ from
@@ -1440,6 +1451,7 @@ class TestAsyncReloadEntry:
         entry.entry_id = "test-entry-id"
         runtime = MagicMock()
         runtime.setup_options = {"update_interval": 6}  # different from current options
+        runtime.setup_data = dict(self._BASE_DATA)  # data unchanged
         entry.runtime_data = runtime
 
         await _async_reload_entry(hass, entry)
@@ -1447,17 +1459,24 @@ class TestAsyncReloadEntry:
         hass.config_entries.async_reload.assert_called_once_with("test-entry-id")
 
     @pytest.mark.asyncio
-    async def test_reload_not_triggered_on_data_only_change(self) -> None:
-        """_async_reload_entry must NOT call async_reload when options match
-        setup_options (e.g. a cookie save updated entry.data but not options)."""
+    async def test_reload_not_triggered_on_cookie_only_change(self) -> None:
+        """_async_reload_entry must NOT call async_reload when only session_cookies
+        changed (a routine cookie save) and options are unchanged."""
         from custom_components.karlstadsenergi import _async_reload_entry
 
         hass = _make_hass()
         hass.config_entries.async_reload = AsyncMock()
 
-        entry = _make_entry(options={"update_interval": 6})
+        entry = _make_entry(
+            data={
+                **self._BASE_DATA,
+                "session_cookies": {"ASP.NET_SessionId": "rotated-cookie"},
+            },
+            options={"update_interval": 6},
+        )
         runtime = MagicMock()
         runtime.setup_options = {"update_interval": 6}  # same as current options
+        runtime.setup_data = dict(self._BASE_DATA)  # credentials unchanged
         entry.runtime_data = runtime
 
         await _async_reload_entry(hass, entry)
@@ -1465,9 +1484,36 @@ class TestAsyncReloadEntry:
         hass.config_entries.async_reload.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_reload_not_triggered_when_both_options_empty(self) -> None:
-        """_async_reload_entry does not reload when neither current nor setup options
-        have been customised (both are empty dicts)."""
+    async def test_reload_triggered_on_credential_change(self) -> None:
+        """_async_reload_entry must call async_reload when non-cookie data changed
+        (e.g. reauth stored new credentials), even if options are unchanged."""
+        from custom_components.karlstadsenergi import _async_reload_entry
+
+        hass = _make_hass()
+        hass.config_entries.async_reload = AsyncMock()
+
+        entry = _make_entry(
+            data={
+                CONF_PERSONNUMMER: "199912319999",  # changed by reauth
+                CONF_AUTH_METHOD: AUTH_BANKID,
+                "session_cookies": {"ASP.NET_SessionId": "abc123"},
+            },
+            options={"update_interval": 6},
+        )
+        entry.entry_id = "reauth-entry-id"
+        runtime = MagicMock()
+        runtime.setup_options = {"update_interval": 6}  # options unchanged
+        runtime.setup_data = dict(self._BASE_DATA)
+        entry.runtime_data = runtime
+
+        await _async_reload_entry(hass, entry)
+
+        hass.config_entries.async_reload.assert_called_once_with("reauth-entry-id")
+
+    @pytest.mark.asyncio
+    async def test_reload_not_triggered_when_options_and_data_unchanged(self) -> None:
+        """_async_reload_entry does not reload when neither options nor non-cookie
+        data have changed (both options empty, credentials match snapshot)."""
         from custom_components.karlstadsenergi import _async_reload_entry
 
         hass = _make_hass()
@@ -1476,6 +1522,7 @@ class TestAsyncReloadEntry:
         entry = _make_entry(options={})
         runtime = MagicMock()
         runtime.setup_options = {}
+        runtime.setup_data = dict(self._BASE_DATA)
         entry.runtime_data = runtime
 
         await _async_reload_entry(hass, entry)
