@@ -29,6 +29,7 @@ from .api import (
     AUTH_BANKID,
     AUTH_PASSWORD,
     BANKID_COMPLETE,
+    KarlstadsenergiAccountLockedError,
     KarlstadsenergiApi,
     KarlstadsenergiAuthError,
     KarlstadsenergiConnectionError,
@@ -151,6 +152,8 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
                 await api.authenticate_password()
                 await api.async_get_next_flex_dates()
                 cookies = api.get_session_cookies()
+            except KarlstadsenergiAccountLockedError:
+                errors["base"] = "account_locked"
             except KarlstadsenergiAuthError:
                 errors["base"] = "invalid_auth"
             except KarlstadsenergiConnectionError:

@@ -39,6 +39,20 @@ BANKID_OUTSTANDING = 2
 AUTH_PASSWORD = "password"
 AUTH_BANKID = "bankid"
 
+# LoginResultStatus values returned by the portal's /Authenticate endpoint.
+# Mirrors the enum in the portal login page JS (default.aspx).
+LOGIN_RESULT_STATUS = {
+    0: "OK",
+    1: "NotOK",  # wrong username/password
+    2: "CaptchaNotOK",  # captcha required
+    3: "TwoFactorNotOK",  # two-factor required
+    4: "EmtOnlyOK",
+    5: "EmtAdminOK",
+    6: "PfuOnlyOK",
+    7: "LockedAccount",  # account temporarily locked
+}
+LOGIN_STATUS_LOCKED_ACCOUNT = 7
+
 
 class KarlstadsenergiApiError(Exception):
     """Base exception for Karlstadsenergi API errors."""
@@ -46,6 +60,14 @@ class KarlstadsenergiApiError(Exception):
 
 class KarlstadsenergiAuthError(KarlstadsenergiApiError):
     """Authentication failed."""
+
+
+class KarlstadsenergiAccountLockedError(KarlstadsenergiAuthError):
+    """The portal reports the account is temporarily locked (LoginResultStatus 7).
+
+    Distinct from a wrong-credentials failure: the credentials may be correct,
+    so re-entering them will not help until the lockout clears.
+    """
 
 
 class KarlstadsenergiConnectionError(KarlstadsenergiApiError):
@@ -184,8 +206,14 @@ class KarlstadsenergiApi:
 
         if status is not True and status != "OK":
             self._authenticated = False
+            status_name = LOGIN_RESULT_STATUS.get(login_status, "Unknown")
+            if login_status == LOGIN_STATUS_LOCKED_ACCOUNT:
+                raise KarlstadsenergiAccountLockedError(
+                    f"Account temporarily locked (LoginResultStatus={login_status})"
+                )
             raise KarlstadsenergiAuthError(
-                f"Authentication failed: Result={status}, LoginResultStatus={login_status}"
+                f"Authentication failed: Result={status}, "
+                f"LoginResultStatus={login_status} ({status_name})"
             )
 
         self._authenticated = True

@@ -221,6 +221,31 @@ class TestStepPassword:
         assert result["errors"]["base"] == "invalid_auth"
 
     @pytest.mark.asyncio
+    async def test_locked_account_shows_account_locked(self) -> None:
+        """A locked account must show account_locked, not invalid_auth."""
+        from custom_components.karlstadsenergi.api import (
+            KarlstadsenergiAccountLockedError,
+        )
+
+        flow = _make_flow()
+        flow.async_set_unique_id = AsyncMock()
+        flow._abort_if_unique_id_configured = MagicMock()
+
+        mock_api = _mock_password_api(
+            auth_side_effect=KarlstadsenergiAccountLockedError("locked")
+        )
+        with patch(
+            "custom_components.karlstadsenergi.config_flow.KarlstadsenergiApi",
+            return_value=mock_api,
+        ):
+            result = await flow.async_step_password(
+                user_input={"customer_number": "166667", "password": "pw"}
+            )
+
+        assert result["type"] == "form"
+        assert result["errors"]["base"] == "account_locked"
+
+    @pytest.mark.asyncio
     async def test_connection_error_shows_cannot_connect(self) -> None:
         from custom_components.karlstadsenergi.api import KarlstadsenergiConnectionError
 
