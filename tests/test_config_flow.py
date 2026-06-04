@@ -279,6 +279,33 @@ class TestStepPassword:
             )
         flow.async_set_unique_id.assert_called_once_with("123456")
 
+    @pytest.mark.asyncio
+    async def test_reauth_updates_and_schedules_reload(self) -> None:
+        """Reauth completion must update the entry and explicitly schedule a
+        reload. The update listener only reloads on options changes, and an
+        entry that failed setup has no listener registered, so reauth cannot
+        rely on the listener to reload."""
+        flow = _make_flow(source="reauth")
+        flow.async_set_unique_id = AsyncMock()
+        reauth_entry = MagicMock()
+        reauth_entry.entry_id = "reauth-entry-id"
+        flow._get_reauth_entry = MagicMock(return_value=reauth_entry)
+
+        mock_api = _mock_password_api()
+        with patch(
+            "custom_components.karlstadsenergi.config_flow.KarlstadsenergiApi",
+            return_value=mock_api,
+        ):
+            result = await flow.async_step_password(
+                user_input={"customer_number": "123456", "password": "correct"}
+            )
+
+        assert result["type"] == "abort"
+        assert result["reason"] == "reauth_successful"
+        flow.hass.config_entries.async_schedule_reload.assert_called_once_with(
+            "reauth-entry-id"
+        )
+
 
 # ---------------------------------------------------------------------------
 # Options flow: update interval validation
