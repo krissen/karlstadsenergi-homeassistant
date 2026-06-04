@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Authentication failure now surfaces reauth instead of retrying forever** -- when setup fails because credentials are invalid (and no saved session is available), the integration raises `ConfigEntryAuthFailed` to start a reauthentication flow, instead of `ConfigEntryNotReady`. Previously this path retried the portal login indefinitely on HA's schedule, which never prompted the user and could trigger a portal-side account lockout. Transient connection errors still raise `ConfigEntryNotReady` (retry).
+
 ### Changed
 - **Reauthentication reload** -- reauth now updates the config entry with the non-reloading `async_update_and_abort()` and then schedules the reload explicitly, instead of using a reloading config-flow method. Resolves a Home Assistant 2026.6 deprecation (combining an update listener with a reloading config-flow method) that becomes an error in 2026.12. Reauth reloads reliably even when only the session cookie changed or when the previous setup had failed (no listener registered yet); the update listener itself continues to reload only on options changes.
 - **Coordinators pass the config entry explicitly** -- all `DataUpdateCoordinator` instances now receive `config_entry=` at construction, resolving the "relies on ContextVar" deprecation warning emitted since HA 2025.x.
