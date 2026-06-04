@@ -75,6 +75,18 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
         self._bankid_init: dict[str, str] = {}
         self._accounts: list[dict[str, Any]] = []
 
+    def _reauth_update_and_reload(self, new_data: dict[str, Any]) -> ConfigFlowResult:
+        """Finish reauth: update the entry and schedule an explicit reload.
+
+        ``async_update_and_abort()`` does not reload, and the update listener
+        only reloads on options changes (and is not registered at all when the
+        previous setup failed), so reauth schedules the reload itself.
+        """
+        reauth_entry = self._get_reauth_entry()
+        result = self.async_update_and_abort(reauth_entry, data=new_data)
+        self.hass.config_entries.async_schedule_reload(reauth_entry.entry_id)
+        return result
+
     async def async_step_user(
         self,
         user_input: dict[str, Any] | None = None,
@@ -159,18 +171,7 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
                 }
 
                 if self.source == "reauth":
-                    reauth_entry = self._get_reauth_entry()
-                    result = self.async_update_and_abort(
-                        reauth_entry,
-                        data=new_data,
-                    )
-                    # Reload explicitly: the update listener only reloads on
-                    # options changes, and an entry that failed setup has no
-                    # listener registered yet.
-                    self.hass.config_entries.async_schedule_reload(
-                        reauth_entry.entry_id
-                    )
-                    return result
+                    return self._reauth_update_and_reload(new_data)
 
                 return self.async_create_entry(
                     title=f"Karlstadsenergi ({customer_number})",
@@ -422,16 +423,7 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
             }
 
             if self.source == "reauth":
-                reauth_entry = self._get_reauth_entry()
-                result = self.async_update_and_abort(
-                    reauth_entry,
-                    data=new_data,
-                )
-                # Reload explicitly: the update listener only reloads on
-                # options changes, and an entry that failed setup has no
-                # listener registered yet.
-                self.hass.config_entries.async_schedule_reload(reauth_entry.entry_id)
-                return result
+                return self._reauth_update_and_reload(new_data)
 
             return self.async_create_entry(title=title, data=new_data)
 
