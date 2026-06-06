@@ -355,6 +355,9 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
             # attempt. Keep the API alive instead of tearing it down.
             if errors and self._api is not None:
                 try:
+                    # Drop the previous order's cached QR before replacing it,
+                    # or its token leaks in _QR_STORE for the process lifetime.
+                    self._forget_qr()
                     self._bankid_init = await self._api.bankid_initiate()
                     self._store_qr()
                 except KarlstadsenergiConnectionError:
