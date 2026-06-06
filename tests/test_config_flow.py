@@ -723,3 +723,50 @@ class TestBankIDQRView:
         view = KarlstadsenergiBankIDQRView()
         resp = await view.get(MagicMock(), "tok-missing")
         assert resp.status == 404
+
+
+class TestNormalizePersonnummer:
+    """10-digit input must be expanded to the 12-digit form the portal wants."""
+
+    def test_twelve_digits_passthrough(self) -> None:
+        from custom_components.karlstadsenergi.config_flow import (
+            _normalize_personnummer,
+        )
+
+        assert _normalize_personnummer("199001011234") == "199001011234"
+
+    def test_ten_digits_get_2000_century_for_recent_year(self) -> None:
+        from unittest.mock import patch
+
+        from custom_components.karlstadsenergi import config_flow
+
+        # current year 2026 -> yy=05 (<=26) resolves to 2005
+        fake_now = MagicMock()
+        fake_now.year = 2026
+        with patch.object(config_flow, "datetime") as dt:
+            dt.now.return_value = fake_now
+            assert config_flow._normalize_personnummer("0501011234") == "200501011234"
+
+    def test_ten_digits_get_1900_century_for_old_year(self) -> None:
+        from unittest.mock import patch
+
+        from custom_components.karlstadsenergi import config_flow
+
+        # current year 2026 -> yy=27 (>26) resolves to 1927
+        fake_now = MagicMock()
+        fake_now.year = 2026
+        with patch.object(config_flow, "datetime") as dt:
+            dt.now.return_value = fake_now
+            assert config_flow._normalize_personnummer("2705011234") == "192705011234"
+
+    def test_tail_preserved(self) -> None:
+        from unittest.mock import patch
+
+        from custom_components.karlstadsenergi import config_flow
+
+        fake_now = MagicMock()
+        fake_now.year = 2026
+        with patch.object(config_flow, "datetime") as dt:
+            dt.now.return_value = fake_now
+            # MMDDNNNN tail must survive verbatim
+            assert config_flow._normalize_personnummer("9912319876")[-8:] == "12319876"

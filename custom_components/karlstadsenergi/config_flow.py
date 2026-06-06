@@ -6,6 +6,7 @@ import asyncio
 import base64
 import logging
 from collections.abc import Mapping
+from datetime import datetime
 from typing import Any
 
 import voluptuous as vol
@@ -89,6 +90,25 @@ class KarlstadsenergiBankIDQRView(HomeAssistantView):
         return web.Response(body=data, content_type="image/png")
 
 
+def _normalize_personnummer(pnr: str) -> str:
+    """Return a Swedish personnummer in 12-digit YYYYMMDDNNNN form.
+
+    BankID signing identifies the person by signature and ignores the typed
+    number, but the portal's customer lookup (GetCustomerByPinCode) only
+    matches the 12-digit form -- a 10-digit entry signs fine yet returns zero
+    accounts. Infer the century from the two-digit year relative to today
+    (e.g. in 2026, ``05`` -> ``2005`` and ``27`` -> ``1927``). A wrong guess
+    can only fail the lookup as before, never make a 12-digit entry worse.
+    """
+    pnr = pnr.strip()
+    if len(pnr) != 10:
+        return pnr
+    yy = int(pnr[:2])
+    current_yy = datetime.now().year % 100
+    century = 2000 if yy <= current_yy else 1900
+    return f"{century + yy:04d}{pnr[2:]}"
+
+
 @callback
 def _register_qr_view(hass: HomeAssistant) -> None:
     """Register the QR view once per HA instance."""
@@ -166,6 +186,8 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
                 and self._personnummer.isdigit()
                 and len(self._personnummer) in (10, 12)
             ):
+                # The portal's customer lookup only matches the 12-digit form.
+                self._personnummer = _normalize_personnummer(self._personnummer)
                 return await self.async_step_bankid()
             errors["base"] = "invalid_personnummer"
 
@@ -297,9 +319,7 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
                         self._personnummer,
                         self._bankid_init["transaction_id"],
                     )
-                    _LOGGER.debug(
-                        "BankID: %d account(s) found", len(self._accounts)
-                    )
+                    _LOGGER.debug("BankID: %d account(s) found", len(self._accounts))
                     if len(self._accounts) == 1:
                         # Only one account -- login directly
                         return await self._do_bankid_login(self._accounts[0])
