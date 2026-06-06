@@ -275,11 +275,18 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
                     # by few users. Refactoring to progress steps is deferred.
                     await asyncio.sleep(2)
 
+                _LOGGER.debug(
+                    "BankID submit: poll result status=%s",
+                    result["status"] if result else None,
+                )
                 if result and result["status"] == BANKID_COMPLETE:
                     # Get available accounts
                     self._accounts = await self._api.bankid_get_customers(
                         self._personnummer,
                         self._bankid_init["transaction_id"],
+                    )
+                    _LOGGER.debug(
+                        "BankID: %d account(s) found", len(self._accounts)
                     )
                     if len(self._accounts) == 1:
                         # Only one account -- login directly
@@ -289,6 +296,10 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
                         return await self.async_step_select_account()
                     # Signed in, but this personnummer has no accounts. Re-signing
                     # won't change that, so send the user back to re-enter it.
+                    _LOGGER.warning(
+                        "BankID signed successfully but no accounts were "
+                        "returned for this personnummer"
+                    )
                     await self._cleanup_api()
                     return self.async_show_form(
                         step_id="bankid_personnummer",
@@ -462,15 +473,22 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
     ) -> ConfigFlowResult:
         """Login with selected account and create/update entry."""
         try:
+            _LOGGER.debug(
+                "BankID login attempt: customer_id set=%s, sub_user=%s",
+                bool(account.get("customer_id")),
+                bool(account.get("sub_user_id")),
+            )
             await self._api.bankid_login(
                 self._personnummer,
                 account["customer_id"],
                 self._bankid_init["transaction_id"],
                 account.get("sub_user_id", ""),
             )
+            _LOGGER.debug("BankID login OK; verifying data access")
 
             # Verify data access
             await self._api.async_get_next_flex_dates()
+            _LOGGER.debug("BankID data-access verification OK")
 
             cookies = self._api.get_session_cookies()
             self._forget_qr()
