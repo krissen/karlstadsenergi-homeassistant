@@ -85,6 +85,32 @@ class KarlstadsenergiData:
 type KarlstadsenergiConfigEntry = ConfigEntry[KarlstadsenergiData]
 
 
+def _persist_session_cookies(
+    hass: HomeAssistant, entry: ConfigEntry, api: KarlstadsenergiApi
+) -> None:
+    """Persist the API's current session cookies to the config entry.
+
+    The portal reissues the ``.PORTALAUTH`` forms-auth ticket with a fresh
+    value (and a fresh embedded expiry) on every request -- sliding
+    expiration. The live in-memory session always holds the latest ticket,
+    but the persisted copy goes stale unless refreshed regularly, INCLUDING
+    after heartbeats. If it goes stale, a Home Assistant restart loads an
+    expired ticket and setup fails to authenticate -- fatal for BankID, which
+    cannot re-auth non-interactively. Only persists when both required cookies
+    are present (never a partial/failed-auth state) and the value changed.
+    """
+    cookies = api.get_session_cookies()
+    if (
+        cookies
+        and "ASP.NET_SessionId" in cookies
+        and ".PORTALAUTH" in cookies
+        and cookies != entry.data.get("session_cookies")
+    ):
+        hass.config_entries.async_update_entry(
+            entry, data={**entry.data, "session_cookies": cookies}
+        )
+
+
 class _CookieSavingCoordinator(DataUpdateCoordinator[dict]):
     """Base coordinator that persists session cookies after each update."""
 
@@ -99,6 +125,7 @@ class _CookieSavingCoordinator(DataUpdateCoordinator[dict]):
         super().__init__(
             hass,
             _LOGGER,
+            config_entry=entry,
             name=name,
             update_interval=timedelta(hours=update_interval_hours),
         )
@@ -106,23 +133,8 @@ class _CookieSavingCoordinator(DataUpdateCoordinator[dict]):
         self._entry = entry
 
     def _save_cookies(self) -> None:
-        """Persist current session cookies to config entry.
-
-        Only saves when both required cookies are present, preventing
-        invalid/partial cookies from being persisted after auth failures.
-        """
-        cookies = self.api.get_session_cookies()
-        if (
-            cookies
-            and "ASP.NET_SessionId" in cookies
-            and ".PORTALAUTH" in cookies
-            and cookies != self._entry.data.get("session_cookies")
-        ):
-            new_data = {**self._entry.data, "session_cookies": cookies}
-            self.hass.config_entries.async_update_entry(
-                self._entry,
-                data=new_data,
-            )
+        """Persist current session cookies to the config entry."""
+        _persist_session_cookies(self.hass, self._entry, self.api)
 
 
 class KarlstadsenergiWasteCoordinator(_CookieSavingCoordinator):
@@ -743,10 +755,11 @@ class KarlstadsenergiContractCoordinator(_CookieSavingCoordinator):
 class KarlstadsenergiSpotPriceCoordinator(DataUpdateCoordinator[dict]):
     """Coordinator for Evado public spot prices (15-minute refresh)."""
 
-    def __init__(self, hass: HomeAssistant) -> None:
+    def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         super().__init__(
             hass,
             _LOGGER,
+            config_entry=entry,
             name=f"{DOMAIN}_spot_price",
             update_interval=timedelta(minutes=15),
         )
@@ -865,6 +878,12 @@ async def async_setup_entry(
     elif auth_method == AUTH_PASSWORD:
         try:
             await api.authenticate()
+        except KarlstadsenergiAuthError as err:
+            # Credentials are wrong (or the account is locked) -- surface a reauth
+            # flow and stop retrying, rather than hammering the portal login on the
+            # ConfigEntryNotReady schedule (which can trigger a lockout).
+            await api.async_close()
+            raise ConfigEntryAuthFailed(f"Authentication failed: {err}") from err
         except KarlstadsenergiApiError as err:
             await api.async_close()
             raise ConfigEntryNotReady(f"Could not authenticate: {err}") from err
@@ -942,7 +961,7 @@ async def async_setup_entry(
         _LOGGER.warning("Could not fetch contract data: %s", err)
 
     # Spot price coordinator (15 min interval, public API, no auth).
-    spot_price_coordinator = KarlstadsenergiSpotPriceCoordinator(hass)
+    spot_price_coordinator = KarlstadsenergiSpotPriceCoordinator(hass, entry)
     try:
         await spot_price_coordinator.async_config_entry_first_refresh()
     except Exception as err:
@@ -960,10 +979,15 @@ async def async_setup_entry(
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
-    # Heartbeat: keep session alive every 5 minutes
+    # Heartbeat: keep session alive every 5 minutes. The portal reissues the
+    # .PORTALAUTH ticket on each request (sliding expiration), so persist the
+    # refreshed cookies here too -- otherwise the saved ticket goes stale
+    # between the (infrequent) coordinator updates and a restart loads an
+    # expired ticket.
     async def _heartbeat(_now=None) -> None:
         try:
             await api.async_heartbeat()
+            _persist_session_cookies(hass, entry, api)
         except Exception:
             _LOGGER.debug("Heartbeat failed", exc_info=True)
 
@@ -996,6 +1020,10 @@ async def _async_reload_entry(
     hass: HomeAssistant,
     entry: KarlstadsenergiConfigEntry,
 ) -> None:
-    """Reload entry on options change (ignores data-only updates like cookie saves)."""
+    """Reload entry on options change (ignores data-only updates like cookie saves).
+
+    Reauth schedules its own reload explicitly (see config_flow), so the listener
+    only needs to handle options changes here.
+    """
     if dict(entry.options) != entry.runtime_data.setup_options:
         await hass.config_entries.async_reload(entry.entry_id)

@@ -16,6 +16,7 @@ import pytest
 from custom_components.karlstadsenergi import (
     KarlstadsenergiConsumptionCoordinator,
     KarlstadsenergiContractCoordinator,
+    _persist_session_cookies,
     async_setup_entry,
     async_unload_entry,
 )
@@ -24,6 +25,8 @@ from custom_components.karlstadsenergi.api import (
     AUTH_PASSWORD,
     BANKID_COMPLETE,
 )
+from homeassistant.config_entries import ConfigEntryState
+
 from custom_components.karlstadsenergi.config_flow import KarlstadsenergiConfigFlow
 from custom_components.karlstadsenergi.const import (
     CONF_AUTH_METHOD,
@@ -60,6 +63,9 @@ def _make_entry(
     }
     entry.options = options or {}
     entry.runtime_data = None
+    # Coordinators are created with config_entry=entry, so async_config_entry_first_refresh
+    # validates the entry state during setup.
+    entry.state = ConfigEntryState.SETUP_IN_PROGRESS
     entry.async_on_unload = MagicMock()
     entry.add_update_listener = MagicMock(return_value=MagicMock())
     return entry
@@ -428,6 +434,42 @@ class TestAsyncSetupEntryAuthFailure:
         hass = _make_hass()
         entry = _make_entry()
         api = _make_api(auth_error=True)
+
+        with (
+            patch(
+                "custom_components.karlstadsenergi.KarlstadsenergiApi",
+                return_value=api,
+            ),
+            pytest.raises(ConfigEntryAuthFailed),
+        ):
+            await async_setup_entry(hass, entry)
+
+        api.async_close.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_initial_password_auth_error_raises_config_entry_auth_failed(
+        self,
+    ) -> None:
+        """Invalid credentials with no saved cookies must surface reauth
+        (ConfigEntryAuthFailed), not retry indefinitely as ConfigEntryNotReady --
+        otherwise the portal login is hammered on the retry schedule and can lock
+        the account."""
+        from homeassistant.exceptions import ConfigEntryAuthFailed
+
+        from custom_components.karlstadsenergi.api import KarlstadsenergiAuthError
+
+        hass = _make_hass()
+        entry = _make_entry(
+            data={
+                CONF_PERSONNUMMER: "123456",
+                CONF_AUTH_METHOD: AUTH_PASSWORD,
+                "password": "wrong",
+            }
+        )
+        api = _make_api()
+        api.authenticate = AsyncMock(
+            side_effect=KarlstadsenergiAuthError("bad credentials")
+        )
 
         with (
             patch(
@@ -1449,13 +1491,24 @@ class TestAsyncReloadEntry:
     @pytest.mark.asyncio
     async def test_reload_not_triggered_on_data_only_change(self) -> None:
         """_async_reload_entry must NOT call async_reload when options match
-        setup_options (e.g. a cookie save updated entry.data but not options)."""
+        setup_options (e.g. a cookie save updated entry.data but not options).
+
+        Reauth handles its own reload explicitly, so data-only entry updates --
+        cookie saves in particular -- must never reload here.
+        """
         from custom_components.karlstadsenergi import _async_reload_entry
 
         hass = _make_hass()
         hass.config_entries.async_reload = AsyncMock()
 
-        entry = _make_entry(options={"update_interval": 6})
+        entry = _make_entry(
+            data={
+                CONF_PERSONNUMMER: "199001011234",
+                CONF_AUTH_METHOD: AUTH_BANKID,
+                "session_cookies": {"ASP.NET_SessionId": "rotated-cookie"},
+            },
+            options={"update_interval": 6},
+        )
         runtime = MagicMock()
         runtime.setup_options = {"update_interval": 6}  # same as current options
         entry.runtime_data = runtime
@@ -1585,3 +1638,54 @@ class TestUpdateIntervalClamping:
 
         waste_coord = entry.runtime_data.waste_coordinator
         assert waste_coord.update_interval == timedelta(hours=MAX_UPDATE_INTERVAL)
+
+
+class TestPersistSessionCookies:
+    """The .PORTALAUTH ticket rotates each request; persistence must keep up."""
+
+    def _api_with(self, cookies: dict) -> MagicMock:
+        api = MagicMock()
+        api.get_session_cookies = MagicMock(return_value=cookies)
+        return api
+
+    def test_persists_fresh_rotated_ticket(self) -> None:
+        """A new .PORTALAUTH value (same SessionId) must be written through."""
+        hass = MagicMock()
+        hass.config_entries = MagicMock()
+        entry = MagicMock()
+        entry.data = {
+            "session_cookies": {"ASP.NET_SessionId": "S", ".PORTALAUTH": "OLD"},
+            "other": "keep",
+        }
+        api = self._api_with({"ASP.NET_SessionId": "S", ".PORTALAUTH": "NEW"})
+
+        _persist_session_cookies(hass, entry, api)
+
+        hass.config_entries.async_update_entry.assert_called_once()
+        new_data = hass.config_entries.async_update_entry.call_args.kwargs["data"]
+        assert new_data["session_cookies"][".PORTALAUTH"] == "NEW"
+        assert new_data["other"] == "keep"  # other entry data preserved
+
+    def test_skips_when_unchanged(self) -> None:
+        hass = MagicMock()
+        hass.config_entries = MagicMock()
+        entry = MagicMock()
+        cookies = {"ASP.NET_SessionId": "S", ".PORTALAUTH": "SAME"}
+        entry.data = {"session_cookies": dict(cookies)}
+        api = self._api_with(dict(cookies))
+
+        _persist_session_cookies(hass, entry, api)
+
+        hass.config_entries.async_update_entry.assert_not_called()
+
+    def test_skips_partial_cookies(self) -> None:
+        """Never persist a partial set (e.g. after a failed/expired auth)."""
+        hass = MagicMock()
+        hass.config_entries = MagicMock()
+        entry = MagicMock()
+        entry.data = {"session_cookies": {"ASP.NET_SessionId": "S", ".PORTALAUTH": "X"}}
+        api = self._api_with({"ASP.NET_SessionId": "S"})  # missing .PORTALAUTH
+
+        _persist_session_cookies(hass, entry, api)
+
+        hass.config_entries.async_update_entry.assert_not_called()

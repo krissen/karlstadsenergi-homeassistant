@@ -9,13 +9,22 @@ directly and driving it through its async_step_* methods.
 
 from __future__ import annotations
 
+import base64
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from custom_components.karlstadsenergi.api import AUTH_BANKID, AUTH_PASSWORD
-from custom_components.karlstadsenergi.config_flow import KarlstadsenergiConfigFlow
+from custom_components.karlstadsenergi.api import (
+    AUTH_BANKID,
+    AUTH_PASSWORD,
+    KarlstadsenergiConnectionError,
+)
+from custom_components.karlstadsenergi.config_flow import (
+    _QR_STORE,
+    KarlstadsenergiBankIDQRView,
+    KarlstadsenergiConfigFlow,
+)
 from custom_components.karlstadsenergi.const import (
     CONF_AUTH_METHOD,
     CONF_PERSONNUMMER,
@@ -221,6 +230,31 @@ class TestStepPassword:
         assert result["errors"]["base"] == "invalid_auth"
 
     @pytest.mark.asyncio
+    async def test_locked_account_shows_account_locked(self) -> None:
+        """A locked account must show account_locked, not invalid_auth."""
+        from custom_components.karlstadsenergi.api import (
+            KarlstadsenergiAccountLockedError,
+        )
+
+        flow = _make_flow()
+        flow.async_set_unique_id = AsyncMock()
+        flow._abort_if_unique_id_configured = MagicMock()
+
+        mock_api = _mock_password_api(
+            auth_side_effect=KarlstadsenergiAccountLockedError("locked")
+        )
+        with patch(
+            "custom_components.karlstadsenergi.config_flow.KarlstadsenergiApi",
+            return_value=mock_api,
+        ):
+            result = await flow.async_step_password(
+                user_input={"customer_number": "166667", "password": "pw"}
+            )
+
+        assert result["type"] == "form"
+        assert result["errors"]["base"] == "account_locked"
+
+    @pytest.mark.asyncio
     async def test_connection_error_shows_cannot_connect(self) -> None:
         from custom_components.karlstadsenergi.api import KarlstadsenergiConnectionError
 
@@ -278,6 +312,33 @@ class TestStepPassword:
                 user_input={"customer_number": "123456", "password": "pw"}
             )
         flow.async_set_unique_id.assert_called_once_with("123456")
+
+    @pytest.mark.asyncio
+    async def test_reauth_updates_and_schedules_reload(self) -> None:
+        """Reauth completion must update the entry and explicitly schedule a
+        reload. The update listener only reloads on options changes, and an
+        entry that failed setup has no listener registered, so reauth cannot
+        rely on the listener to reload."""
+        flow = _make_flow(source="reauth")
+        flow.async_set_unique_id = AsyncMock()
+        reauth_entry = MagicMock()
+        reauth_entry.entry_id = "reauth-entry-id"
+        flow._get_reauth_entry = MagicMock(return_value=reauth_entry)
+
+        mock_api = _mock_password_api()
+        with patch(
+            "custom_components.karlstadsenergi.config_flow.KarlstadsenergiApi",
+            return_value=mock_api,
+        ):
+            result = await flow.async_step_password(
+                user_input={"customer_number": "123456", "password": "correct"}
+            )
+
+        assert result["type"] == "abort"
+        assert result["reason"] == "reauth_successful"
+        flow.hass.config_entries.async_schedule_reload.assert_called_once_with(
+            "reauth-entry-id"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -521,3 +582,191 @@ class TestStepReauthConfirm:
 
         schema_keys = list(result["data_schema"].schema.keys())
         assert schema_keys == []
+
+
+# ---------------------------------------------------------------------------
+# Step: bankid (QR display + resilient re-initiation)
+# ---------------------------------------------------------------------------
+
+
+def _make_bankid_api(qr_b64: str = "") -> MagicMock:
+    """Mock API that initiates a BankID order."""
+    mock_api = MagicMock()
+    mock_api.bankid_initiate = AsyncMock(
+        return_value={
+            "order_ref": "ref123",
+            "auto_start_token": "token",
+            "qr_start_token": "qrt",
+            "qr_code_base64": qr_b64,
+            "transaction_id": "txn123",
+            "data_field": "",
+        }
+    )
+    mock_api.bankid_poll = AsyncMock()
+    mock_api.async_close = AsyncMock()
+    return mock_api
+
+
+class TestStepBankid:
+    """The BankID step must show a valid order and never poll a dead API."""
+
+    @pytest.mark.asyncio
+    async def test_submit_with_no_live_api_reinitiates_without_crash(self) -> None:
+        """Regression: a Submit after the API was cleaned up must not crash.
+
+        Previously this raised AttributeError ('NoneType' has no bankid_poll)
+        because the Submit branch polled self._api while it was None.
+        """
+        flow = _make_flow()
+        flow._personnummer = "199001011234"
+        flow._api = None  # simulate cleanup after a prior failed attempt
+        flow._bankid_init = {}
+
+        mock_api = _make_bankid_api()
+        with patch(
+            "custom_components.karlstadsenergi.config_flow.KarlstadsenergiApi",
+            return_value=mock_api,
+        ):
+            # user_input is a Submit (dict), but there is no live order yet
+            result = await flow.async_step_bankid(user_input={})
+
+        assert result["type"] == "form"
+        assert result["step_id"] == "bankid"
+        # A fresh order was created and the stale Submit was NOT polled.
+        mock_api.bankid_initiate.assert_awaited()
+        mock_api.bankid_poll.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_pending_reinitiates_fresh_order(self) -> None:
+        """A pending (unsigned) order must yield a new order, keeping the API."""
+        flow = _make_flow()
+        flow._personnummer = "199001011234"
+
+        mock_api = _make_bankid_api()
+        # Poll always reports "outstanding" (status 2) -> pending.
+        mock_api.bankid_poll = AsyncMock(return_value={"status": 2, "data": {}})
+
+        with (
+            patch(
+                "custom_components.karlstadsenergi.config_flow.KarlstadsenergiApi",
+                return_value=mock_api,
+            ),
+            patch(
+                "custom_components.karlstadsenergi.config_flow.asyncio.sleep",
+                new=AsyncMock(),
+            ),
+        ):
+            # First entry creates the order, then a Submit polls it.
+            await flow.async_step_bankid(user_input=None)
+            result = await flow.async_step_bankid(user_input={})
+
+        assert result["step_id"] == "bankid"
+        assert result["errors"] == {"base": "bankid_pending"}
+        # API stays alive for the next attempt; a fresh order was created.
+        assert flow._api is mock_api
+        assert mock_api.bankid_initiate.await_count >= 2
+
+    @pytest.mark.asyncio
+    async def test_connection_error_on_initiate_returns_to_user_form(self) -> None:
+        """A connection error while initiating bails to the user step."""
+        flow = _make_flow()
+        flow._personnummer = "199001011234"
+        flow._api = None
+        flow._bankid_init = {}
+
+        mock_api = _make_bankid_api()
+        mock_api.bankid_initiate = AsyncMock(
+            side_effect=KarlstadsenergiConnectionError("boom")
+        )
+        with patch(
+            "custom_components.karlstadsenergi.config_flow.KarlstadsenergiApi",
+            return_value=mock_api,
+        ):
+            result = await flow.async_step_bankid(user_input=None)
+
+        assert result["step_id"] == "user"
+        assert result["errors"] == {"base": "cannot_connect"}
+
+    @pytest.mark.asyncio
+    async def test_qr_png_is_cached_and_linked(self) -> None:
+        """Initiating an order caches the decoded QR PNG and links to it."""
+        png = base64.b64encode(b"PNGDATA").decode("ascii")
+        flow = _make_flow()
+        flow._personnummer = "199001011234"
+
+        mock_api = _make_bankid_api(qr_b64=png)
+        with patch(
+            "custom_components.karlstadsenergi.config_flow.KarlstadsenergiApi",
+            return_value=mock_api,
+        ):
+            result = await flow.async_step_bankid(user_input=None)
+
+        assert _QR_STORE["txn123"] == b"PNGDATA"
+        assert result["description_placeholders"]["qr_url"].endswith("/txn123")
+
+
+class TestBankIDQRView:
+    """The HTTP view that serves the QR PNG cross-device."""
+
+    @pytest.mark.asyncio
+    async def test_known_token_returns_png(self) -> None:
+        _QR_STORE["tok-known"] = b"imgbytes"
+        view = KarlstadsenergiBankIDQRView()
+        resp = await view.get(MagicMock(), "tok-known")
+        assert resp.status == 200
+        assert resp.body == b"imgbytes"
+        assert resp.content_type == "image/png"
+        _QR_STORE.pop("tok-known", None)
+
+    @pytest.mark.asyncio
+    async def test_unknown_token_returns_404(self) -> None:
+        view = KarlstadsenergiBankIDQRView()
+        resp = await view.get(MagicMock(), "tok-missing")
+        assert resp.status == 404
+
+
+class TestNormalizePersonnummer:
+    """10-digit input must be expanded to the 12-digit form the portal wants."""
+
+    def test_twelve_digits_passthrough(self) -> None:
+        from custom_components.karlstadsenergi.config_flow import (
+            _normalize_personnummer,
+        )
+
+        assert _normalize_personnummer("199001011234") == "199001011234"
+
+    def test_ten_digits_get_2000_century_for_recent_year(self) -> None:
+        from unittest.mock import patch
+
+        from custom_components.karlstadsenergi import config_flow
+
+        # current year 2026 -> yy=05 (<=26) resolves to 2005
+        fake_now = MagicMock()
+        fake_now.year = 2026
+        with patch.object(config_flow, "datetime") as dt:
+            dt.now.return_value = fake_now
+            assert config_flow._normalize_personnummer("0501011234") == "200501011234"
+
+    def test_ten_digits_get_1900_century_for_old_year(self) -> None:
+        from unittest.mock import patch
+
+        from custom_components.karlstadsenergi import config_flow
+
+        # current year 2026 -> yy=27 (>26) resolves to 1927
+        fake_now = MagicMock()
+        fake_now.year = 2026
+        with patch.object(config_flow, "datetime") as dt:
+            dt.now.return_value = fake_now
+            assert config_flow._normalize_personnummer("2705011234") == "192705011234"
+
+    def test_tail_preserved(self) -> None:
+        from unittest.mock import patch
+
+        from custom_components.karlstadsenergi import config_flow
+
+        fake_now = MagicMock()
+        fake_now.year = 2026
+        with patch.object(config_flow, "datetime") as dt:
+            dt.now.return_value = fake_now
+            # MMDDNNNN tail must survive verbatim
+            assert config_flow._normalize_personnummer("9912319876")[-8:] == "12319876"

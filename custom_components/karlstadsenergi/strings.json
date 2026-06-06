@@ -43,7 +43,7 @@
       },
       "bankid": {
         "title": "Karlstadsenergi - BankID",
-        "description": "Open BankID on your phone and sign in.\n\nOn your phone: [Open BankID app](bankid:///?autostarttoken={auto_start_token}&redirect=null)\n\nAfter signing, click **Submit**.",
+        "description": "Sign in with BankID.\n\n**On another device:** scan this QR code with your BankID app. If it does not appear below, [open the QR code]({qr_url}).\n\n![BankID QR code]({qr_url})\n\n**On this device:** [open the BankID app](bankid:///?autostarttoken={auto_start_token}&redirect=null)\n\nAfter signing, click **Submit**.",
         "data": {}
       },
       "select_account": {
@@ -69,6 +69,7 @@
     },
     "error": {
       "invalid_auth": "Invalid credentials",
+      "account_locked": "This account is locked by Karlstadsenergi. Check the account in the customer portal, then try again.",
       "invalid_personnummer": "Invalid personnummer. Enter 10 or 12 digits.",
       "cannot_connect": "Could not connect to Karlstadsenergi",
       "bankid_pending": "BankID not yet signed. Open BankID app and try again.",
