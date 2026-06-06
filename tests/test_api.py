@@ -122,6 +122,23 @@ class TestSessionCookies:
         api.set_session_cookies(cookies)
         assert api._saved_cookies == cookies
 
+    def test_set_session_cookies_marks_authenticated(self) -> None:
+        """Restoring cookies must mark the client authenticated.
+
+        Regression: without this, the pre-request guard fired a re-auth before
+        the session restored the cookies, which is fatal for BankID (no
+        non-interactive re-auth). See set_session_cookies docstring.
+        """
+        api = KarlstadsenergiApi("1234567890")  # defaults to BankID
+        assert api._authenticated is False
+        api.set_session_cookies({"ASP.NET_SessionId": "abc", ".PORTALAUTH": "xyz"})
+        assert api._authenticated is True
+
+    def test_set_session_cookies_empty_does_not_authenticate(self) -> None:
+        api = KarlstadsenergiApi("1234567890")
+        api.set_session_cookies({})
+        assert api._authenticated is False
+
     def test_get_session_cookies_returns_empty_when_no_session(self) -> None:
         api = KarlstadsenergiApi("1234567890", AUTH_PASSWORD, "pass")
         assert api.get_session_cookies() == {}

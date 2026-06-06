@@ -7,7 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Cross-device BankID QR code** -- the BankID setup step now shows a scannable QR code so you can authenticate from a desktop browser using the BankID app on a separate phone. Previously only same-device sign-in (tapping the `bankid://` link on the phone running Home Assistant) worked, because the QR could not be rendered in the config-flow UI. The QR is served from a small auth-free HTTP endpoint and linked from the form for clients that do not render inline images.
+
 ### Fixed
+- **BankID account always required reconfiguration after setup** -- a successfully configured BankID account (including delegated/sub-user accounts) failed on the very first data refresh with "BankID requires interactive authentication", forcing a reauth loop. Restoring saved session cookies did not mark the client as authenticated, so the pre-request guard triggered a re-auth before the session applied the cookies -- fatal for BankID, which cannot re-auth without an interactive QR scan. Restored cookies now mark the client authenticated; a genuinely stale cookie is still caught by the first request's 302/401 and surfaces a reauth prompt.
+- **Crash when re-submitting BankID after a failed attempt** -- a second "Submit" after a pending/failed BankID order raised `AttributeError: 'NoneType' object has no attribute 'bankid_poll'`. The step now re-initiates a fresh order instead of polling a torn-down session, and keeps the order valid across retries.
 - **Locked accounts are distinguished from wrong credentials** -- the portal's `LoginResultStatus=7` (account locked) now shows a specific "account locked" message instead of the generic "invalid credentials". The credentials may be correct, so reporting them as wrong was misleading.
 - **Authentication failure now surfaces reauth instead of retrying forever** -- when setup fails because credentials are invalid (and no saved session is available), the integration raises `ConfigEntryAuthFailed` to start a reauthentication flow, instead of `ConfigEntryNotReady`. Previously this path retried the portal login indefinitely on HA's schedule, which never prompted the user and could trigger a portal-side account lockout. Transient connection errors still raise `ConfigEntryNotReady` (retry).
 

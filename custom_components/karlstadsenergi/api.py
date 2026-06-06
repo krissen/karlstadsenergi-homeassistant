@@ -149,8 +149,18 @@ class KarlstadsenergiApi:
         return cookies
 
     def set_session_cookies(self, cookies: dict[str, str]) -> None:
-        """Set saved cookies to restore on next session creation."""
+        """Set saved cookies to restore on next session creation.
+
+        Marks the client as authenticated when cookies are provided. Without
+        this, the pre-request guard ``if not self._authenticated`` fires before
+        the lazily-created session restores the cookies, forcing a re-auth --
+        which is fatal for BankID, whose re-auth requires an interactive QR
+        scan. A genuinely stale cookie is still caught later: the first request
+        gets a 302/401, clears the flag, and surfaces the reauth prompt.
+        """
         self._saved_cookies = cookies
+        if cookies:
+            self._authenticated = True
 
     async def _post(
         self,
@@ -348,6 +358,23 @@ class KarlstadsenergiApi:
                 }
             )
 
+        # Structural diagnostics only (counts + field names, never values) so we
+        # can spot an empty list or a renamed field without logging PII.
+        _LOGGER.debug(
+            "BankID accounts: %d customer(s), %d sub-user(s)",
+            len(customers),
+            len(sub_users),
+        )
+        if customers:
+            _LOGGER.debug("Customer record keys: %s", sorted(customers[0].keys()))
+        if sub_users:
+            _LOGGER.debug("Sub-user record keys: %s", sorted(sub_users[0].keys()))
+        _LOGGER.debug(
+            "Built %d account(s); customer_id present: %s",
+            len(accounts),
+            [bool(a["customer_id"]) for a in accounts],
+        )
+
         return accounts
 
     async def bankid_login(
@@ -367,12 +394,24 @@ class KarlstadsenergiApi:
             f"/{personnummer}/{b64_customer_id}"
             f"/{transaction_id}/{sub_user_id}"
         )
+        _LOGGER.debug(
+            "BankID login: customer_id set=%s, sub_user_id=%r",
+            bool(customer_id),
+            sub_user_id,
+        )
         resp = await self._post(url_login)
         try:
             resp.raise_for_status()
             result = await resp.json()
         finally:
             await resp.release()
+
+        _LOGGER.debug(
+            "BankID login response: keys=%s, Key=%r, Value=%r",
+            sorted(result.keys()) if isinstance(result, dict) else type(result),
+            result.get("Key") if isinstance(result, dict) else None,
+            result.get("Value") if isinstance(result, dict) else None,
+        )
 
         if result.get("Key") is True:
             # Navigate to start page to initialize the session view
