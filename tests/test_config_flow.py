@@ -770,3 +770,59 @@ class TestNormalizePersonnummer:
             dt.now.return_value = fake_now
             # MMDDNNNN tail must survive verbatim
             assert config_flow._normalize_personnummer("9912319876")[-8:] == "12319876"
+
+
+class TestBankidQrStoreNoLeak:
+    """A recoverable retry must not orphan the previous order's QR in _QR_STORE."""
+
+    @pytest.mark.asyncio
+    async def test_pending_retry_evicts_old_qr_token(self) -> None:
+        import base64 as _b64
+
+        from custom_components.karlstadsenergi.config_flow import _QR_STORE
+
+        png = _b64.b64encode(b"PNG").decode("ascii")
+        flow = _make_flow()
+        flow._personnummer = "199001011234"
+
+        # Two successive orders with DISTINCT transaction ids + QR payloads.
+        orders = [
+            {
+                "order_ref": "r1",
+                "auto_start_token": "t1",
+                "qr_start_token": "q1",
+                "qr_code_base64": png,
+                "transaction_id": "txn-A",
+                "data_field": "",
+            },
+            {
+                "order_ref": "r2",
+                "auto_start_token": "t2",
+                "qr_start_token": "q2",
+                "qr_code_base64": png,
+                "transaction_id": "txn-B",
+                "data_field": "",
+            },
+        ]
+        mock_api = MagicMock()
+        mock_api.bankid_initiate = AsyncMock(side_effect=orders)
+        mock_api.bankid_poll = AsyncMock(return_value={"status": 2, "data": {}})
+        mock_api.async_close = AsyncMock()
+
+        with (
+            patch(
+                "custom_components.karlstadsenergi.config_flow.KarlstadsenergiApi",
+                return_value=mock_api,
+            ),
+            patch(
+                "custom_components.karlstadsenergi.config_flow.asyncio.sleep",
+                new=AsyncMock(),
+            ),
+        ):
+            await flow.async_step_bankid(user_input=None)  # first order -> txn-A
+            assert "txn-A" in _QR_STORE
+            await flow.async_step_bankid(user_input={})  # pending -> re-init txn-B
+
+        assert "txn-A" not in _QR_STORE  # old token evicted, no leak
+        assert "txn-B" in _QR_STORE
+        _QR_STORE.pop("txn-B", None)

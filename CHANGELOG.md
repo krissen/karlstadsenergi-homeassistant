@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-06-06
+
 ### Added
 - **Cross-device BankID QR code** -- the BankID setup step now shows a scannable QR code so you can authenticate from a desktop browser using the BankID app on a separate phone. Previously only same-device sign-in (tapping the `bankid://` link on the phone running Home Assistant) worked, because the QR could not be rendered in the config-flow UI. The QR is served from a small auth-free HTTP endpoint and linked from the form for clients that do not render inline images.
 
@@ -15,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Crash when re-submitting BankID after a failed attempt** -- a second "Submit" after a pending/failed BankID order raised `AttributeError: 'NoneType' object has no attribute 'bankid_poll'`. The step now re-initiates a fresh order instead of polling a torn-down session, and keeps the order valid across retries.
 - **10-digit personnummer signed in but found no BankID accounts** -- BankID signing identifies the person by signature regardless of the typed number, but the portal's customer lookup only matches the 12-digit form, so a 10-digit entry signed successfully yet returned zero accounts ("BankID authentication failed"). A 10-digit entry is now expanded to 12 digits (century inferred from the two-digit year) before the lookup.
 - **BankID session lost on restart despite a live session** -- the portal reissues the `.PORTALAUTH` forms-auth ticket with a fresh expiry on every request (sliding expiration), but the saved copy was only refreshed after the infrequent coordinator updates -- never after the 5-minute heartbeat. The persisted ticket went stale during normal operation, so a Home Assistant restart loaded an expired ticket and forced a BankID re-scan even though the running session was healthy. The heartbeat now persists the refreshed cookies, so a restart within the session window resumes without re-authentication.
+- **BankID QR cache leak on retries** -- each recoverable retry during BankID sign-in started a new order without evicting the previous order's cached QR image, leaking a small amount of memory per retry for the process lifetime. The old entry is now dropped before the new order is created.
 - **Locked accounts are distinguished from wrong credentials** -- the portal's `LoginResultStatus=7` (account locked) now shows a specific "account locked" message instead of the generic "invalid credentials". The credentials may be correct, so reporting them as wrong was misleading.
 - **Authentication failure now surfaces reauth instead of retrying forever** -- when setup fails because credentials are invalid (and no saved session is available), the integration raises `ConfigEntryAuthFailed` to start a reauthentication flow, instead of `ConfigEntryNotReady`. Previously this path retried the portal login indefinitely on HA's schedule, which never prompted the user and could trigger a portal-side account lockout. Transient connection errors still raise `ConfigEntryNotReady` (retry).
 
