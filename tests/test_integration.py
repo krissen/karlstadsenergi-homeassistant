@@ -16,6 +16,7 @@ import pytest
 from custom_components.karlstadsenergi import (
     KarlstadsenergiConsumptionCoordinator,
     KarlstadsenergiContractCoordinator,
+    _persist_session_cookies,
     async_setup_entry,
     async_unload_entry,
 )
@@ -1637,3 +1638,54 @@ class TestUpdateIntervalClamping:
 
         waste_coord = entry.runtime_data.waste_coordinator
         assert waste_coord.update_interval == timedelta(hours=MAX_UPDATE_INTERVAL)
+
+
+class TestPersistSessionCookies:
+    """The .PORTALAUTH ticket rotates each request; persistence must keep up."""
+
+    def _api_with(self, cookies: dict) -> MagicMock:
+        api = MagicMock()
+        api.get_session_cookies = MagicMock(return_value=cookies)
+        return api
+
+    def test_persists_fresh_rotated_ticket(self) -> None:
+        """A new .PORTALAUTH value (same SessionId) must be written through."""
+        hass = MagicMock()
+        hass.config_entries = MagicMock()
+        entry = MagicMock()
+        entry.data = {
+            "session_cookies": {"ASP.NET_SessionId": "S", ".PORTALAUTH": "OLD"},
+            "other": "keep",
+        }
+        api = self._api_with({"ASP.NET_SessionId": "S", ".PORTALAUTH": "NEW"})
+
+        _persist_session_cookies(hass, entry, api)
+
+        hass.config_entries.async_update_entry.assert_called_once()
+        new_data = hass.config_entries.async_update_entry.call_args.kwargs["data"]
+        assert new_data["session_cookies"][".PORTALAUTH"] == "NEW"
+        assert new_data["other"] == "keep"  # other entry data preserved
+
+    def test_skips_when_unchanged(self) -> None:
+        hass = MagicMock()
+        hass.config_entries = MagicMock()
+        entry = MagicMock()
+        cookies = {"ASP.NET_SessionId": "S", ".PORTALAUTH": "SAME"}
+        entry.data = {"session_cookies": dict(cookies)}
+        api = self._api_with(dict(cookies))
+
+        _persist_session_cookies(hass, entry, api)
+
+        hass.config_entries.async_update_entry.assert_not_called()
+
+    def test_skips_partial_cookies(self) -> None:
+        """Never persist a partial set (e.g. after a failed/expired auth)."""
+        hass = MagicMock()
+        hass.config_entries = MagicMock()
+        entry = MagicMock()
+        entry.data = {"session_cookies": {"ASP.NET_SessionId": "S", ".PORTALAUTH": "X"}}
+        api = self._api_with({"ASP.NET_SessionId": "S"})  # missing .PORTALAUTH
+
+        _persist_session_cookies(hass, entry, api)
+
+        hass.config_entries.async_update_entry.assert_not_called()
