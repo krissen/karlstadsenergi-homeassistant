@@ -865,6 +865,11 @@ async def async_setup_entry(
     elif auth_method == AUTH_PASSWORD:
         try:
             await api.authenticate()
+        except KarlstadsenergiAuthError as err:
+            # A rejected credential never recovers on its own. Surface a reauth
+            # prompt instead of retrying ConfigEntryNotReady forever.
+            await api.async_close()
+            raise ConfigEntryAuthFailed(f"Could not authenticate: {err}") from err
         except KarlstadsenergiApiError as err:
             await api.async_close()
             raise ConfigEntryNotReady(f"Could not authenticate: {err}") from err
