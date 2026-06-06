@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Cross-device BankID QR code** -- the BankID setup step now shows a scannable QR code so you can authenticate from a desktop browser using the BankID app on a separate phone. Previously only same-device sign-in (tapping the `bankid://` link on the phone running Home Assistant) worked, because the QR could not be rendered in the config-flow UI. The QR is served from a small auth-free HTTP endpoint and linked from the form for clients that do not render inline images.
+
+### Fixed
+- **Crash when re-submitting BankID after a failed attempt** -- a second "Submit" after a pending/failed BankID order raised `AttributeError: 'NoneType' object has no attribute 'bankid_poll'`. The step now re-initiates a fresh order instead of polling a torn-down session, and keeps the order valid across retries.
+- **Password auth failure retried forever** -- when a saved customer-number/password credential was rejected on setup, the integration raised `ConfigEntryNotReady` and retried indefinitely (every 80→600 s). It now raises `ConfigEntryAuthFailed`, surfacing a re-authentication prompt instead.
+
 ## [0.3.1] - 2026-05-30
 
 ### Changed

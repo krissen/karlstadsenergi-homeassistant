@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import logging
 from collections.abc import Mapping
 from typing import Any
 
 import voluptuous as vol
+from aiohttp import web
 
+from homeassistant.components.http import HomeAssistantView
 from homeassistant.config_entries import (
     ConfigEntry,
     ConfigFlow,
@@ -16,7 +19,7 @@ from homeassistant.config_entries import (
     OptionsFlow,
 )
 from homeassistant.const import CONF_PASSWORD
-from homeassistant.core import callback
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.selector import (
     NumberSelector,
     NumberSelectorConfig,
@@ -29,6 +32,8 @@ from .api import (
     AUTH_BANKID,
     AUTH_PASSWORD,
     BANKID_COMPLETE,
+    BANKID_OUTSTANDING,
+    BANKID_USER_SIGN,
     KarlstadsenergiApi,
     KarlstadsenergiAuthError,
     KarlstadsenergiConnectionError,
@@ -48,6 +53,48 @@ from .const import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+# Cross-device BankID QR support.
+#
+# HA's config-flow markdown strips data: URIs and inline <img>, so the QR PNG
+# cannot be embedded directly in a step description. Instead we cache the PNG
+# bytes here, keyed by the per-order transaction id, and expose them through a
+# tiny HTTP view that the description links to. A user on a desktop can then
+# scan the QR with the BankID app on their phone.
+QR_URL_BASE = "/api/karlstadsenergi/bankid_qr"
+_QR_VIEW_KEY = f"{DOMAIN}_bankid_qr_view"
+_QR_STORE: dict[str, bytes] = {}
+
+
+class KarlstadsenergiBankIDQRView(HomeAssistantView):
+    """Serve the BankID QR PNG so it can be scanned cross-device.
+
+    The token is a random per-order transaction id, and scanning the QR only
+    lets the scanner *start* a BankID signing (authenticating their own
+    identity, not gaining access to anyone else's account), so the view is not
+    auth-protected -- an unauthenticated browser fetch from the QR link must
+    succeed.
+    """
+
+    url = QR_URL_BASE + "/{token}"
+    name = "api:karlstadsenergi:bankid_qr"
+    requires_auth = False
+
+    async def get(self, request: web.Request, token: str) -> web.Response:
+        """Return the cached QR PNG for a transaction, or 404."""
+        data = _QR_STORE.get(token)
+        if data is None:
+            return web.Response(status=404)
+        return web.Response(body=data, content_type="image/png")
+
+
+@callback
+def _register_qr_view(hass: HomeAssistant) -> None:
+    """Register the QR view once per HA instance."""
+    if hass.data.get(_QR_VIEW_KEY):
+        return
+    hass.http.register_view(KarlstadsenergiBankIDQRView())
+    hass.data[_QR_VIEW_KEY] = True
 
 
 _USER_STEP_SCHEMA = vol.Schema(
@@ -184,26 +231,26 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
         self,
         user_input: dict[str, Any] | None = None,
     ) -> ConfigFlowResult:
-        """Step 2 (BankID): Show QR code and wait for signing."""
+        """Step 2 (BankID): Show QR code / deep link and wait for signing."""
         errors: dict[str, str] = {}
 
-        # Initiate BankID on first entry
+        _register_qr_view(self.hass)
+
+        # (Re)initiate whenever there is no live order. This covers the first
+        # entry as well as the case where a previous attempt cleaned up the API
+        # after an error -- without this guard, a second Submit would poll a
+        # None API and crash with AttributeError.
         if self._api is None:
-            self._api = KarlstadsenergiApi(
-                self._personnummer,
-                AUTH_BANKID,
-            )
+            self._api = KarlstadsenergiApi(self._personnummer, AUTH_BANKID)
             try:
-                # QR code (qr_code_base64) is available from the API but cannot be
-                # displayed in HA's config flow UI -- the frontend sanitizes data URIs
-                # and <img> tags in description markdown. Users authenticate via the
-                # bankid:// deep link shown in the description instead.
                 self._bankid_init = await self._api.bankid_initiate()
             except KarlstadsenergiConnectionError:
-                errors["base"] = "cannot_connect"
-                await self._api.async_close()
-                self._api = None
-                return self._show_user_form(errors)
+                await self._cleanup_api()
+                return self._show_user_form({"base": "cannot_connect"})
+            self._store_qr()
+            # A Submit that arrived with no live API was acting on a dead order;
+            # ignore it and let the user sign the fresh order we just created.
+            user_input = None
 
         if user_input is not None:
             # User clicked Submit -- poll for completion
@@ -215,7 +262,11 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
                     )
                     if result["status"] == BANKID_COMPLETE:
                         break
-                    if result["status"] not in (1, 2, 5):
+                    if result["status"] not in (
+                        BANKID_USER_SIGN,
+                        BANKID_OUTSTANDING,
+                        5,
+                    ):
                         break
                     # Known limitation (B4): This sleep-based polling blocks the
                     # config flow for up to 30 seconds. The recommended HA pattern
@@ -233,43 +284,70 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
                     if len(self._accounts) == 1:
                         # Only one account -- login directly
                         return await self._do_bankid_login(self._accounts[0])
-                    elif len(self._accounts) > 1:
+                    if len(self._accounts) > 1:
                         # Multiple accounts -- show selection
                         return await self.async_step_select_account()
-                    else:
-                        errors["base"] = "bankid_failed"
-                else:
-                    errors["base"] = "bankid_pending"
-                    # Re-initiate for next attempt
-                    try:
-                        self._bankid_init = await self._api.bankid_initiate()
-                    except KarlstadsenergiConnectionError:
-                        errors["base"] = "cannot_connect"
-                        await self._cleanup_api()
+                    # Signed in, but this personnummer has no accounts. Re-signing
+                    # won't change that, so send the user back to re-enter it.
+                    await self._cleanup_api()
+                    return self.async_show_form(
+                        step_id="bankid_personnummer",
+                        data_schema=vol.Schema({vol.Required(CONF_PERSONNUMMER): str}),
+                        errors={"base": "bankid_failed"},
+                    )
+                errors["base"] = "bankid_pending"
             except KarlstadsenergiAuthError as err:
                 _LOGGER.error("BankID auth failed: %s", err)
                 errors["base"] = "bankid_failed"
-                await self._cleanup_api()
             except KarlstadsenergiConnectionError as err:
                 _LOGGER.error("BankID connection error: %s", err)
-                errors["base"] = "cannot_connect"
                 await self._cleanup_api()
+                return self._show_user_form({"base": "cannot_connect"})
             except Exception:
                 _LOGGER.exception("Unexpected error during BankID setup")
                 errors["base"] = "unknown"
-                await self._cleanup_api()
 
-        auto_start_token = self._bankid_init.get("auto_start_token", "")
+            # Recoverable failure (pending / auth / unknown): start a fresh
+            # order so the QR and deep link shown below are valid for the next
+            # attempt. Keep the API alive instead of tearing it down.
+            if errors and self._api is not None:
+                try:
+                    self._bankid_init = await self._api.bankid_initiate()
+                    self._store_qr()
+                except KarlstadsenergiConnectionError:
+                    await self._cleanup_api()
+                    return self._show_user_form({"base": "cannot_connect"})
 
         return self.async_show_form(
             step_id="bankid",
             description_placeholders={
                 "personnummer": self._personnummer,
-                "auto_start_token": auto_start_token,
+                "auto_start_token": self._bankid_init.get("auto_start_token", ""),
+                "qr_url": f"{QR_URL_BASE}/{self._bankid_init.get('transaction_id', '')}",
             },
             data_schema=vol.Schema({}),
             errors=errors,
         )
+
+    def _store_qr(self) -> None:
+        """Cache the current order's QR PNG for the HTTP view to serve."""
+        token = self._bankid_init.get("transaction_id", "")
+        b64 = self._bankid_init.get("qr_code_base64", "")
+        if not token:
+            return
+        if not b64:
+            _QR_STORE.pop(token, None)
+            return
+        try:
+            _QR_STORE[token] = base64.b64decode(b64)
+        except (ValueError, TypeError):
+            _QR_STORE.pop(token, None)
+
+    def _forget_qr(self) -> None:
+        """Drop the cached QR for the current order."""
+        token = self._bankid_init.get("transaction_id", "")
+        if token:
+            _QR_STORE.pop(token, None)
 
     async def async_step_select_account(
         self,
@@ -331,6 +409,7 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
             self.hass.async_create_task(self._cleanup_api())
 
     async def _cleanup_api(self) -> None:
+        self._forget_qr()
         if self._api:
             await self._api.async_close()
             self._api = None
@@ -394,6 +473,7 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
             await self._api.async_get_next_flex_dates()
 
             cookies = self._api.get_session_cookies()
+            self._forget_qr()
             await self._api.async_close()
             self._api = None
 
