@@ -99,6 +99,7 @@ class _CookieSavingCoordinator(DataUpdateCoordinator[dict]):
         super().__init__(
             hass,
             _LOGGER,
+            config_entry=entry,
             name=name,
             update_interval=timedelta(hours=update_interval_hours),
         )
@@ -743,10 +744,11 @@ class KarlstadsenergiContractCoordinator(_CookieSavingCoordinator):
 class KarlstadsenergiSpotPriceCoordinator(DataUpdateCoordinator[dict]):
     """Coordinator for Evado public spot prices (15-minute refresh)."""
 
-    def __init__(self, hass: HomeAssistant) -> None:
+    def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         super().__init__(
             hass,
             _LOGGER,
+            config_entry=entry,
             name=f"{DOMAIN}_spot_price",
             update_interval=timedelta(minutes=15),
         )
@@ -865,6 +867,12 @@ async def async_setup_entry(
     elif auth_method == AUTH_PASSWORD:
         try:
             await api.authenticate()
+        except KarlstadsenergiAuthError as err:
+            # Credentials are wrong (or the account is locked) -- surface a reauth
+            # flow and stop retrying, rather than hammering the portal login on the
+            # ConfigEntryNotReady schedule (which can trigger a lockout).
+            await api.async_close()
+            raise ConfigEntryAuthFailed(f"Authentication failed: {err}") from err
         except KarlstadsenergiApiError as err:
             await api.async_close()
             raise ConfigEntryNotReady(f"Could not authenticate: {err}") from err
@@ -942,7 +950,7 @@ async def async_setup_entry(
         _LOGGER.warning("Could not fetch contract data: %s", err)
 
     # Spot price coordinator (15 min interval, public API, no auth).
-    spot_price_coordinator = KarlstadsenergiSpotPriceCoordinator(hass)
+    spot_price_coordinator = KarlstadsenergiSpotPriceCoordinator(hass, entry)
     try:
         await spot_price_coordinator.async_config_entry_first_refresh()
     except Exception as err:
@@ -996,6 +1004,10 @@ async def _async_reload_entry(
     hass: HomeAssistant,
     entry: KarlstadsenergiConfigEntry,
 ) -> None:
-    """Reload entry on options change (ignores data-only updates like cookie saves)."""
+    """Reload entry on options change (ignores data-only updates like cookie saves).
+
+    Reauth schedules its own reload explicitly (see config_flow), so the listener
+    only needs to handle options changes here.
+    """
     if dict(entry.options) != entry.runtime_data.setup_options:
         await hass.config_entries.async_reload(entry.entry_id)

@@ -29,6 +29,7 @@ from .api import (
     AUTH_BANKID,
     AUTH_PASSWORD,
     BANKID_COMPLETE,
+    KarlstadsenergiAccountLockedError,
     KarlstadsenergiApi,
     KarlstadsenergiAuthError,
     KarlstadsenergiConnectionError,
@@ -74,6 +75,18 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
         self._api: KarlstadsenergiApi | None = None
         self._bankid_init: dict[str, str] = {}
         self._accounts: list[dict[str, Any]] = []
+
+    def _reauth_update_and_reload(self, new_data: dict[str, Any]) -> ConfigFlowResult:
+        """Finish reauth: update the entry and schedule an explicit reload.
+
+        ``async_update_and_abort()`` does not reload, and the update listener
+        only reloads on options changes (and is not registered at all when the
+        previous setup failed), so reauth schedules the reload itself.
+        """
+        reauth_entry = self._get_reauth_entry()
+        result = self.async_update_and_abort(reauth_entry, data=new_data)
+        self.hass.config_entries.async_schedule_reload(reauth_entry.entry_id)
+        return result
 
     async def async_step_user(
         self,
@@ -139,6 +152,8 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
                 await api.authenticate_password()
                 await api.async_get_next_flex_dates()
                 cookies = api.get_session_cookies()
+            except KarlstadsenergiAccountLockedError:
+                errors["base"] = "account_locked"
             except KarlstadsenergiAuthError:
                 errors["base"] = "invalid_auth"
             except KarlstadsenergiConnectionError:
@@ -159,10 +174,7 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
                 }
 
                 if self.source == "reauth":
-                    return self.async_update_reload_and_abort(
-                        self._get_reauth_entry(),
-                        data=new_data,
-                    )
+                    return self._reauth_update_and_reload(new_data)
 
                 return self.async_create_entry(
                     title=f"Karlstadsenergi ({customer_number})",
@@ -414,10 +426,7 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
             }
 
             if self.source == "reauth":
-                return self.async_update_reload_and_abort(
-                    self._get_reauth_entry(),
-                    data=new_data,
-                )
+                return self._reauth_update_and_reload(new_data)
 
             return self.async_create_entry(title=title, data=new_data)
 

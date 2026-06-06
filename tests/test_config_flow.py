@@ -221,6 +221,31 @@ class TestStepPassword:
         assert result["errors"]["base"] == "invalid_auth"
 
     @pytest.mark.asyncio
+    async def test_locked_account_shows_account_locked(self) -> None:
+        """A locked account must show account_locked, not invalid_auth."""
+        from custom_components.karlstadsenergi.api import (
+            KarlstadsenergiAccountLockedError,
+        )
+
+        flow = _make_flow()
+        flow.async_set_unique_id = AsyncMock()
+        flow._abort_if_unique_id_configured = MagicMock()
+
+        mock_api = _mock_password_api(
+            auth_side_effect=KarlstadsenergiAccountLockedError("locked")
+        )
+        with patch(
+            "custom_components.karlstadsenergi.config_flow.KarlstadsenergiApi",
+            return_value=mock_api,
+        ):
+            result = await flow.async_step_password(
+                user_input={"customer_number": "166667", "password": "pw"}
+            )
+
+        assert result["type"] == "form"
+        assert result["errors"]["base"] == "account_locked"
+
+    @pytest.mark.asyncio
     async def test_connection_error_shows_cannot_connect(self) -> None:
         from custom_components.karlstadsenergi.api import KarlstadsenergiConnectionError
 
@@ -278,6 +303,33 @@ class TestStepPassword:
                 user_input={"customer_number": "123456", "password": "pw"}
             )
         flow.async_set_unique_id.assert_called_once_with("123456")
+
+    @pytest.mark.asyncio
+    async def test_reauth_updates_and_schedules_reload(self) -> None:
+        """Reauth completion must update the entry and explicitly schedule a
+        reload. The update listener only reloads on options changes, and an
+        entry that failed setup has no listener registered, so reauth cannot
+        rely on the listener to reload."""
+        flow = _make_flow(source="reauth")
+        flow.async_set_unique_id = AsyncMock()
+        reauth_entry = MagicMock()
+        reauth_entry.entry_id = "reauth-entry-id"
+        flow._get_reauth_entry = MagicMock(return_value=reauth_entry)
+
+        mock_api = _mock_password_api()
+        with patch(
+            "custom_components.karlstadsenergi.config_flow.KarlstadsenergiApi",
+            return_value=mock_api,
+        ):
+            result = await flow.async_step_password(
+                user_input={"customer_number": "123456", "password": "correct"}
+            )
+
+        assert result["type"] == "abort"
+        assert result["reason"] == "reauth_successful"
+        flow.hass.config_entries.async_schedule_reload.assert_called_once_with(
+            "reauth-entry-id"
+        )
 
 
 # ---------------------------------------------------------------------------

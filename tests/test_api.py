@@ -11,6 +11,7 @@ import pytest
 from custom_components.karlstadsenergi.api import (
     AUTH_BANKID,
     AUTH_PASSWORD,
+    KarlstadsenergiAccountLockedError,
     KarlstadsenergiApi,
     KarlstadsenergiApiError,
     KarlstadsenergiAuthError,
@@ -502,6 +503,54 @@ class TestAsyncGetFlexDates:
         # _request is called with (url, {"flexServiceIds": "1|2|3"})
         args, _ = api._request.call_args
         assert args[1]["flexServiceIds"] == "1|2|3"
+
+
+# ---------------------------------------------------------------------------
+# authenticate_password -- LoginResultStatus handling
+# ---------------------------------------------------------------------------
+
+
+class TestAuthenticatePassword:
+    """authenticate_password maps the portal LoginResultStatus correctly."""
+
+    def _api_with_login_response(self, response_d: Any) -> KarlstadsenergiApi:
+        api = KarlstadsenergiApi("166667", AUTH_PASSWORD, "pw")
+        mock_session = MagicMock()
+        mock_session.cookie_jar = MagicMock()
+        api._ensure_session = AsyncMock(return_value=mock_session)
+        resp = MagicMock()
+        resp.raise_for_status = MagicMock()
+        resp.json = AsyncMock(return_value={"d": response_d})
+        resp.release = AsyncMock()
+        api._post = AsyncMock(return_value=resp)
+        return api
+
+    @pytest.mark.asyncio
+    async def test_locked_account_raises_account_locked_error(self) -> None:
+        """LoginResultStatus 7 must raise the distinct locked-account error."""
+        api = self._api_with_login_response(
+            {"Result": False, "LoginResultStatus": 7, "Url": ""}
+        )
+        with pytest.raises(KarlstadsenergiAccountLockedError):
+            await api.authenticate_password()
+
+    @pytest.mark.asyncio
+    async def test_wrong_credentials_is_auth_error_not_locked(self) -> None:
+        """LoginResultStatus 1 (NotOK) is a normal auth error, not a lockout."""
+        api = self._api_with_login_response(
+            {"Result": False, "LoginResultStatus": 1, "Url": ""}
+        )
+        with pytest.raises(KarlstadsenergiAuthError) as exc:
+            await api.authenticate_password()
+        assert not isinstance(exc.value, KarlstadsenergiAccountLockedError)
+
+    @pytest.mark.asyncio
+    async def test_success_sets_authenticated(self) -> None:
+        api = self._api_with_login_response(
+            {"Result": True, "LoginResultStatus": 0, "Url": "/home"}
+        )
+        assert await api.authenticate_password() is True
+        assert api._authenticated is True
 
 
 # ---------------------------------------------------------------------------
