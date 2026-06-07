@@ -364,11 +364,18 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
                     await self._cleanup_api()
                     return self._show_user_form({"base": "cannot_connect"})
 
+        auto_start_token = self._bankid_init.get("auto_start_token", "")
         return self.async_show_form(
             step_id="bankid",
             description_placeholders={
                 "personnummer": self._personnummer,
-                "auto_start_token": self._bankid_init.get("auto_start_token", ""),
+                # Full URL built here, not in strings.json: hassfest rejects
+                # literal http(s) URLs in translated strings (TRANSLATIONS check)
+                # and requires a placeholder.
+                "bankid_url": (
+                    "https://app.bankid.com/"
+                    f"?autostarttoken={auto_start_token}&redirect=null"
+                ),
                 "qr_url": f"{QR_URL_BASE}/{self._bankid_init.get('transaction_id', '')}",
             },
             data_schema=vol.Schema({}),
