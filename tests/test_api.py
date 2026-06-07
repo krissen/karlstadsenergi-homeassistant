@@ -434,6 +434,25 @@ class TestAsyncHeartbeat:
         result = await api.async_heartbeat()
         assert result is False
 
+    @pytest.mark.asyncio
+    async def test_dead_session_redirect_is_failure_not_followed(self) -> None:
+        """A 302 (session timeout -> /Logout.aspx) must be a failure.
+
+        The request must NOT follow the redirect (allow_redirects=False) -- else
+        it would hit the logout page (200) and both mask the death and tear the
+        session down server-side.
+        """
+        api = KarlstadsenergiApi("1234567890", AUTH_PASSWORD, "pass")
+        mock_resp = MagicMock()
+        mock_resp.status = 302
+
+        session = _make_cm_session_get(mock_resp)
+        api._session = session
+
+        result = await api.async_heartbeat()
+        assert result is False
+        assert session.get.call_args.kwargs.get("allow_redirects") is False
+
 
 # ---------------------------------------------------------------------------
 # async_get_next_flex_dates -- response parsing

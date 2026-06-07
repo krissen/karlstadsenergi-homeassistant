@@ -779,16 +779,25 @@ class KarlstadsenergiApi:
         return result
 
     async def async_heartbeat(self) -> bool:
-        """Send heartbeat to keep session alive."""
+        """Send a heartbeat to keep the session alive.
+
+        Uses allow_redirects=False: a dead session 302-redirects to
+        /Logout.aspx, and following that would both mask the failure (the
+        logout page returns 200) and actively log the session out server-side.
+        Logs the status so the session's lifetime can be traced.
+        """
         session = await self._ensure_session()
         try:
             async with asyncio.timeout(10):
                 async with session.get(
                     f"{BASE_URL}/heart.beat",
                     headers=REQUEST_HEADERS,
+                    allow_redirects=False,
                 ) as resp:
+                    _LOGGER.debug("Heartbeat: status=%s", resp.status)
                     return resp.status == 200
         except Exception:
+            _LOGGER.debug("Heartbeat: request error", exc_info=True)
             return False
 
     async def async_close(self) -> None:

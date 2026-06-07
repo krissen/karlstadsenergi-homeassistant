@@ -43,7 +43,7 @@
       },
       "bankid": {
         "title": "Karlstadsenergi - BankID",
-        "description": "Sign in with BankID.\n\n**On another device:** scan this QR code with your BankID app. If it does not appear below, [open the QR code]({qr_url}).\n\n![BankID QR code]({qr_url})\n\n**On this device:** [open the BankID app](bankid:///?autostarttoken={auto_start_token}&redirect=null)\n\nAfter signing, click **Submit**.",
+        "description": "Sign in with BankID.\n\n**On another device:** scan this QR code with your BankID app. If it does not appear below, [open the QR code]({qr_url}).\n\n![BankID QR code]({qr_url})\n\n**On this device:** [open the BankID app](https://app.bankid.com/?autostarttoken={auto_start_token}&redirect=null)\n\nAfter signing, click **Submit**.",
         "data": {}
       },
       "select_account": {

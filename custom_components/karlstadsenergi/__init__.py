@@ -986,8 +986,11 @@ async def async_setup_entry(
     # expired ticket.
     async def _heartbeat(_now=None) -> None:
         try:
-            await api.async_heartbeat()
-            _persist_session_cookies(hass, entry, api)
+            ok = await api.async_heartbeat()
+            if ok:
+                _persist_session_cookies(hass, entry, api)
+            else:
+                _LOGGER.debug("Heartbeat did not keep the session alive")
         except Exception:
             _LOGGER.debug("Heartbeat failed", exc_info=True)
 
