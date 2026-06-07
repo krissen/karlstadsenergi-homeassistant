@@ -782,9 +782,9 @@ class KarlstadsenergiApi:
         """Send a heartbeat to keep the session alive.
 
         Uses allow_redirects=False: a dead session 302-redirects to
-        /Logout.aspx, and following that would both mask the failure (the
-        logout page returns 200) and actively log the session out server-side.
-        Logs the status so the session's lifetime can be traced.
+        /Logout.aspx, and following that would mask the failure (the logout
+        page returns 200) and may log the session out server-side. Logs the
+        status so the session's lifetime can be traced.
         """
         session = await self._ensure_session()
         try:

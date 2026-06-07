@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **BankID app link opened Home Assistant instead of BankID on mobile** -- the same-device link used the `bankid://` custom scheme, which a phone could route back to the HA app. It now uses the official `https://app.bankid.com/` universal link, which the OS hands to the BankID app.
-- **Heartbeat followed the logout redirect** -- a dead session 302-redirects `/heart.beat` to `/Logout.aspx`; the heartbeat followed it, so it reported success against the logout page (200) and could even tear the session down server-side. It now uses `allow_redirects=False`, treats a redirect as failure, and logs the status so session lifetime can be traced.
+- **Heartbeat followed the logout redirect** -- a dead session 302-redirects `/heart.beat` to `/Logout.aspx`; the heartbeat followed it, so it reported success against the logout page (200) and may have logged the session out server-side. It now uses `allow_redirects=False`, treats a redirect as failure, and logs the status so session lifetime can be traced.
 
 ## [0.4.0] - 2026-06-06
 
