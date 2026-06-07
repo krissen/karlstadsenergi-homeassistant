@@ -1057,8 +1057,8 @@ class TestBankIdFlowFullPath:
         assert result["step_id"] == "bankid"
 
     @pytest.mark.asyncio
-    async def test_bankid_step_shows_form_with_auto_start_token(self) -> None:
-        """bankid step description_placeholders must contain auto_start_token."""
+    async def test_bankid_step_shows_form_with_autostart_link(self) -> None:
+        """bankid step must expose the BankID universal link with the token."""
         flow = _make_flow()
         mock_api = MagicMock()
         mock_api.bankid_initiate = AsyncMock(
@@ -1078,8 +1078,10 @@ class TestBankIdFlowFullPath:
                 user_input={CONF_PERSONNUMMER: "199001011234"}
             )
 
-        # The bankid form shows auto_start_token as placeholder
-        assert result["description_placeholders"]["auto_start_token"] == "token-abc"
+        # The autostart token is embedded in the app.bankid.com universal link.
+        bankid_url = result["description_placeholders"]["bankid_url"]
+        assert bankid_url.startswith("https://app.bankid.com/")
+        assert "autostarttoken=token-abc" in bankid_url
 
     @pytest.mark.asyncio
     async def test_bankid_poll_complete_single_account_creates_entry(self) -> None:
