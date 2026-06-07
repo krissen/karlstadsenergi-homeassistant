@@ -131,10 +131,28 @@ class _CookieSavingCoordinator(DataUpdateCoordinator[dict]):
         )
         self.api = api
         self._entry = entry
+        # Timestamp of the last successful update; exposed via entities as
+        # `last_updated` so retained (stale) values show when they were fetched.
+        self.last_success_time: datetime | None = None
 
     def _save_cookies(self) -> None:
         """Persist current session cookies to the config entry."""
         _persist_session_cookies(self.hass, self._entry, self.api)
+
+    async def _async_update_data(self) -> dict:
+        """Fetch via the subclass, stamping the time on success.
+
+        Subclasses implement ``_fetch_data``. A failed fetch propagates without
+        updating ``last_success_time`` (and the coordinator keeps its previous
+        ``data``, so entities retain their last values).
+        """
+        data = await self._fetch_data()
+        self.last_success_time = dt_util.utcnow()
+        return data
+
+    async def _fetch_data(self) -> dict:
+        """Fetch fresh data. Implemented by subclasses."""
+        raise NotImplementedError
 
 
 class KarlstadsenergiWasteCoordinator(_CookieSavingCoordinator):
@@ -149,7 +167,7 @@ class KarlstadsenergiWasteCoordinator(_CookieSavingCoordinator):
     ) -> None:
         super().__init__(hass, api, update_interval_hours, entry, f"{DOMAIN}_waste")
 
-    async def _async_update_data(self) -> dict:
+    async def _fetch_data(self) -> dict:
         """Fetch waste collection data."""
         try:
             # Primary: detailed services (requires flex page visit)
@@ -467,7 +485,7 @@ class KarlstadsenergiConsumptionCoordinator(_UtilityConsumptionCoordinator):
             fee_stat_prefix="cost",
         )
 
-    async def _async_update_data(self) -> dict:
+    async def _fetch_data(self) -> dict:
         """Fetch electricity consumption data."""
         try:
             consumption = await self.api.async_get_consumption()
@@ -610,7 +628,7 @@ class KarlstadsenergiDistrictHeatingCoordinator(_UtilityConsumptionCoordinator):
         consumption = el_data.get("consumption") or {}
         return consumption.get("ConsumptionModel")
 
-    async def _async_update_data(self) -> dict:
+    async def _fetch_data(self) -> dict:
         """Fetch district heating consumption data."""
         try:
             model = self._get_base_model()
@@ -737,7 +755,7 @@ class KarlstadsenergiContractCoordinator(_CookieSavingCoordinator):
         super().__init__(hass, api, 24, entry, f"{DOMAIN}_contracts")
         self._site_ids = site_ids
 
-    async def _async_update_data(self) -> dict:
+    async def _fetch_data(self) -> dict:
         """Fetch contract details."""
         try:
             contracts = await self.api.async_get_contract_details(self._site_ids)

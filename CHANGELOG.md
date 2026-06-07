@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Sensors keep their last value when an update fails** -- when the portal session expires (which happens often with BankID: sessions last only ~15 min and cannot be kept alive), entities now retain their last successful values instead of going `unavailable`/gray. Two new attributes on every entity, `data_stale` (true while showing retained data) and `last_updated` (timestamp of the last successful fetch), make the staleness visible. A re-authentication acts as a refresh and backfills missing energy/cost history. Especially useful for BankID-only users.
+
+### Changed
+- **Documentation: accurate BankID limitations** -- README and the user docs now explain that a BankID session expires after ~15 minutes with no way to keep it alive (so it needs frequent manual re-scans), correct an inaccurate "session keepalive" claim, document the new `data_stale`/`last_updated` behavior, and reinforce that customer number + password (silent, indefinite re-auth) is by far the best login.
+
 ### Fixed
 - **Blank BankID step (no QR) after updating** -- a renamed description placeholder meant a translation cached by the frontend from an older version referenced a value the new code no longer supplied, so the whole step failed to render (`MISSING_VALUE`) and the QR disappeared. The step now supplies both the old and new placeholder names, so a stale cached translation still renders.
 - **Reauth reused an expired BankID order** -- starting a re-authentication, letting the order time out, and trying again (without restarting the integration) kept showing the same dead order, so signing failed with "wrong code" every time. Each entry into the BankID step now starts a fresh order, so a resumed or retried reauth always shows a new, signable code.
