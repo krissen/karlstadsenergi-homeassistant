@@ -916,6 +916,12 @@ async def async_setup_entry(
 
     try:
         await consumption_coordinator.async_config_entry_first_refresh()
+    except ConfigEntryAuthFailed:
+        # A dead/expired session must surface reauth even though consumption is
+        # otherwise non-fatal. Without this the entry would set up on waste
+        # alone and silently never prompt for re-authentication.
+        await api.async_close()
+        raise
     except Exception as err:
         # Review note (V2): Consumption failure is logged here and the
         # integration continues without consumption/contract data. This
@@ -936,6 +942,9 @@ async def async_setup_entry(
     )
     try:
         await district_heating_coordinator.async_config_entry_first_refresh()
+    except ConfigEntryAuthFailed:
+        await api.async_close()
+        raise
     except Exception as err:
         _LOGGER.warning("Could not fetch district heating data: %s", err)
 
@@ -957,6 +966,9 @@ async def async_setup_entry(
     )
     try:
         await contract_coordinator.async_config_entry_first_refresh()
+    except ConfigEntryAuthFailed:
+        await api.async_close()
+        raise
     except Exception as err:
         _LOGGER.warning("Could not fetch contract data: %s", err)
 

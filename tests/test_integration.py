@@ -618,6 +618,40 @@ class TestAsyncSetupEntryNonFatalFailures:
 
         assert result is True
 
+    @pytest.mark.asyncio
+    async def test_consumption_auth_error_surfaces_reauth(self) -> None:
+        """An AUTH failure (dead session) must surface reauth, not be swallowed.
+
+        Even though consumption is otherwise non-fatal, a 302/expired session
+        means the whole session is dead -- it must raise ConfigEntryAuthFailed
+        so HA prompts for re-authentication, not silently set up on waste alone.
+        """
+        from homeassistant.exceptions import ConfigEntryAuthFailed
+
+        from custom_components.karlstadsenergi.api import KarlstadsenergiAuthError
+
+        hass = _make_hass()
+        entry = _make_entry()
+        api = _make_api()  # waste etc. succeed
+        api.async_get_consumption = AsyncMock(
+            side_effect=KarlstadsenergiAuthError("session expired")
+        )
+
+        with (
+            patch(
+                "custom_components.karlstadsenergi.KarlstadsenergiApi",
+                return_value=api,
+            ),
+            patch(
+                "custom_components.karlstadsenergi.async_track_time_interval",
+                return_value=MagicMock(),
+            ),
+            pytest.raises(ConfigEntryAuthFailed),
+        ):
+            await async_setup_entry(hass, entry)
+
+        api.async_close.assert_awaited()
+
 
 # ---------------------------------------------------------------------------
 # async_unload_entry
