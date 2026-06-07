@@ -435,8 +435,8 @@ class TestAsyncHeartbeat:
         assert result is False
 
     @pytest.mark.asyncio
-    async def test_dead_session_redirect_is_failure_not_followed(self) -> None:
-        """A 302 (session timeout -> /Logout.aspx) must be a failure.
+    async def test_redirect_to_logout_is_failure_not_followed(self) -> None:
+        """A 302 to the logout/session-timeout page must be a failure.
 
         The request must NOT follow the redirect (allow_redirects=False) -- else
         it would hit the logout page (200) and both mask the death and tear the
@@ -445,6 +445,7 @@ class TestAsyncHeartbeat:
         api = KarlstadsenergiApi("1234567890", AUTH_PASSWORD, "pass")
         mock_resp = MagicMock()
         mock_resp.status = 302
+        mock_resp.headers = {"Location": "/Logout.aspx?type=SessionTimeout"}
 
         session = _make_cm_session_get(mock_resp)
         api._session = session
@@ -452,6 +453,19 @@ class TestAsyncHeartbeat:
         result = await api.async_heartbeat()
         assert result is False
         assert session.get.call_args.kwargs.get("allow_redirects") is False
+
+    @pytest.mark.asyncio
+    async def test_benign_redirect_is_still_alive(self) -> None:
+        """A 302 that is NOT to the logout page means the session is alive."""
+        api = KarlstadsenergiApi("1234567890", AUTH_PASSWORD, "pass")
+        mock_resp = MagicMock()
+        mock_resp.status = 302
+        mock_resp.headers = {"Location": "/Start.aspx"}
+
+        api._session = _make_cm_session_get(mock_resp)
+
+        result = await api.async_heartbeat()
+        assert result is True
 
 
 # ---------------------------------------------------------------------------

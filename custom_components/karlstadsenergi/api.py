@@ -779,22 +779,42 @@ class KarlstadsenergiApi:
         return result
 
     async def async_heartbeat(self) -> bool:
-        """Send a heartbeat to keep the session alive.
+        """Keep the session alive by touching an auth-gated page.
 
-        Uses allow_redirects=False: a dead session 302-redirects to
-        /Logout.aspx, and following that would mask the failure (the logout
-        page returns 200) and may log the session out server-side. Logs the
-        status so the session's lifetime can be traced.
+        ``/heart.beat`` returns 200 even after the authenticated session has
+        expired (observed: heart.beat=200 while start.aspx already 302'd to
+        login), so it never actually kept the session alive. Hit ``start.aspx``
+        instead -- it is auth-gated (302 -> login when dead) and touches
+        server-side session state, so it should reset the session's sliding
+        timeout. allow_redirects=False so an expired session reads as failure.
+        Does not re-authenticate here; the coordinators own reauth.
         """
         session = await self._ensure_session()
         try:
             async with asyncio.timeout(10):
+                # Plain GET (no X-Requested-With), exactly like _visit_pages /
+                # the coordinators -- an XHR-flagged GET appears not to refresh
+                # the server-side session, so it expired despite the keepalive.
                 async with session.get(
-                    f"{BASE_URL}/heart.beat",
-                    headers=REQUEST_HEADERS,
+                    f"{BASE_URL}/start.aspx",
                     allow_redirects=False,
                 ) as resp:
-                    _LOGGER.debug("Heartbeat: status=%s", resp.status)
+                    if resp.status in (301, 302, 303, 307, 308):
+                        loc = resp.headers.get("Location", "")
+                        # A redirect to the logout/session-timeout page is the
+                        # real death signal; other redirects are benign and the
+                        # session is still alive (and the hit still refreshed it).
+                        dead = "logout" in loc.lower() or "sessiontimeout" in (
+                            loc.lower()
+                        )
+                        _LOGGER.debug(
+                            "Heartbeat (start.aspx): status=%s -> %s%s",
+                            resp.status,
+                            loc[:60],
+                            " [DEAD]" if dead else "",
+                        )
+                        return not dead
+                    _LOGGER.debug("Heartbeat (start.aspx): status=%s", resp.status)
                     return resp.status == 200
         except Exception:
             _LOGGER.debug("Heartbeat: request error", exc_info=True)
