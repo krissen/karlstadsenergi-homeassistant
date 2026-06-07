@@ -367,6 +367,11 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
                     "https://app.bankid.com/"
                     f"?autostarttoken={auto_start_token}&redirect=null"
                 ),
+                # Also provide auto_start_token (the older placeholder name) so a
+                # stale cached translation from an earlier version still renders
+                # instead of failing with MISSING_VALUE and hiding the whole
+                # step (including the QR). Harmless when the string omits it.
+                "auto_start_token": auto_start_token,
                 "qr_url": f"{QR_URL_BASE}/{self._bankid_init.get('transaction_id', '')}",
             },
             data_schema=vol.Schema({}),
