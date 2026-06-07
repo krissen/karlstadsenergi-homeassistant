@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **Reauth reused an expired BankID order** -- starting a re-authentication, letting the order time out, and trying again (without restarting the integration) kept showing the same dead order, so signing failed with "wrong code" every time. Each entry into the BankID step now starts a fresh order, so a resumed or retried reauth always shows a new, signable code.
 - **BankID app link opened Home Assistant instead of BankID on mobile** -- the same-device link used the `bankid://` custom scheme, which a phone could route back to the HA app. It now uses the official `https://app.bankid.com/` universal link, which the OS hands to the BankID app.
 - **Heartbeat followed the logout redirect** -- a dead session 302-redirects `/heart.beat` to `/Logout.aspx`; the heartbeat followed it, so it reported success against the logout page (200) and may have logged the session out server-side. It now uses `allow_redirects=False`, treats a redirect as failure, and logs the status so session lifetime can be traced.
 
