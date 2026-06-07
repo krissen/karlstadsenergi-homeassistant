@@ -34,7 +34,7 @@ A Home Assistant integration for [Karlstads Energi](https://www.karlstadsenergi.
 - **Historical statistics** -- Hourly consumption and monthly cost data imported into HA long-term statistics with configurable depth (1--10 years, default 2). The portal API has data going back to contract start -- this integration unlocks it for Energy Dashboard graphs and history analysis.
 - **Contract overview** -- Sensors for each contract (grid, trading, waste) with contract type, dates, and identifiers
 - **Computed attributes** -- `days_until_pickup`, `pickup_is_today`, `pickup_is_tomorrow`
-- **Session management** -- Automatic session keepalive (heartbeat), cookie persistence across restarts, and re-authentication on session expiry
+- **Session management** -- Cookie persistence across restarts and automatic re-authentication on session expiry (silent and indefinite for password logins; BankID expires after ~15 min and needs a manual re-scan -- see below). When the session expires, sensors keep their last values (marked `data_stale`) instead of going unavailable.
 - **Configurable update interval** -- Set how often data is refreshed (1--24 hours)
 
 ---
@@ -62,15 +62,15 @@ A Home Assistant integration for [Karlstads Energi](https://www.karlstadsenergi.
 
 ### Authentication methods
 
-The integration supports two login methods. **Customer number & password is strongly recommended.**
+The integration supports two login methods. **Customer number & password is by far the best** -- it re-authenticates silently and indefinitely, with no recurring interaction. Mobile BankID is a last resort: the portal expires a BankID session after ~15 minutes and there is no way to keep it alive, so it needs frequent manual re-scans (details below).
 
 | | Customer number & password | Mobile BankID |
 |---|---|---|
-| **Recommended** | **Yes** | **No** -- avoid if possible |
-| Auto-reconnect on HA restart | **Yes** -- automatic | **No** -- requires manual re-scan |
-| Session handling | Automatic re-login | Heartbeat keep-alive only |
-| Setup complexity | Simple | Requires manual BankID app sign-in |
-| Multi-account | Logs in directly | Must select account each time |
+| **Recommended** | **Yes** | **No** -- last resort only |
+| Session lifetime | Indefinite -- silent re-login | **~15 min**, then manual QR re-scan |
+| Re-auth on expiry / restart | Automatic, no interaction | Manual BankID sign-in every time |
+| Setup complexity | Simple | Requires BankID app sign-in |
+| Multi-account | Logs in directly | Select the account at sign-in |
 
 #### Customer number & password (recommended)
 
@@ -79,16 +79,16 @@ The integration supports two login methods. **Customer number & password is stro
 
 > **Don't have a password yet?** Go to [Karlstadsenergi Password Reset](https://minasidor.karlstadsenergi.se/Customer/PasswordReset.aspx). Have your customer number ready (found on your invoice). Enter the customer number and a password reset link will be sent to the email address Karlstads Energi has on file for your account. Then you're good to go!
 
-#### Mobile BankID (not recommended)
+#### Mobile BankID (last resort -- not recommended)
 
-> **Warning:** BankID is available but **we do not recommend using it.** When Home Assistant restarts, the session expires and **you must manually sign in with the BankID app** every time to reconnect. There is no way to automate BankID re-authentication. It is only included as a fallback for users who cannot set up password login. If at all possible, set up customer number & password instead.
+> **Warning:** BankID is a fallback only, for users who genuinely cannot use password login. The Karlstadsenergi portal expires a BankID session after **~15 minutes**, and there is **no way to keep it alive or re-authenticate automatically** -- verified by extensive testing (heartbeats, token replay, and the official app's own mechanism all expire on the same 15-minute limit). In practice, Home Assistant will prompt you to **re-scan the BankID QR roughly every ~15 minutes** of operation, which makes BankID impractical for unattended use. To soften this, sensors keep their last values (marked `data_stale`) between re-scans instead of going blank, and a re-scan acts as a refresh. **If at all possible, use customer number & password instead** (see the password-reset link above).
 
 1. Select **Mobilt BankID**.
-2. Enter your personnummer (Swedish personal identity number).
-3. In the config flow, click the **Open BankID app** link and sign in with BankID.
+2. Enter your personnummer (10 or 12 digits -- a 10-digit number is expanded automatically).
+3. **Scan the QR code** with the BankID app on your phone, or -- if Home Assistant is open on the same phone -- tap the **Open BankID app** link, then sign in.
 4. If your personnummer is linked to multiple accounts, select which one to use.
 
-> **Note:** Home Assistant config flows cannot render the QR image from the upstream API. This integration therefore uses the `bankid://` deep link in the flow description instead.
+> **On a phone:** the in-app "Open BankID app" link may not launch BankID from inside the Home Assistant Companion app (it can route back to Home Assistant). If that happens, scan the QR code from a computer, or open this page in your phone's browser. Cross-device -- Home Assistant on a computer, BankID app on your phone -- is the most reliable.
 
 ### Options
 
