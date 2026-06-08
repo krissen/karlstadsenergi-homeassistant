@@ -7,7 +7,9 @@ import json
 import logging
 import re
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from collections.abc import Callable
+from datetime import date, datetime, timedelta, timezone
+from typing import Any
 
 import aiohttp
 
@@ -37,6 +39,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.event import async_track_time_interval
+from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
@@ -68,6 +71,88 @@ _LOGGER = logging.getLogger(__name__)
 
 HEARTBEAT_INTERVAL = timedelta(minutes=5)
 
+# Local cache of each coordinator's last-known data, so entities keep their
+# values across a restart/reload instead of going unavailable until the next
+# successful fetch (essential for BankID, whose session dies every ~15 min).
+CACHE_STORAGE_VERSION = 1
+CACHE_SAVE_DELAY = 30  # seconds -- debounce frequent coordinator successes
+# Heavy hourly time-series are dropped from the cache: they dominate the size
+# (~10 MB of 2-year hourly data), drive only secondary attributes / DH detail
+# sensors, and are recoverable -- long-term statistics persist in the recorder
+# and the series repopulate on the first successful fetch after a restart. The
+# values that matter (pickup dates, consumption total, cost, contracts, spot)
+# live in the small keys we keep.
+CACHE_PRUNE_KEYS = ("hourly", "flow", "dt")
+
+
+def _json_encode(obj: Any) -> Any:
+    """Recursively make coordinator data JSON-serializable.
+
+    Only datetimes need transforming (spot price ``prices[*]["start"]`` and the
+    per-coordinator ``last_success_time``); everything else in the cached data
+    is already JSON-safe (waste/consumption/contract dates are stored as
+    strings). ``datetime`` is checked before ``date`` since it subclasses it.
+    """
+    if isinstance(obj, datetime):
+        return {"__dt__": obj.isoformat()}
+    if isinstance(obj, date):
+        return {"__date__": obj.isoformat()}
+    if isinstance(obj, dict):
+        return {k: _json_encode(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_json_encode(v) for v in obj]
+    return obj
+
+
+def _json_decode(obj: Any) -> Any:
+    """Reverse of :func:`_json_encode` -- restore datetimes from their markers."""
+    if isinstance(obj, dict):
+        if len(obj) == 1 and "__dt__" in obj:
+            return datetime.fromisoformat(obj["__dt__"])
+        if len(obj) == 1 and "__date__" in obj:
+            return date.fromisoformat(obj["__date__"])
+        return {k: _json_decode(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_json_decode(v) for v in obj]
+    return obj
+
+
+class _DataCache:
+    """Per-entry on-disk cache of coordinator data (HA Store, debounced)."""
+
+    def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
+        self._store: Store = Store(
+            hass, CACHE_STORAGE_VERSION, f"{DOMAIN}.{entry.entry_id}.cache"
+        )
+        # name -> {"data": <coordinator.data>, "last_success_time": datetime}
+        self._state: dict[str, dict] = {}
+
+    async def async_load(self) -> dict:
+        """Load + decode the cache; returns the live state dict (also kept)."""
+        raw = await self._store.async_load()
+        decoded = _json_decode(raw) if raw else {}
+        self._state = decoded if isinstance(decoded, dict) else {}
+        return self._state
+
+    def record(self, name: str, data: dict, last_success_time: datetime) -> None:
+        """Update one coordinator's slice and schedule a debounced save.
+
+        Heavy time-series keys are dropped (shallow copy -- the live
+        ``coordinator.data`` the entities use is never mutated).
+        """
+        if isinstance(data, dict):
+            cached = {k: v for k, v in data.items() if k not in CACHE_PRUNE_KEYS}
+        else:
+            cached = data
+        self._state[name] = {"data": cached, "last_success_time": last_success_time}
+        self._store.async_delay_save(
+            lambda: _json_encode(self._state), CACHE_SAVE_DELAY
+        )
+
+    async def async_remove(self) -> None:
+        """Delete the cache file (entry removed)."""
+        await self._store.async_remove()
+
 
 @dataclass
 class KarlstadsenergiData:
@@ -83,6 +168,23 @@ class KarlstadsenergiData:
 
 
 type KarlstadsenergiConfigEntry = ConfigEntry[KarlstadsenergiData]
+
+
+def _cookie_fingerprint(cookies: dict[str, str] | None) -> dict[str, str]:
+    """Non-reversible fingerprint of cookies for debug logging.
+
+    Logs only ``<length>:<sha256 prefix>`` per key -- never the value -- so we
+    can see *whether* ASP.NET_SessionId / .PORTALAUTH changed across a
+    persist/restore cycle without leaking the secrets.
+    """
+    import hashlib
+
+    if not cookies:
+        return {}
+    return {
+        k: f"{len(v)}:{hashlib.sha256(v.encode()).hexdigest()[:8]}"
+        for k, v in sorted(cookies.items())
+    }
 
 
 def _persist_session_cookies(
@@ -106,6 +208,12 @@ def _persist_session_cookies(
         and ".PORTALAUTH" in cookies
         and cookies != entry.data.get("session_cookies")
     ):
+        old = entry.data.get("session_cookies")
+        _LOGGER.debug(
+            "Persisting session cookies: old=%s new=%s",
+            _cookie_fingerprint(old),
+            _cookie_fingerprint(cookies),
+        )
         hass.config_entries.async_update_entry(
             entry, data={**entry.data, "session_cookies": cookies}
         )
@@ -134,6 +242,8 @@ class _CookieSavingCoordinator(DataUpdateCoordinator[dict]):
         # Timestamp of the last successful update; exposed via entities as
         # `last_updated` so retained (stale) values show when they were fetched.
         self.last_success_time: datetime | None = None
+        # Set by setup to persist each success to the on-disk cache.
+        self.on_success_callback: Callable[[str, dict, datetime], None] | None = None
 
     def _save_cookies(self) -> None:
         """Persist current session cookies to the config entry."""
@@ -148,6 +258,8 @@ class _CookieSavingCoordinator(DataUpdateCoordinator[dict]):
         """
         data = await self._fetch_data()
         self.last_success_time = dt_util.utcnow()
+        if self.on_success_callback is not None:
+            self.on_success_callback(self.name, data, self.last_success_time)
         return data
 
     async def _fetch_data(self) -> dict:
@@ -781,6 +893,10 @@ class KarlstadsenergiSpotPriceCoordinator(DataUpdateCoordinator[dict]):
             name=f"{DOMAIN}_spot_price",
             update_interval=timedelta(minutes=15),
         )
+        # Mirror the auth coordinators so the entity mixin and on-disk cache
+        # treat spot price uniformly (see _CookieSavingCoordinator).
+        self.last_success_time: datetime | None = None
+        self.on_success_callback: Callable[[str, dict, datetime], None] | None = None
 
     async def _async_update_data(self) -> dict:
         """Fetch spot prices from Evado public API."""
@@ -798,7 +914,11 @@ class KarlstadsenergiSpotPriceCoordinator(DataUpdateCoordinator[dict]):
             raise UpdateFailed(f"Spot price parse error: {err}") from err
         except Exception as err:
             raise UpdateFailed(f"Spot price fetch failed: {err}") from err
-        return self._parse_spot_data(data)
+        result = self._parse_spot_data(data)
+        self.last_success_time = dt_util.utcnow()
+        if self.on_success_callback is not None:
+            self.on_success_callback(self.name, result, self.last_success_time)
+        return result
 
     @staticmethod
     def _parse_spot_data(data: dict) -> dict:
@@ -892,6 +1012,10 @@ async def async_setup_entry(
     api = KarlstadsenergiApi(personnummer, auth_method, password)
     saved_cookies = entry.data.get("session_cookies")
     if saved_cookies:
+        _LOGGER.debug(
+            "Setup restoring session cookies: %s",
+            _cookie_fingerprint(saved_cookies),
+        )
         api.set_session_cookies(saved_cookies)
     elif auth_method == AUTH_PASSWORD:
         try:
@@ -905,6 +1029,48 @@ async def async_setup_entry(
         except KarlstadsenergiApiError as err:
             await api.async_close()
             raise ConfigEntryNotReady(f"Could not authenticate: {err}") from err
+
+    # Local cache of last-known coordinator data. When present, we seed each
+    # coordinator from it and use async_refresh() instead of
+    # async_config_entry_first_refresh() so a dead session at startup does NOT
+    # abort setup -- entities load with their last (stale) values. The reauth
+    # prompt is NOT suppressed: async_refresh() auto-calls async_start_reauth()
+    # on ConfigEntryAuthFailed (see homeassistant/helpers/update_coordinator.py),
+    # and entities still report data_stale=True. With no cache (fresh install)
+    # we keep the strict behaviour: a failed first fetch aborts/prompts reauth.
+    cache = _DataCache(hass, entry)
+    cached = await cache.async_load()
+    has_cache = bool(cached)
+
+    def _seed(coordinator: DataUpdateCoordinator) -> None:
+        """Seed a coordinator from the cache and wire success persistence."""
+        slice_ = cached.get(coordinator.name)
+        if slice_ and slice_.get("data") is not None:
+            coordinator.data = slice_["data"]
+            coordinator.last_success_time = slice_.get("last_success_time")
+        coordinator.on_success_callback = cache.record
+
+    async def _refresh(
+        coordinator: DataUpdateCoordinator, *, critical: bool = False
+    ) -> None:
+        """Seed then refresh, choosing the strategy based on cache presence."""
+        _seed(coordinator)
+        if has_cache:
+            # Cached values are already showing; never abort setup.
+            await coordinator.async_refresh()
+            return
+        try:
+            await coordinator.async_config_entry_first_refresh()
+        except ConfigEntryAuthFailed:
+            await api.async_close()
+            raise
+        except Exception as err:
+            if critical:
+                await api.async_close()
+                raise ConfigEntryNotReady(
+                    f"Could not fetch {coordinator.name} data: {err}"
+                ) from err
+            _LOGGER.warning("Could not fetch %s data: %s", coordinator.name, err)
 
     waste_coordinator = KarlstadsenergiWasteCoordinator(
         hass,
@@ -923,29 +1089,14 @@ async def async_setup_entry(
         history_years=history_years,
     )
 
-    try:
-        await waste_coordinator.async_config_entry_first_refresh()
-    except ConfigEntryAuthFailed:
-        await api.async_close()
-        raise
-    except Exception as err:
-        await api.async_close()
-        raise ConfigEntryNotReady(f"Could not fetch waste data: {err}") from err
+    # Waste is the primary feature: a non-auth failure with no cache aborts
+    # setup (ConfigEntryNotReady) so HA retries.
+    await _refresh(waste_coordinator, critical=True)
 
-    try:
-        await consumption_coordinator.async_config_entry_first_refresh()
-    except ConfigEntryAuthFailed:
-        # A dead/expired session must surface reauth even though consumption is
-        # otherwise non-fatal. Without this the entry would set up on waste
-        # alone and silently never prompt for re-authentication.
-        await api.async_close()
-        raise
-    except Exception as err:
-        # Review note (V2): Consumption failure is logged here and the
-        # integration continues without consumption/contract data. This
-        # is intentional -- waste collection (the primary feature) should
-        # work even if the electricity API is temporarily unavailable.
-        _LOGGER.warning("Could not fetch consumption data: %s", err)
+    # Consumption: a dead/expired session must surface reauth (handled inside
+    # _refresh). A non-auth failure with no cache is logged and setup continues
+    # so waste keeps working even if the electricity API is down.
+    await _refresh(consumption_coordinator)
 
     # District heating coordinator: reads the base model from the electricity
     # coordinator to avoid duplicate page visits and API calls.
@@ -958,13 +1109,7 @@ async def async_setup_entry(
         customer_id=customer_id,
         history_years=history_years,
     )
-    try:
-        await district_heating_coordinator.async_config_entry_first_refresh()
-    except ConfigEntryAuthFailed:
-        await api.async_close()
-        raise
-    except Exception as err:
-        _LOGGER.warning("Could not fetch district heating data: %s", err)
+    await _refresh(district_heating_coordinator)
 
     # Extract site_id from consumption data for contract fetching
     site_ids: list[str] = []
@@ -982,20 +1127,11 @@ async def async_setup_entry(
         entry,
         site_ids,
     )
-    try:
-        await contract_coordinator.async_config_entry_first_refresh()
-    except ConfigEntryAuthFailed:
-        await api.async_close()
-        raise
-    except Exception as err:
-        _LOGGER.warning("Could not fetch contract data: %s", err)
+    await _refresh(contract_coordinator)
 
     # Spot price coordinator (15 min interval, public API, no auth).
     spot_price_coordinator = KarlstadsenergiSpotPriceCoordinator(hass, entry)
-    try:
-        await spot_price_coordinator.async_config_entry_first_refresh()
-    except Exception as err:
-        _LOGGER.warning("Could not fetch spot prices: %s", err)
+    await _refresh(spot_price_coordinator)
 
     entry.runtime_data = KarlstadsenergiData(
         api=api,
@@ -1047,6 +1183,13 @@ async def async_unload_entry(
         await entry.runtime_data.api.async_close()
 
     return unload_ok
+
+
+async def async_remove_entry(
+    hass: HomeAssistant, entry: KarlstadsenergiConfigEntry
+) -> None:
+    """Delete the local data cache when the entry is removed."""
+    await _DataCache(hass, entry).async_remove()
 
 
 async def _async_reload_entry(

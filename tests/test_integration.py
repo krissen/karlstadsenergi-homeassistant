@@ -128,6 +128,32 @@ def _make_flow() -> KarlstadsenergiConfigFlow:
     return flow
 
 
+class _FakeCache:
+    """In-memory stand-in for _DataCache so setup tests never touch disk."""
+
+    def __init__(self, *_args, **_kwargs) -> None:
+        self._state: dict = {}
+
+    async def async_load(self) -> dict:
+        return {}
+
+    def record(self, name: str, data: dict, last_success_time) -> None:
+        self._state[name] = {"data": data, "last_success_time": last_success_time}
+
+    async def async_remove(self) -> None:
+        pass
+
+
+@pytest.fixture(autouse=True)
+def _patch_data_cache():
+    """Replace the on-disk cache with an in-memory fake for all setup tests."""
+    with patch(
+        "custom_components.karlstadsenergi._DataCache",
+        _FakeCache,
+    ):
+        yield
+
+
 # ---------------------------------------------------------------------------
 # async_setup_entry -- success path
 # ---------------------------------------------------------------------------

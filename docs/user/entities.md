@@ -19,6 +19,8 @@ Every entity exposes two attributes describing how fresh its data is:
 
 When the portal session expires -- which happens often with **Mobile BankID** (sessions last only ~15 minutes and cannot be kept alive) -- entities **keep their last values** instead of going `unavailable`, and flip `data_stale` to `true`. Home Assistant will also show a re-authentication ("Reconfigure") prompt. Completing it refreshes the values (`data_stale` returns to `false`) and backfills any missing energy/cost history. Password logins re-authenticate silently, so they rarely go stale.
 
+The last values are also cached on disk, so they **survive a Home Assistant restart or an integration reload**: after a restart the entities come back showing their previous values (marked `data_stale`) even if the session has since expired, rather than going `unavailable`. The re-authentication prompt still appears when action is needed -- the cache does not hide it -- and the cache is cleared if you delete the integration.
+
 ---
 
 ## Waste collection sensors
