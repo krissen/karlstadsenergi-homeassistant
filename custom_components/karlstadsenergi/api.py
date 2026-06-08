@@ -813,20 +813,19 @@ class KarlstadsenergiApi:
                     allow_redirects=False,
                 ) as resp:
                     if resp.status in (301, 302, 303, 307, 308):
+                        # Any auth-redirect from this page means the session is no
+                        # longer valid -- the same rule _visit_pages applies to the
+                        # data path. Treating only logout/sessiontimeout as dead
+                        # would misread another expiry redirect as "alive" and let
+                        # a dead session's cookies be persisted. Log the target for
+                        # diagnostics, but never report alive on a redirect.
                         loc = resp.headers.get("Location", "")
-                        # A redirect to the logout/session-timeout page is the
-                        # real death signal; other redirects are benign and the
-                        # session is still alive (and the hit still refreshed it).
-                        dead = "logout" in loc.lower() or "sessiontimeout" in (
-                            loc.lower()
-                        )
                         _LOGGER.debug(
-                            "Heartbeat (start.aspx): status=%s -> %s%s",
+                            "Heartbeat (start.aspx): status=%s -> %s [DEAD]",
                             resp.status,
                             loc[:60],
-                            " [DEAD]" if dead else "",
                         )
-                        return not dead
+                        return False
                     _LOGGER.debug("Heartbeat (start.aspx): status=%s", resp.status)
                     return resp.status == 200
         except Exception:

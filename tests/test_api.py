@@ -455,8 +455,13 @@ class TestAsyncHeartbeat:
         assert session.get.call_args.kwargs.get("allow_redirects") is False
 
     @pytest.mark.asyncio
-    async def test_benign_redirect_is_still_alive(self) -> None:
-        """A 302 that is NOT to the logout page means the session is alive."""
+    async def test_any_redirect_is_treated_as_dead(self) -> None:
+        """Any auth-redirect from start.aspx means the session is not alive.
+
+        The data path (_visit_pages) treats any 301/302/401/403 as expired;
+        the heartbeat uses the same rule so a non-logout expiry redirect is
+        not misread as alive (which would persist a dead session's cookies).
+        """
         api = KarlstadsenergiApi("1234567890", AUTH_PASSWORD, "pass")
         mock_resp = MagicMock()
         mock_resp.status = 302
@@ -465,7 +470,7 @@ class TestAsyncHeartbeat:
         api._session = _make_cm_session_get(mock_resp)
 
         result = await api.async_heartbeat()
-        assert result is True
+        assert result is False
 
 
 # ---------------------------------------------------------------------------
