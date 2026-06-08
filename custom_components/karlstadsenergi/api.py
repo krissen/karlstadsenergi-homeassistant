@@ -479,6 +479,13 @@ class KarlstadsenergiApi:
                     async with session.get(
                         f"{BASE_URL}/{page}", allow_redirects=False
                     ) as resp:
+                        location = resp.headers.get("Location", "")
+                        _LOGGER.debug(
+                            "Page visit %s -> status=%s%s",
+                            page,
+                            resp.status,
+                            f" Location={location}" if location else "",
+                        )
                         if resp.status in (301, 302, 401, 403):
                             raise KarlstadsenergiAuthError(
                                 f"Session expired visiting {page} "
