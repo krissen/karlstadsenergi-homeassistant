@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.4.1] - 2026-06-08
 
 ### Added
 - **Sensors keep their last value when an update fails** -- when the portal session expires (which happens often with BankID: sessions last only ~15 min and cannot be kept alive), entities now retain their last successful values instead of going `unavailable`/gray. Two new attributes on every entity, `data_stale` (true while showing retained data) and `last_updated` (timestamp of the last successful fetch), make the staleness visible. A re-authentication acts as a refresh and backfills missing energy/cost history. Especially useful for BankID-only users.
