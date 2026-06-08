@@ -557,12 +557,18 @@ class KarlstadsenergiApi:
     async def async_get_flex_services(self) -> list[dict[str, Any]]:
         """Get all waste collection services.
 
-        Requires visiting the flex page first to initialize server state.
+        Visits start.aspx first to (re)initialize the server-side session
+        view, then the flex page, before calling the data endpoint. The
+        start.aspx visit matters on a restored session (after a restart or
+        reauth): the cookies are valid but the per-session view state set up
+        during login is gone, so going straight to flexservices.aspx
+        redirects to logout. This mirrors async_get_consumption and the
+        start.aspx init that bankid_login performs.
         """
         if not self._authenticated:
             await self.authenticate()
 
-        pages = ("flex/flexservices.aspx",)
+        pages = ("start.aspx", "flex/flexservices.aspx")
         session = await self._ensure_session()
         try:
             await self._visit_pages(session, pages)
