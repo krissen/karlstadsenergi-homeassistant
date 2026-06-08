@@ -9,7 +9,7 @@ from homeassistant.components.binary_sensor import BinarySensorEntity
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from .entity import KarlstadsenergiEntity
 from homeassistant.util import dt as dt_util
 
 from . import KarlstadsenergiConfigEntry, KarlstadsenergiWasteCoordinator
@@ -84,7 +84,7 @@ async def async_setup_entry(
 
 
 class WastePickupTomorrowSensor(
-    CoordinatorEntity[KarlstadsenergiWasteCoordinator],
+    KarlstadsenergiEntity[KarlstadsenergiWasteCoordinator],
     BinarySensorEntity,
 ):
     """Binary sensor: on when waste pickup is tomorrow (detailed mode)."""
@@ -140,7 +140,7 @@ class WastePickupTomorrowSensor(
 
 
 class WastePickupTomorrowSummarySensor(
-    CoordinatorEntity[KarlstadsenergiWasteCoordinator],
+    KarlstadsenergiEntity[KarlstadsenergiWasteCoordinator],
     BinarySensorEntity,
 ):
     """Binary sensor: on when waste pickup is tomorrow (summary mode)."""

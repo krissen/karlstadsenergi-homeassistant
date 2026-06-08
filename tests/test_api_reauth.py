@@ -257,6 +257,29 @@ class TestFlexServicesReauthSuccess:
 
         assert result == expected
 
+    async def test_visits_start_before_flexservices(self) -> None:
+        """start.aspx must be visited before flexservices.aspx.
+
+        On a restored session (restart/reauth) the cookies are valid but the
+        per-session view state is gone; going straight to flexservices.aspx
+        redirects to logout. Visiting start.aspx first re-initializes it.
+        """
+        api = KarlstadsenergiApi("1234567890", AUTH_PASSWORD, "pass")
+        api._authenticated = True
+        api._request = AsyncMock(return_value=[{"ServiceId": 1}])
+        api._session = _make_page_visit_session()
+
+        await api.async_get_flex_services()
+
+        urls = _get_urls(api._session)
+        start_idx = next(i for i, u in enumerate(urls) if "start.aspx" in u.lower())
+        flex_idx = next(
+            i for i, u in enumerate(urls) if "flexservices.aspx" in u.lower()
+        )
+        assert start_idx < flex_idx, (
+            f"start.aspx must precede flexservices.aspx, got: {urls}"
+        )
+
     async def test_flex_page_visited_twice(self) -> None:
         """After re-auth, flexservices.aspx must be visited again."""
         api = KarlstadsenergiApi("1234567890", AUTH_PASSWORD, "pass")

@@ -826,3 +826,40 @@ class TestBankidQrStoreNoLeak:
         assert "txn-A" not in _QR_STORE  # old token evicted, no leak
         assert "txn-B" in _QR_STORE
         _QR_STORE.pop("txn-B", None)
+
+
+class TestBankidFreshOrderPerEntry:
+    """Reauth resume / re-entry must mint a new order, never reuse a stale one."""
+
+    @pytest.mark.asyncio
+    async def test_each_entry_starts_a_fresh_order(self) -> None:
+        flow = _make_flow()
+        flow._personnummer = "199001011234"
+
+        def _order(n: str) -> dict:
+            return {
+                "order_ref": f"ref-{n}",
+                "auto_start_token": f"token-{n}",
+                "qr_start_token": f"qr-{n}",
+                "qr_code_base64": "",
+                "transaction_id": f"txn-{n}",
+                "data_field": "",
+            }
+
+        mock_api = MagicMock()
+        mock_api.bankid_initiate = AsyncMock(side_effect=[_order("1"), _order("2")])
+        mock_api.bankid_poll = AsyncMock()
+        mock_api.async_close = AsyncMock()
+
+        with patch(
+            "custom_components.karlstadsenergi.config_flow.KarlstadsenergiApi",
+            return_value=mock_api,
+        ):
+            r1 = await flow.async_step_bankid(user_input=None)  # first show
+            r2 = await flow.async_step_bankid(user_input=None)  # resumed reauth
+
+        # Two distinct orders minted; no stale reuse; the shown link changed.
+        assert mock_api.bankid_initiate.await_count == 2
+        assert "token-1" in r1["description_placeholders"]["bankid_url"]
+        assert "token-2" in r2["description_placeholders"]["bankid_url"]
+        mock_api.bankid_poll.assert_not_awaited()

@@ -28,9 +28,10 @@ All or some sensors show "unavailable" in Home Assistant.
 
 1. **The Karlstads Energi portal is down.** Check by logging in at [minasidor.karlstadsenergi.se](https://minasidor.karlstadsenergi.se). If you cannot log in there either, the issue is on their end. Wait and the integration will recover automatically when the portal comes back.
 
-2. **Your session has expired.** The portal uses ASP.NET session cookies that expire after a period of inactivity.
-   - **Password users:** The integration re-authenticates automatically. Check the HA logs for re-authentication errors.
-   - **BankID users:** You must manually re-authenticate. Check Home Assistant notifications for a re-authentication prompt, then go to Settings > Devices & Services > Karlstadsenergi > Reconfigure and sign in with BankID again.
+2. **Your session has expired.** The portal uses ASP.NET session cookies with a short server-side lifetime.
+   - As of the latest version, entities **keep their last values** when a session expires (instead of going `unavailable`) and set the `data_stale` attribute to `true`. These cached values also survive a Home Assistant restart or an integration reload, so a restart no longer blanks the sensors. So if your sensors are genuinely `unavailable`, the cause is usually the portal being down or a first-time setup that never succeeded -- not an expired session.
+   - **Password users:** The integration re-authenticates automatically; sessions rarely go stale. Check the HA logs for re-authentication errors.
+   - **BankID users:** BankID sessions expire after only ~15 minutes and cannot be kept alive, so you will see a recurring re-authentication ("Reconfigure") prompt. Sensors keep showing their last values (marked `data_stale`) in the meantime. Go to Settings > Devices & Services > Karlstadsenergi > Reconfigure and sign in with BankID again to refresh. See the BankID section below.
 
 3. **Orphaned entities from a mode switch.** The integration creates waste entities in one of two modes (detailed per-service-line or summary per-waste-type) depending on what data the Flex API returns. If the mode changes between restarts, the old set of entities becomes "unavailable".
    - **How to fix:** Go to Settings > Devices & Services > Entities, filter by "unavailable", and delete the stale karlstadsenergi entities. The current entities will continue working normally.
@@ -82,9 +83,11 @@ The consumption sensor shows old data, or consumption values are missing.
 
 2. **Wrong personnummer.** Make sure the personnummer you entered matches the one linked to your Karlstads Energi account.
 
-3. **Session expired, need to sign in again.** BankID sessions cannot be renewed automatically. Every time your session expires or Home Assistant restarts, you must manually sign in with BankID again. A re-authentication prompt will appear in Home Assistant notifications.
+3. **Session expired, need to sign in again (frequently).** A BankID session on this portal expires after only **~15 minutes** and **cannot be kept alive or renewed automatically** -- this was verified by extensive testing (HTTP keepalives, the durable token the official app uses, and a SignalR connection all expire on the same 15-minute limit). So Home Assistant will prompt you to re-scan the BankID QR roughly every ~15 minutes of operation. To soften this, sensors keep their last values (marked `data_stale`) between re-scans -- and those values are cached on disk, so they also survive a Home Assistant restart or an integration reload instead of going `unavailable`. Each re-scan refreshes them and backfills missing energy history. The "Reconfigure" prompt still appears whenever a re-scan is actually needed (the cache never hides it). There is no way to make BankID unattended; it is a last resort.
 
-**Strong recommendation:** If at all possible, switch to customer number and password authentication instead. It supports automatic re-authentication and is far more reliable for long-term use. See the [README](https://github.com/krissen/karlstadsenergi-homeassistant/blob/HEAD/README.md#authentication-methods) for setup instructions. You can set up a password at [Karlstadsenergi Password Reset](https://minasidor.karlstadsenergi.se/Customer/PasswordReset.aspx).
+4. **The "Open BankID app" link does nothing / returns to Home Assistant (on a phone).** Inside the Home Assistant Companion app, the in-app link may not launch BankID. Scan the QR code from a computer instead, or open the config page in your phone's regular browser. Cross-device (HA on a computer, BankID app on your phone) is the most reliable.
+
+**Strong recommendation:** If at all possible, switch to customer number and password authentication instead. It re-authenticates silently and indefinitely and is far more reliable for long-term use. See the [README](https://github.com/krissen/karlstadsenergi-homeassistant/blob/HEAD/README.md#authentication-methods) for setup instructions. You can set up a password at [Karlstadsenergi Password Reset](https://minasidor.karlstadsenergi.se/Customer/PasswordReset.aspx).
 
 ---
 

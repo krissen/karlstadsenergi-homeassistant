@@ -270,20 +270,11 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
 
         _register_qr_view(self.hass)
 
-        # (Re)initiate whenever there is no live order. This covers the first
-        # entry as well as the case where a previous attempt cleaned up the API
-        # after an error -- without this guard, a second Submit would poll a
-        # None API and crash with AttributeError.
+        # Ensure an API client exists (first entry, or after a prior cleanup).
+        # A Submit that arrives without a live client was acting on a dead
+        # order, so void it -- the fresh order created below is what counts.
         if self._api is None:
             self._api = KarlstadsenergiApi(self._personnummer, AUTH_BANKID)
-            try:
-                self._bankid_init = await self._api.bankid_initiate()
-            except KarlstadsenergiConnectionError:
-                await self._cleanup_api()
-                return self._show_user_form({"base": "cannot_connect"})
-            self._store_qr()
-            # A Submit that arrived with no live API was acting on a dead order;
-            # ignore it and let the user sign the fresh order we just created.
             user_input = None
 
         if user_input is not None:
@@ -350,25 +341,37 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
                 _LOGGER.exception("Unexpected error during BankID setup")
                 errors["base"] = "unknown"
 
-            # Recoverable failure (pending / auth / unknown): start a fresh
-            # order so the QR and deep link shown below are valid for the next
-            # attempt. Keep the API alive instead of tearing it down.
-            if errors and self._api is not None:
-                try:
-                    # Drop the previous order's cached QR before replacing it,
-                    # or its token leaks in _QR_STORE for the process lifetime.
-                    self._forget_qr()
-                    self._bankid_init = await self._api.bankid_initiate()
-                    self._store_qr()
-                except KarlstadsenergiConnectionError:
-                    await self._cleanup_api()
-                    return self._show_user_form({"base": "cannot_connect"})
+        # About to show the form: always start a FRESH order so the QR and deep
+        # link shown are never stale. This makes every (re)entry -- first show,
+        # a resumed/backed-out-of reauth flow, back-navigation, or a retry after
+        # a pending/failed Submit -- hand the user a new, signable code instead
+        # of reusing an expired order. Drop the previous order's cached QR first
+        # so its token does not leak in _QR_STORE.
+        try:
+            self._forget_qr()
+            self._bankid_init = await self._api.bankid_initiate()
+            self._store_qr()
+        except KarlstadsenergiConnectionError:
+            await self._cleanup_api()
+            return self._show_user_form({"base": "cannot_connect"})
 
+        auto_start_token = self._bankid_init.get("auto_start_token", "")
         return self.async_show_form(
             step_id="bankid",
             description_placeholders={
                 "personnummer": self._personnummer,
-                "auto_start_token": self._bankid_init.get("auto_start_token", ""),
+                # Full URL built here, not in strings.json: hassfest rejects
+                # literal http(s) URLs in translated strings (TRANSLATIONS check)
+                # and requires a placeholder.
+                "bankid_url": (
+                    "https://app.bankid.com/"
+                    f"?autostarttoken={auto_start_token}&redirect=null"
+                ),
+                # Also provide auto_start_token (the older placeholder name) so a
+                # stale cached translation from an earlier version still renders
+                # instead of failing with MISSING_VALUE and hiding the whole
+                # step (including the QR). Harmless when the string omits it.
+                "auto_start_token": auto_start_token,
                 "qr_url": f"{QR_URL_BASE}/{self._bankid_init.get('transaction_id', '')}",
             },
             data_schema=vol.Schema({}),

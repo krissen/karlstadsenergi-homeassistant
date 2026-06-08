@@ -128,6 +128,35 @@ def _make_flow() -> KarlstadsenergiConfigFlow:
     return flow
 
 
+class _FakeCache:
+    """In-memory stand-in for _DataCache so setup tests never touch disk."""
+
+    def __init__(self, *_args, **_kwargs) -> None:
+        self._state: dict = {}
+
+    async def async_load(self) -> dict:
+        return {}
+
+    def record(self, name: str, data: dict, last_success_time) -> None:
+        self._state[name] = {"data": data, "last_success_time": last_success_time}
+
+    async def async_flush(self) -> None:
+        pass
+
+    async def async_remove(self) -> None:
+        pass
+
+
+@pytest.fixture(autouse=True)
+def _patch_data_cache():
+    """Replace the on-disk cache with an in-memory fake for all setup tests."""
+    with patch(
+        "custom_components.karlstadsenergi._DataCache",
+        _FakeCache,
+    ):
+        yield
+
+
 # ---------------------------------------------------------------------------
 # async_setup_entry -- success path
 # ---------------------------------------------------------------------------
@@ -618,6 +647,40 @@ class TestAsyncSetupEntryNonFatalFailures:
 
         assert result is True
 
+    @pytest.mark.asyncio
+    async def test_consumption_auth_error_surfaces_reauth(self) -> None:
+        """An AUTH failure (dead session) must surface reauth, not be swallowed.
+
+        Even though consumption is otherwise non-fatal, a 302/expired session
+        means the whole session is dead -- it must raise ConfigEntryAuthFailed
+        so HA prompts for re-authentication, not silently set up on waste alone.
+        """
+        from homeassistant.exceptions import ConfigEntryAuthFailed
+
+        from custom_components.karlstadsenergi.api import KarlstadsenergiAuthError
+
+        hass = _make_hass()
+        entry = _make_entry()
+        api = _make_api()  # waste etc. succeed
+        api.async_get_consumption = AsyncMock(
+            side_effect=KarlstadsenergiAuthError("session expired")
+        )
+
+        with (
+            patch(
+                "custom_components.karlstadsenergi.KarlstadsenergiApi",
+                return_value=api,
+            ),
+            patch(
+                "custom_components.karlstadsenergi.async_track_time_interval",
+                return_value=MagicMock(),
+            ),
+            pytest.raises(ConfigEntryAuthFailed),
+        ):
+            await async_setup_entry(hass, entry)
+
+        api.async_close.assert_awaited()
+
 
 # ---------------------------------------------------------------------------
 # async_unload_entry
@@ -632,6 +695,7 @@ class TestAsyncUnloadEntry:
         api = _make_api()
         # Attach runtime_data as async_unload_entry uses it
         runtime_data = MagicMock()
+        runtime_data.cache.async_flush = AsyncMock()
         runtime_data.api = api
         entry.runtime_data = runtime_data
 
@@ -644,6 +708,7 @@ class TestAsyncUnloadEntry:
         hass = _make_hass()
         entry = _make_entry()
         runtime_data = MagicMock()
+        runtime_data.cache.async_flush = AsyncMock()
         runtime_data.api = _make_api()
         entry.runtime_data = runtime_data
 
@@ -659,6 +724,7 @@ class TestAsyncUnloadEntry:
         entry = _make_entry()
         api = _make_api()
         runtime_data = MagicMock()
+        runtime_data.cache.async_flush = AsyncMock()
         runtime_data.api = api
         entry.runtime_data = runtime_data
 
@@ -674,6 +740,7 @@ class TestAsyncUnloadEntry:
         entry = _make_entry()
         api = _make_api()
         runtime_data = MagicMock()
+        runtime_data.cache.async_flush = AsyncMock()
         runtime_data.api = api
         entry.runtime_data = runtime_data
 
@@ -1057,8 +1124,8 @@ class TestBankIdFlowFullPath:
         assert result["step_id"] == "bankid"
 
     @pytest.mark.asyncio
-    async def test_bankid_step_shows_form_with_auto_start_token(self) -> None:
-        """bankid step description_placeholders must contain auto_start_token."""
+    async def test_bankid_step_shows_form_with_autostart_link(self) -> None:
+        """bankid step must expose the BankID universal link with the token."""
         flow = _make_flow()
         mock_api = MagicMock()
         mock_api.bankid_initiate = AsyncMock(
@@ -1078,8 +1145,10 @@ class TestBankIdFlowFullPath:
                 user_input={CONF_PERSONNUMMER: "199001011234"}
             )
 
-        # The bankid form shows auto_start_token as placeholder
-        assert result["description_placeholders"]["auto_start_token"] == "token-abc"
+        # The autostart token is embedded in the app.bankid.com universal link.
+        bankid_url = result["description_placeholders"]["bankid_url"]
+        assert bankid_url.startswith("https://app.bankid.com/")
+        assert "autostarttoken=token-abc" in bankid_url
 
     @pytest.mark.asyncio
     async def test_bankid_poll_complete_single_account_creates_entry(self) -> None:

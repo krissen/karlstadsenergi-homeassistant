@@ -9,7 +9,7 @@ from homeassistant.components.calendar import CalendarEntity, CalendarEvent
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from .entity import KarlstadsenergiEntity
 
 from . import KarlstadsenergiConfigEntry, KarlstadsenergiWasteCoordinator
 from .const import (
@@ -83,7 +83,7 @@ async def async_setup_entry(
 
 
 class WasteCollectionCalendar(
-    CoordinatorEntity[KarlstadsenergiWasteCoordinator],
+    KarlstadsenergiEntity[KarlstadsenergiWasteCoordinator],
     CalendarEntity,
 ):
     """Calendar entity for waste collection (detailed mode)."""
@@ -162,7 +162,7 @@ class WasteCollectionCalendar(
 
 
 class WasteCollectionSummaryCalendar(
-    CoordinatorEntity[KarlstadsenergiWasteCoordinator],
+    KarlstadsenergiEntity[KarlstadsenergiWasteCoordinator],
     CalendarEntity,
 ):
     """Calendar entity for waste collection (summary/fallback mode)."""

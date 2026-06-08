@@ -14,7 +14,7 @@ from homeassistant.const import EntityCategory, UnitOfEnergy
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from .entity import KarlstadsenergiEntity
 from homeassistant.util import dt as dt_util
 
 from . import (
@@ -210,7 +210,7 @@ async def async_setup_entry(
 
     # Electricity consumption + price sensors: always created so entities
     # don't disappear permanently after a transient startup failure.
-    # CoordinatorEntity handles unavailability when coordinator.data is None.
+    # KarlstadsenergiEntity keeps the last value on failure; unavailable only when data is None.
     entities.append(
         ElectricityConsumptionSensor(
             coordinator=runtime.consumption_coordinator,
@@ -379,7 +379,7 @@ async def async_setup_entry(
 
 
 class WasteCollectionSensor(
-    CoordinatorEntity[KarlstadsenergiWasteCoordinator],
+    KarlstadsenergiEntity[KarlstadsenergiWasteCoordinator],
     SensorEntity,
 ):
     """Sensor for waste collection next pickup date."""
@@ -427,7 +427,7 @@ class WasteCollectionSensor(
         return pickup_date_for_service(self.coordinator.data, self._service_id)
 
     @property
-    def extra_state_attributes(self) -> dict[str, Any]:
+    def _entity_attrs(self) -> dict[str, Any]:
         attrs: dict[str, Any] = {
             "address": self._address,
             "container_size": self._container_size,
@@ -445,7 +445,7 @@ class WasteCollectionSensor(
 
 
 class WasteCollectionSummary(
-    CoordinatorEntity[KarlstadsenergiWasteCoordinator],
+    KarlstadsenergiEntity[KarlstadsenergiWasteCoordinator],
     SensorEntity,
 ):
     """Sensor for waste collection from start page summary data."""
@@ -488,7 +488,7 @@ class WasteCollectionSummary(
         return pickup_date_for_type(self.coordinator.data, self._waste_type)
 
     @property
-    def extra_state_attributes(self) -> dict[str, Any]:
+    def _entity_attrs(self) -> dict[str, Any]:
         attrs: dict[str, Any] = {
             "address": self._address,
             "container_size": self._container_size,
@@ -507,7 +507,7 @@ class WasteCollectionSummary(
 
 
 class _UtilityConsumptionSensor(
-    CoordinatorEntity[_UtilityConsumptionCoordinator],
+    KarlstadsenergiEntity[_UtilityConsumptionCoordinator],
     SensorEntity,
 ):
     """Base sensor for utility consumption (electricity, district heating).
@@ -573,7 +573,7 @@ class _UtilityConsumptionSensor(
         return round(float(total), 3) if total else None
 
     @property
-    def extra_state_attributes(self) -> dict[str, Any]:
+    def _entity_attrs(self) -> dict[str, Any]:
         attrs: dict[str, Any] = {}
         consumption = self._get_consumption()
 
@@ -724,7 +724,7 @@ class DistrictHeatingConsumptionSensor(_UtilityConsumptionSensor):
 
 
 class _UtilityPriceSensor(
-    CoordinatorEntity[_UtilityConsumptionCoordinator],
+    KarlstadsenergiEntity[_UtilityConsumptionCoordinator],
     SensorEntity,
 ):
     """Base sensor for utility price derived from fee breakdown.
@@ -851,7 +851,7 @@ class _UtilityPriceSensor(
         return price
 
     @property
-    def extra_state_attributes(self) -> dict[str, Any]:
+    def _entity_attrs(self) -> dict[str, Any]:
         _, attrs = self._compute_price()
         return attrs
 
@@ -916,7 +916,7 @@ class DistrictHeatingPriceSensor(_UtilityPriceSensor):
 
 
 class _UtilityCostSensor(
-    CoordinatorEntity[_UtilityConsumptionCoordinator],
+    KarlstadsenergiEntity[_UtilityConsumptionCoordinator],
     SensorEntity,
 ):
     """Base monthly cost sensor for a specific fee type."""
@@ -976,7 +976,7 @@ class _UtilityCostSensor(
         return round(float(last_value), 2) if last_value is not None else None
 
     @property
-    def extra_state_attributes(self) -> dict[str, Any]:
+    def _entity_attrs(self) -> dict[str, Any]:
         data_points = self._get_series_points()
         if not data_points:
             return {}
@@ -1063,7 +1063,7 @@ class DistrictHeatingCostSensor(_UtilityCostSensor):
 
 
 class DistrictHeatingFlowSensor(
-    CoordinatorEntity[KarlstadsenergiDistrictHeatingCoordinator],
+    KarlstadsenergiEntity[KarlstadsenergiDistrictHeatingCoordinator],
     SensorEntity,
 ):
     """Sensor for district heating water flow (m³)."""
@@ -1119,7 +1119,7 @@ class DistrictHeatingFlowSensor(
         return round(float(total), 1)
 
     @property
-    def extra_state_attributes(self) -> dict[str, Any]:
+    def _entity_attrs(self) -> dict[str, Any]:
         attrs: dict[str, Any] = {}
         if not self.coordinator.data:
             return attrs
@@ -1148,7 +1148,7 @@ class DistrictHeatingFlowSensor(
 
 
 class DistrictHeatingDtSensor(
-    CoordinatorEntity[KarlstadsenergiDistrictHeatingCoordinator],
+    KarlstadsenergiEntity[KarlstadsenergiDistrictHeatingCoordinator],
     SensorEntity,
 ):
     """Sensor for district heating temperature difference (dT).
@@ -1209,7 +1209,7 @@ class DistrictHeatingDtSensor(
         return round(float(value), 1) if value is not None else None
 
     @property
-    def extra_state_attributes(self) -> dict[str, Any]:
+    def _entity_attrs(self) -> dict[str, Any]:
         attrs: dict[str, Any] = {}
         if not self.coordinator.data:
             return attrs
@@ -1248,7 +1248,7 @@ class DistrictHeatingDtSensor(
 
 
 class SpotPriceSensor(
-    CoordinatorEntity[KarlstadsenergiSpotPriceCoordinator],
+    KarlstadsenergiEntity[KarlstadsenergiSpotPriceCoordinator],
     SensorEntity,
 ):
     """Current Nord Pool spot price from Evado public API.
@@ -1290,7 +1290,7 @@ class SpotPriceSensor(
         return self.coordinator.data.get("current_price")
 
     @property
-    def extra_state_attributes(self) -> dict[str, Any]:
+    def _entity_attrs(self) -> dict[str, Any]:
         if not self.coordinator.data:
             return {}
         data = self.coordinator.data
@@ -1337,7 +1337,7 @@ class SpotPriceSensor(
 
 
 class ContractSensor(
-    CoordinatorEntity[KarlstadsenergiContractCoordinator],
+    KarlstadsenergiEntity[KarlstadsenergiContractCoordinator],
     SensorEntity,
 ):
     """Sensor showing contract details."""
@@ -1394,7 +1394,7 @@ class ContractSensor(
         return value
 
     @property
-    def extra_state_attributes(self) -> dict[str, Any]:
+    def _entity_attrs(self) -> dict[str, Any]:
         contract = self._get_contract()
         if not contract:
             return {}

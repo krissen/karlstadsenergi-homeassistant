@@ -479,6 +479,13 @@ class KarlstadsenergiApi:
                     async with session.get(
                         f"{BASE_URL}/{page}", allow_redirects=False
                     ) as resp:
+                        location = resp.headers.get("Location", "")
+                        _LOGGER.debug(
+                            "Page visit %s -> status=%s%s",
+                            page,
+                            resp.status,
+                            f" Location={location}" if location else "",
+                        )
                         if resp.status in (301, 302, 401, 403):
                             raise KarlstadsenergiAuthError(
                                 f"Session expired visiting {page} "
@@ -557,12 +564,18 @@ class KarlstadsenergiApi:
     async def async_get_flex_services(self) -> list[dict[str, Any]]:
         """Get all waste collection services.
 
-        Requires visiting the flex page first to initialize server state.
+        Visits start.aspx first to (re)initialize the server-side session
+        view, then the flex page, before calling the data endpoint. The
+        start.aspx visit matters on a restored session (after a restart or
+        reauth): the cookies are valid but the per-session view state set up
+        during login is gone, so going straight to flexservices.aspx
+        redirects to logout. This mirrors async_get_consumption and the
+        start.aspx init that bankid_login performs.
         """
         if not self._authenticated:
             await self.authenticate()
 
-        pages = ("flex/flexservices.aspx",)
+        pages = ("start.aspx", "flex/flexservices.aspx")
         session = await self._ensure_session()
         try:
             await self._visit_pages(session, pages)
@@ -779,16 +792,44 @@ class KarlstadsenergiApi:
         return result
 
     async def async_heartbeat(self) -> bool:
-        """Send heartbeat to keep session alive."""
+        """Keep the session alive by touching an auth-gated page.
+
+        ``/heart.beat`` returns 200 even after the authenticated session has
+        expired (observed: heart.beat=200 while start.aspx already 302'd to
+        login), so it never actually kept the session alive. Hit ``start.aspx``
+        instead -- it is auth-gated (302 -> login when dead) and touches
+        server-side session state, so it should reset the session's sliding
+        timeout. allow_redirects=False so an expired session reads as failure.
+        Does not re-authenticate here; the coordinators own reauth.
+        """
         session = await self._ensure_session()
         try:
             async with asyncio.timeout(10):
+                # Plain GET (no X-Requested-With), exactly like _visit_pages /
+                # the coordinators -- an XHR-flagged GET appears not to refresh
+                # the server-side session, so it expired despite the keepalive.
                 async with session.get(
-                    f"{BASE_URL}/heart.beat",
-                    headers=REQUEST_HEADERS,
+                    f"{BASE_URL}/start.aspx",
+                    allow_redirects=False,
                 ) as resp:
+                    if resp.status in (301, 302, 303, 307, 308):
+                        # Any auth-redirect from this page means the session is no
+                        # longer valid -- the same rule _visit_pages applies to the
+                        # data path. Treating only logout/sessiontimeout as dead
+                        # would misread another expiry redirect as "alive" and let
+                        # a dead session's cookies be persisted. Log the target for
+                        # diagnostics, but never report alive on a redirect.
+                        loc = resp.headers.get("Location", "")
+                        _LOGGER.debug(
+                            "Heartbeat (start.aspx): status=%s -> %s [DEAD]",
+                            resp.status,
+                            loc[:60],
+                        )
+                        return False
+                    _LOGGER.debug("Heartbeat (start.aspx): status=%s", resp.status)
                     return resp.status == 200
         except Exception:
+            _LOGGER.debug("Heartbeat: request error", exc_info=True)
             return False
 
     async def async_close(self) -> None:

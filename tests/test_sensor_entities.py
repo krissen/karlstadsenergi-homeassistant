@@ -41,6 +41,9 @@ from custom_components.karlstadsenergi.const import FEE_SUM, FEE_SENSORS
 def _mock_coord(data: Any) -> MagicMock:
     coord = MagicMock()
     coord.data = data
+    # Deterministic freshness markers (merged into every entity's attributes).
+    coord.last_update_success = True
+    coord.last_success_time = None
     return coord
 
 
@@ -532,7 +535,9 @@ class TestElectricityPriceSensor:
 
     def test_extra_state_attributes_empty_when_no_data(self) -> None:
         sensor = self._make_sensor(None)
-        assert sensor.extra_state_attributes == {}
+        # Entity-specific attrs are empty, but the shared freshness marker is
+        # always present (retain-on-failure feature).
+        assert sensor.extra_state_attributes == {"data_stale": False}
 
     def test_no_device_class(self) -> None:
         """Price sensors must not use MONETARY with compound unit SEK/kWh."""
@@ -586,7 +591,9 @@ class TestSpotPriceSensor:
 
     def test_extra_state_attributes_empty_when_no_data(self) -> None:
         sensor = self._make_sensor(None)
-        assert sensor.extra_state_attributes == {}
+        # Entity-specific attrs are empty, but the shared freshness marker is
+        # always present (retain-on-failure feature).
+        assert sensor.extra_state_attributes == {"data_stale": False}
 
     def test_extra_state_attributes_region(self) -> None:
         sensor = self._make_sensor(
@@ -744,7 +751,9 @@ class TestContractSensor:
         sensor = ContractSensor(
             coordinator=coord, customer_id="CUST01", contract=contract
         )
-        assert sensor.extra_state_attributes == {}
+        # Entity-specific attrs are empty, but the shared freshness marker is
+        # always present (retain-on-failure feature).
+        assert sensor.extra_state_attributes == {"data_stale": False}
 
     def test_extra_state_attributes_does_not_contain_gsrn_number(self) -> None:
         """GsrnNumber is PII and must not appear in entity attributes."""
@@ -1059,3 +1068,44 @@ class TestDistrictHeatingDtSensor:
         assert attrs["period_average_dt"] == pytest.approx(40.0, abs=0.1)
         assert attrs["period_min_dt"] == pytest.approx(30.0, abs=0.1)
         assert attrs["period_max_dt"] == pytest.approx(50.0, abs=0.1)
+
+
+# ---------------------------------------------------------------------------
+# Retain-last-value-on-failure behaviour (shared KarlstadsenergiEntity mixin)
+# ---------------------------------------------------------------------------
+
+
+class TestRetainOnFailure:
+    """Entities keep their last value + a stale marker when an update fails."""
+
+    def _sensor(
+        self, data: Any, *, success: bool = True, last_time: Any = None
+    ) -> ElectricityConsumptionSensor:
+        coord = _mock_coord(data)
+        coord.last_update_success = success
+        coord.last_success_time = last_time
+        return ElectricityConsumptionSensor(coordinator=coord, customer_id="CUST01")
+
+    def test_available_and_value_retained_after_failed_update(self) -> None:
+        from datetime import datetime, timezone
+
+        ts = datetime(2026, 6, 7, 12, 0, tzinfo=timezone.utc)
+        data = {"consumption": {"CompareModel": {"CurrYearValue": 100}}}
+        sensor = self._sensor(data, success=False, last_time=ts)
+        # Retained: still available + still showing the last value despite failure
+        assert sensor.available is True
+        assert sensor.native_value == 100.0
+        # ...marked stale, with the last successful fetch time
+        attrs = sensor.extra_state_attributes
+        assert attrs["data_stale"] is True
+        assert attrs["last_updated"] == ts.isoformat()
+
+    def test_fresh_update_not_stale(self) -> None:
+        data = {"consumption": {"CompareModel": {"CurrYearValue": 50}}}
+        sensor = self._sensor(data, success=True)
+        assert sensor.available is True
+        assert sensor.extra_state_attributes["data_stale"] is False
+
+    def test_unavailable_when_no_data_ever(self) -> None:
+        sensor = self._sensor(None, success=False)
+        assert sensor.available is False
