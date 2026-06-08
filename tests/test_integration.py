@@ -140,6 +140,9 @@ class _FakeCache:
     def record(self, name: str, data: dict, last_success_time) -> None:
         self._state[name] = {"data": data, "last_success_time": last_success_time}
 
+    async def async_flush(self) -> None:
+        pass
+
     async def async_remove(self) -> None:
         pass
 
@@ -692,6 +695,7 @@ class TestAsyncUnloadEntry:
         api = _make_api()
         # Attach runtime_data as async_unload_entry uses it
         runtime_data = MagicMock()
+        runtime_data.cache.async_flush = AsyncMock()
         runtime_data.api = api
         entry.runtime_data = runtime_data
 
@@ -704,6 +708,7 @@ class TestAsyncUnloadEntry:
         hass = _make_hass()
         entry = _make_entry()
         runtime_data = MagicMock()
+        runtime_data.cache.async_flush = AsyncMock()
         runtime_data.api = _make_api()
         entry.runtime_data = runtime_data
 
@@ -719,6 +724,7 @@ class TestAsyncUnloadEntry:
         entry = _make_entry()
         api = _make_api()
         runtime_data = MagicMock()
+        runtime_data.cache.async_flush = AsyncMock()
         runtime_data.api = api
         entry.runtime_data = runtime_data
 
@@ -734,6 +740,7 @@ class TestAsyncUnloadEntry:
         entry = _make_entry()
         api = _make_api()
         runtime_data = MagicMock()
+        runtime_data.cache.async_flush = AsyncMock()
         runtime_data.api = api
         entry.runtime_data = runtime_data
 

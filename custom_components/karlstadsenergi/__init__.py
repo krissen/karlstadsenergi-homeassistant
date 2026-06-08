@@ -76,13 +76,14 @@ HEARTBEAT_INTERVAL = timedelta(minutes=5)
 # successful fetch (essential for BankID, whose session dies every ~15 min).
 CACHE_STORAGE_VERSION = 1
 CACHE_SAVE_DELAY = 30  # seconds -- debounce frequent coordinator successes
-# Heavy hourly time-series are dropped from the cache: they dominate the size
-# (~10 MB of 2-year hourly data), drive only secondary attributes / DH detail
-# sensors, and are recoverable -- long-term statistics persist in the recorder
-# and the series repopulate on the first successful fetch after a restart. The
-# values that matter (pickup dates, consumption total, cost, contracts, spot)
-# live in the small keys we keep.
-CACHE_PRUNE_KEYS = ("hourly", "flow", "dt")
+# The 2-year hourly series dominates the cache size (~10 MB) but only backs a
+# secondary "last 24h" attribute on the consumption sensor, and it is
+# recoverable -- long-term statistics persist in the recorder and it repopulates
+# on the first successful fetch after a restart. So it is dropped from the cache.
+# (flow/dt are NOT dropped: they use the narrow base-period window, not the wide
+# history, so they are small, and the DH flow/dT sensors derive their *state*
+# from them -- pruning would make those sensors go unavailable after a restore.)
+CACHE_PRUNE_KEYS = ("hourly",)
 
 
 def _json_encode(obj: Any) -> Any:
@@ -126,6 +127,7 @@ class _DataCache:
         )
         # name -> {"data": <coordinator.data>, "last_success_time": datetime}
         self._state: dict[str, dict] = {}
+        self._dirty = False
 
     async def async_load(self) -> dict:
         """Load + decode the cache; returns the live state dict (also kept)."""
@@ -145,9 +147,22 @@ class _DataCache:
         else:
             cached = data
         self._state[name] = {"data": cached, "last_success_time": last_success_time}
+        self._dirty = True
         self._store.async_delay_save(
             lambda: _json_encode(self._state), CACHE_SAVE_DELAY
         )
+
+    async def async_flush(self) -> None:
+        """Write any pending state immediately (called on unload).
+
+        Without this, a debounced write scheduled just before an unload/reload
+        could fire ~30s later and overwrite the reloaded entry's fresher cache
+        with slightly older state. ``async_save`` writes now and cancels the
+        pending delayed write.
+        """
+        if self._dirty:
+            await self._store.async_save(_json_encode(self._state))
+            self._dirty = False
 
     async def async_remove(self) -> None:
         """Delete the cache file (entry removed)."""
@@ -165,6 +180,7 @@ class KarlstadsenergiData:
     contract_coordinator: KarlstadsenergiContractCoordinator
     spot_price_coordinator: KarlstadsenergiSpotPriceCoordinator
     setup_options: dict
+    cache: _DataCache
 
 
 type KarlstadsenergiConfigEntry = ConfigEntry[KarlstadsenergiData]
@@ -1141,6 +1157,7 @@ async def async_setup_entry(
         contract_coordinator=contract_coordinator,
         spot_price_coordinator=spot_price_coordinator,
         setup_options=dict(entry.options),
+        cache=cache,
     )
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -1180,6 +1197,9 @@ async def async_unload_entry(
         PLATFORMS,
     )
     if unload_ok:
+        # Flush any pending cache write before tearing down, so a reload seeds
+        # from the latest data instead of a stale debounced snapshot.
+        await entry.runtime_data.cache.async_flush()
         await entry.runtime_data.api.async_close()
 
     return unload_ok

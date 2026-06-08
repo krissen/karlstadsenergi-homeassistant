@@ -128,7 +128,7 @@ class TestJsonRoundTrip:
 
 
 class TestPruneHeavySeries:
-    def test_record_drops_hourly_flow_dt(self) -> None:
+    def test_record_drops_only_hourly(self) -> None:
         with patch("custom_components.karlstadsenergi.Store"):
             cache = _DataCache(MagicMock(), MagicMock(entry_id="x"))
         data = {
@@ -136,8 +136,8 @@ class TestPruneHeavySeries:
             "monthly_kwh": {"x": 1},
             "fee_data": {"y": 2},
             "hourly": {"big": list(range(1000))},
-            "flow": {"big": list(range(1000))},
-            "dt": {"big": list(range(1000))},
+            "flow": {"small": [1, 2, 3]},
+            "dt": {"small": [1, 2, 3]},
         }
         cache.record(
             "karlstadsenergi_consumption",
@@ -145,10 +145,11 @@ class TestPruneHeavySeries:
             datetime(2026, 6, 8, tzinfo=timezone.utc),
         )
         cached = cache._state["karlstadsenergi_consumption"]["data"]
-        # heavy series dropped...
+        # only the large 2-year hourly series is dropped...
         assert "hourly" not in cached
-        assert "flow" not in cached
-        assert "dt" not in cached
+        # ...flow/dt are KEPT (small base-window series that back DH sensor state)...
+        assert "flow" in cached
+        assert "dt" in cached
         # ...lightweight, state-driving keys kept...
         assert "consumption" in cached
         assert "monthly_kwh" in cached
@@ -224,6 +225,9 @@ def _fake_cache_cls(payload: dict):
 
         def record(self, name, data, last_success_time) -> None:
             self._state[name] = {"data": data, "last_success_time": last_success_time}
+
+        async def async_flush(self) -> None:
+            pass
 
         async def async_remove(self) -> None:
             pass
