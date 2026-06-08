@@ -157,6 +157,25 @@ class TestPruneHeavySeries:
         # ...and the live data passed in is NOT mutated.
         assert "hourly" in data
 
+    def test_delayed_save_uses_immutable_snapshot(self) -> None:
+        """The scheduled save captures a snapshot, not live self._state.
+
+        Guards against the delayed/off-loop serialization traversing state that
+        a later coordinator success is mutating.
+        """
+        with patch("custom_components.karlstadsenergi.Store") as MockStore:
+            store = MockStore.return_value
+            cache = _DataCache(MagicMock(), MagicMock(entry_id="x"))
+            ts = datetime(2026, 6, 8, tzinfo=timezone.utc)
+            cache.record("karlstadsenergi_waste", {"v": 1}, ts)
+            first_func = store.async_delay_save.call_args.args[0]
+            # A later record() mutates self._state...
+            cache.record("karlstadsenergi_consumption", {"v": 2}, ts)
+            # ...but the earlier scheduled save still serializes the old snapshot.
+            snapshot = first_func()
+            assert "karlstadsenergi_waste" in snapshot
+            assert "karlstadsenergi_consumption" not in snapshot
+
 
 # ---------------------------------------------------------------------------
 # Setup behaviour with / without cache

@@ -148,9 +148,14 @@ class _DataCache:
             cached = data
         self._state[name] = {"data": cached, "last_success_time": last_success_time}
         self._dirty = True
-        self._store.async_delay_save(
-            lambda: _json_encode(self._state), CACHE_SAVE_DELAY
-        )
+        # Encode an immutable snapshot now, on the event loop, rather than
+        # deferring `_json_encode(self._state)` into the delayed save: depending
+        # on the HA version, Store may serialize the data_func result off the
+        # event loop, which could otherwise traverse self._state while a
+        # concurrent coordinator success mutates it. _json_encode rebuilds all
+        # containers, so the snapshot is independent of later record() calls.
+        snapshot = _json_encode(self._state)
+        self._store.async_delay_save(lambda: snapshot, CACHE_SAVE_DELAY)
 
     async def async_flush(self) -> None:
         """Write any pending state immediately (called on unload).
