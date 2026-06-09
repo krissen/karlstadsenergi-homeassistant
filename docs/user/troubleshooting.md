@@ -105,6 +105,8 @@ The consumption sensor shows old data, or consumption values are missing.
 
    When configuring the Energy Dashboard, make sure you select the external statistic (shown under "External statistics" in the Energy Dashboard setup), not the entity sensor.
 
+4. **Wrong `stat_types` in a custom statistics-graph card.** If you build your own "consumption per day" card with a `statistics-graph` (or ApexCharts) card, use `stat_types: [change]`, **not** `state`. The consumption/cost statistics are cumulative (sum) statistics: `change` is the amount consumed *during* each period (the real daily/monthly total, e.g. ~20 kWh/day), while `state` plots each period's last hourly reading (~1 kWh) -- which looks like the graph is ~20x too low. See the [per-day consumption example](dashboard-examples.md#4c-consumption-per-day-statistics-graph).
+
 ---
 
 ### Waste pickup dates not updating

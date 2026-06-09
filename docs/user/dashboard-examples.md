@@ -527,6 +527,25 @@ Shows the latest invoiced month's total fee and effective variable price per kWh
   icon_color: green
 ```
 
+### 4c. Consumption per day (statistics graph)
+
+A built-in `statistics-graph` card showing daily consumption from the external statistic. No HACS card required.
+
+```yaml
+- type: statistics-graph
+  title: Elförbrukning per dag (30 dagar)
+  chart_type: bar
+  entities:
+    - karlstadsenergi:electricity_consumption_166667   # use your own customer_id
+  period: day
+  stat_types:
+    - change
+  days_to_show: 30
+  hide_legend: true
+```
+
+> **Use `change`, not `state`.** The consumption (and cost) statistics are cumulative *sum* statistics. `change` plots the amount consumed **during** each day -- the real daily total (~20 kWh). `stat_types: [state]` looks plausible but plots each day's **last hourly reading** (~1 kWh), so the whole graph comes out roughly 20x too low. The same applies to a per-day/per-month cost graph built on the `karlstadsenergi:cost_*` statistics.
+
 ---
 
 ## Other options
