@@ -44,14 +44,16 @@ cards:
     entity: sensor.karlstadsenergi_food_and_residual_waste
     primary: Mat- och restavfall
     secondary: >-
-      {% set d = state_attr('sensor.karlstadsenergi_food_and_residual_waste', 'days_until_pickup') %}
+      {% set p = states('sensor.karlstadsenergi_food_and_residual_waste') %}
+      {% set d = (as_datetime(p).date() - now().date()).days if p not in ['unknown', 'unavailable'] else none %}
       {% if d == 0 %}Hämtas IDAG
       {% elif d == 1 %}Imorgon ({{ states('sensor.karlstadsenergi_food_and_residual_waste') }})
       {% elif d is not none %}Om {{ d }} dagar ({{ states('sensor.karlstadsenergi_food_and_residual_waste') }})
       {% else %}Okänt datum{% endif %}
     icon: mdi:trash-can
     icon_color: >-
-      {% set d = state_attr('sensor.karlstadsenergi_food_and_residual_waste', 'days_until_pickup') %}
+      {% set p = states('sensor.karlstadsenergi_food_and_residual_waste') %}
+      {% set d = (as_datetime(p).date() - now().date()).days if p not in ['unknown', 'unavailable'] else none %}
       {% if d is none %}disabled
       {% elif d == 0 %}red
       {% elif d == 1 %}orange
@@ -62,14 +64,16 @@ cards:
     entity: sensor.karlstadsenergi_glass_metal
     primary: Glas/Metall
     secondary: >-
-      {% set d = state_attr('sensor.karlstadsenergi_glass_metal', 'days_until_pickup') %}
+      {% set p = states('sensor.karlstadsenergi_glass_metal') %}
+      {% set d = (as_datetime(p).date() - now().date()).days if p not in ['unknown', 'unavailable'] else none %}
       {% if d == 0 %}Hämtas IDAG
       {% elif d == 1 %}Imorgon ({{ states('sensor.karlstadsenergi_glass_metal') }})
       {% elif d is not none %}Om {{ d }} dagar ({{ states('sensor.karlstadsenergi_glass_metal') }})
       {% else %}Okänt datum{% endif %}
     icon: mdi:recycle
     icon_color: >-
-      {% set d = state_attr('sensor.karlstadsenergi_glass_metal', 'days_until_pickup') %}
+      {% set p = states('sensor.karlstadsenergi_glass_metal') %}
+      {% set d = (as_datetime(p).date() - now().date()).days if p not in ['unknown', 'unavailable'] else none %}
       {% if d is none %}disabled
       {% elif d == 0 %}red
       {% elif d == 1 %}orange
@@ -80,14 +84,16 @@ cards:
     entity: sensor.karlstadsenergi_plastic_paper_packaging
     primary: Plast- och pappersförpackningar
     secondary: >-
-      {% set d = state_attr('sensor.karlstadsenergi_plastic_paper_packaging', 'days_until_pickup') %}
+      {% set p = states('sensor.karlstadsenergi_plastic_paper_packaging') %}
+      {% set d = (as_datetime(p).date() - now().date()).days if p not in ['unknown', 'unavailable'] else none %}
       {% if d == 0 %}Hämtas IDAG
       {% elif d == 1 %}Imorgon ({{ states('sensor.karlstadsenergi_plastic_paper_packaging') }})
       {% elif d is not none %}Om {{ d }} dagar ({{ states('sensor.karlstadsenergi_plastic_paper_packaging') }})
       {% else %}Okänt datum{% endif %}
     icon: mdi:package-variant
     icon_color: >-
-      {% set d = state_attr('sensor.karlstadsenergi_plastic_paper_packaging', 'days_until_pickup') %}
+      {% set p = states('sensor.karlstadsenergi_plastic_paper_packaging') %}
+      {% set d = (as_datetime(p).date() - now().date()).days if p not in ['unknown', 'unavailable'] else none %}
       {% if d is none %}disabled
       {% elif d == 0 %}red
       {% elif d == 1 %}orange
@@ -109,18 +115,21 @@ cards:
     entity: sensor.karlstadsenergi_food_and_residual_waste
     primary: Mat- och restavfall
     secondary: >-
-      {% set d = state_attr('sensor.karlstadsenergi_food_and_residual_waste', 'days_until_pickup') %}
+      {% set p = states('sensor.karlstadsenergi_food_and_residual_waste') %}
+      {% set d = (as_datetime(p).date() - now().date()).days if p not in ['unknown', 'unavailable'] else none %}
       {% if d == 0 %}Hämtas IDAG
       {% elif d == 1 %}Imorgon · {{ states('sensor.karlstadsenergi_food_and_residual_waste') }}
       {% elif d is not none %}Om {{ d }} dagar · {{ states('sensor.karlstadsenergi_food_and_residual_waste') }}
       {% else %}Okänt datum{% endif %}
     icon: mdi:trash-can
     icon_color: >-
-      {% set d = state_attr('sensor.karlstadsenergi_food_and_residual_waste', 'days_until_pickup') %}
+      {% set p = states('sensor.karlstadsenergi_food_and_residual_waste') %}
+      {% set d = (as_datetime(p).date() - now().date()).days if p not in ['unknown', 'unavailable'] else none %}
       {% if d is none %}disabled{% elif d == 0 %}red{% elif d == 1 %}orange{% elif d <= 6 %}yellow{% else %}green{% endif %}
     card_mod:
       style: >
-        {% set d = state_attr('sensor.karlstadsenergi_food_and_residual_waste', 'days_until_pickup') %}
+        {% set p = states('sensor.karlstadsenergi_food_and_residual_waste') %}
+        {% set d = (as_datetime(p).date() - now().date()).days if p not in ['unknown', 'unavailable'] else none %}
         ha-card {
           {% if d is none %}background: rgba(128,128,128,0.08);
           {% elif d == 0 %}background: rgba(var(--rgb-red), 0.12);
@@ -134,18 +143,21 @@ cards:
     entity: sensor.karlstadsenergi_glass_metal
     primary: Glas/Metall
     secondary: >-
-      {% set d = state_attr('sensor.karlstadsenergi_glass_metal', 'days_until_pickup') %}
+      {% set p = states('sensor.karlstadsenergi_glass_metal') %}
+      {% set d = (as_datetime(p).date() - now().date()).days if p not in ['unknown', 'unavailable'] else none %}
       {% if d == 0 %}Hämtas IDAG
       {% elif d == 1 %}Imorgon · {{ states('sensor.karlstadsenergi_glass_metal') }}
       {% elif d is not none %}Om {{ d }} dagar · {{ states('sensor.karlstadsenergi_glass_metal') }}
       {% else %}Okänt datum{% endif %}
     icon: mdi:recycle
     icon_color: >-
-      {% set d = state_attr('sensor.karlstadsenergi_glass_metal', 'days_until_pickup') %}
+      {% set p = states('sensor.karlstadsenergi_glass_metal') %}
+      {% set d = (as_datetime(p).date() - now().date()).days if p not in ['unknown', 'unavailable'] else none %}
       {% if d is none %}disabled{% elif d == 0 %}red{% elif d == 1 %}orange{% elif d <= 6 %}yellow{% else %}green{% endif %}
     card_mod:
       style: >
-        {% set d = state_attr('sensor.karlstadsenergi_glass_metal', 'days_until_pickup') %}
+        {% set p = states('sensor.karlstadsenergi_glass_metal') %}
+        {% set d = (as_datetime(p).date() - now().date()).days if p not in ['unknown', 'unavailable'] else none %}
         ha-card {
           {% if d is none %}background: rgba(128,128,128,0.08);
           {% elif d == 0 %}background: rgba(var(--rgb-red), 0.12);
@@ -159,18 +171,21 @@ cards:
     entity: sensor.karlstadsenergi_plastic_paper_packaging
     primary: Plast- och pappersförpackningar
     secondary: >-
-      {% set d = state_attr('sensor.karlstadsenergi_plastic_paper_packaging', 'days_until_pickup') %}
+      {% set p = states('sensor.karlstadsenergi_plastic_paper_packaging') %}
+      {% set d = (as_datetime(p).date() - now().date()).days if p not in ['unknown', 'unavailable'] else none %}
       {% if d == 0 %}Hämtas IDAG
       {% elif d == 1 %}Imorgon · {{ states('sensor.karlstadsenergi_plastic_paper_packaging') }}
       {% elif d is not none %}Om {{ d }} dagar · {{ states('sensor.karlstadsenergi_plastic_paper_packaging') }}
       {% else %}Okänt datum{% endif %}
     icon: mdi:package-variant
     icon_color: >-
-      {% set d = state_attr('sensor.karlstadsenergi_plastic_paper_packaging', 'days_until_pickup') %}
+      {% set p = states('sensor.karlstadsenergi_plastic_paper_packaging') %}
+      {% set d = (as_datetime(p).date() - now().date()).days if p not in ['unknown', 'unavailable'] else none %}
       {% if d is none %}disabled{% elif d == 0 %}red{% elif d == 1 %}orange{% elif d <= 6 %}yellow{% else %}green{% endif %}
     card_mod:
       style: >
-        {% set d = state_attr('sensor.karlstadsenergi_plastic_paper_packaging', 'days_until_pickup') %}
+        {% set p = states('sensor.karlstadsenergi_plastic_paper_packaging') %}
+        {% set d = (as_datetime(p).date() - now().date()).days if p not in ['unknown', 'unavailable'] else none %}
         ha-card {
           {% if d is none %}background: rgba(128,128,128,0.08);
           {% elif d == 0 %}background: rgba(var(--rgb-red), 0.12);
@@ -197,30 +212,36 @@ chips:
     entity: sensor.karlstadsenergi_food_and_residual_waste
     icon: mdi:trash-can
     content: >-
-      {% set d = state_attr('sensor.karlstadsenergi_food_and_residual_waste', 'days_until_pickup') %}
+      {% set p = states('sensor.karlstadsenergi_food_and_residual_waste') %}
+      {% set d = (as_datetime(p).date() - now().date()).days if p not in ['unknown', 'unavailable'] else none %}
       {% if d == 0 %}Idag!{% elif d == 1 %}Imorgon{% elif d is not none %}{{ d }}d{% else %}-{% endif %}
     icon_color: >-
-      {% set d = state_attr('sensor.karlstadsenergi_food_and_residual_waste', 'days_until_pickup') %}
+      {% set p = states('sensor.karlstadsenergi_food_and_residual_waste') %}
+      {% set d = (as_datetime(p).date() - now().date()).days if p not in ['unknown', 'unavailable'] else none %}
       {% if d is none %}disabled{% elif d == 0 %}red{% elif d == 1 %}orange{% elif d <= 6 %}yellow{% else %}green{% endif %}
 
   - type: template
     entity: sensor.karlstadsenergi_glass_metal
     icon: mdi:recycle
     content: >-
-      {% set d = state_attr('sensor.karlstadsenergi_glass_metal', 'days_until_pickup') %}
+      {% set p = states('sensor.karlstadsenergi_glass_metal') %}
+      {% set d = (as_datetime(p).date() - now().date()).days if p not in ['unknown', 'unavailable'] else none %}
       {% if d == 0 %}Idag!{% elif d == 1 %}Imorgon{% elif d is not none %}{{ d }}d{% else %}-{% endif %}
     icon_color: >-
-      {% set d = state_attr('sensor.karlstadsenergi_glass_metal', 'days_until_pickup') %}
+      {% set p = states('sensor.karlstadsenergi_glass_metal') %}
+      {% set d = (as_datetime(p).date() - now().date()).days if p not in ['unknown', 'unavailable'] else none %}
       {% if d is none %}disabled{% elif d == 0 %}red{% elif d == 1 %}orange{% elif d <= 6 %}yellow{% else %}green{% endif %}
 
   - type: template
     entity: sensor.karlstadsenergi_plastic_paper_packaging
     icon: mdi:package-variant
     content: >-
-      {% set d = state_attr('sensor.karlstadsenergi_plastic_paper_packaging', 'days_until_pickup') %}
+      {% set p = states('sensor.karlstadsenergi_plastic_paper_packaging') %}
+      {% set d = (as_datetime(p).date() - now().date()).days if p not in ['unknown', 'unavailable'] else none %}
       {% if d == 0 %}Idag!{% elif d == 1 %}Imorgon{% elif d is not none %}{{ d }}d{% else %}-{% endif %}
     icon_color: >-
-      {% set d = state_attr('sensor.karlstadsenergi_plastic_paper_packaging', 'days_until_pickup') %}
+      {% set p = states('sensor.karlstadsenergi_plastic_paper_packaging') %}
+      {% set d = (as_datetime(p).date() - now().date()).days if p not in ['unknown', 'unavailable'] else none %}
       {% if d is none %}disabled{% elif d == 0 %}red{% elif d == 1 %}orange{% elif d <= 6 %}yellow{% else %}green{% endif %}
 ```
 
@@ -249,7 +270,8 @@ cards:
     size: 40%
     label: >
       [[[
-        const d = entity.attributes.days_until_pickup;
+        const s = entity.state;
+        const d = (s && s !== 'unknown' && s !== 'unavailable') ? Math.round((new Date(s + 'T00:00:00') - new Date(new Date().setHours(0, 0, 0, 0))) / 86400000) : null;
         if (d === undefined || d === null) return 'Okänt datum';
         if (d === 0) return 'Hämtas IDAG';
         if (d === 1) return 'Imorgon · ' + entity.state;
@@ -261,7 +283,8 @@ cards:
         - padding: 16px 12px
         - background: >
             [[[
-              const d = entity.attributes.days_until_pickup;
+              const s = entity.state;
+              const d = (s && s !== 'unknown' && s !== 'unavailable') ? Math.round((new Date(s + 'T00:00:00') - new Date(new Date().setHours(0, 0, 0, 0))) / 86400000) : null;
               if (d === undefined || d === null) return 'rgba(128,128,128,0.1)';
               if (d === 0) return 'rgba(220,38,38,0.18)';
               if (d === 1) return 'rgba(234,88,12,0.16)';
@@ -271,7 +294,8 @@ cards:
       icon:
         - color: >
             [[[
-              const d = entity.attributes.days_until_pickup;
+              const s = entity.state;
+              const d = (s && s !== 'unknown' && s !== 'unavailable') ? Math.round((new Date(s + 'T00:00:00') - new Date(new Date().setHours(0, 0, 0, 0))) / 86400000) : null;
               if (d === undefined || d === null) return 'var(--disabled-color)';
               if (d === 0) return 'var(--error-color)';
               if (d === 1) return '#ea580c';
@@ -297,7 +321,8 @@ cards:
     size: 40%
     label: >
       [[[
-        const d = entity.attributes.days_until_pickup;
+        const s = entity.state;
+        const d = (s && s !== 'unknown' && s !== 'unavailable') ? Math.round((new Date(s + 'T00:00:00') - new Date(new Date().setHours(0, 0, 0, 0))) / 86400000) : null;
         if (d === undefined || d === null) return 'Okänt datum';
         if (d === 0) return 'Hämtas IDAG';
         if (d === 1) return 'Imorgon · ' + entity.state;
@@ -309,7 +334,8 @@ cards:
         - padding: 16px 12px
         - background: >
             [[[
-              const d = entity.attributes.days_until_pickup;
+              const s = entity.state;
+              const d = (s && s !== 'unknown' && s !== 'unavailable') ? Math.round((new Date(s + 'T00:00:00') - new Date(new Date().setHours(0, 0, 0, 0))) / 86400000) : null;
               if (d === undefined || d === null) return 'rgba(128,128,128,0.1)';
               if (d === 0) return 'rgba(220,38,38,0.18)';
               if (d === 1) return 'rgba(234,88,12,0.16)';
@@ -319,7 +345,8 @@ cards:
       icon:
         - color: >
             [[[
-              const d = entity.attributes.days_until_pickup;
+              const s = entity.state;
+              const d = (s && s !== 'unknown' && s !== 'unavailable') ? Math.round((new Date(s + 'T00:00:00') - new Date(new Date().setHours(0, 0, 0, 0))) / 86400000) : null;
               if (d === undefined || d === null) return 'var(--disabled-color)';
               if (d === 0) return 'var(--error-color)';
               if (d === 1) return '#ea580c';
@@ -345,7 +372,8 @@ cards:
     size: 40%
     label: >
       [[[
-        const d = entity.attributes.days_until_pickup;
+        const s = entity.state;
+        const d = (s && s !== 'unknown' && s !== 'unavailable') ? Math.round((new Date(s + 'T00:00:00') - new Date(new Date().setHours(0, 0, 0, 0))) / 86400000) : null;
         if (d === undefined || d === null) return 'Okänt datum';
         if (d === 0) return 'Hämtas IDAG';
         if (d === 1) return 'Imorgon · ' + entity.state;
@@ -357,7 +385,8 @@ cards:
         - padding: 16px 12px
         - background: >
             [[[
-              const d = entity.attributes.days_until_pickup;
+              const s = entity.state;
+              const d = (s && s !== 'unknown' && s !== 'unavailable') ? Math.round((new Date(s + 'T00:00:00') - new Date(new Date().setHours(0, 0, 0, 0))) / 86400000) : null;
               if (d === undefined || d === null) return 'rgba(128,128,128,0.1)';
               if (d === 0) return 'rgba(220,38,38,0.18)';
               if (d === 1) return 'rgba(234,88,12,0.16)';
@@ -367,7 +396,8 @@ cards:
       icon:
         - color: >
             [[[
-              const d = entity.attributes.days_until_pickup;
+              const s = entity.state;
+              const d = (s && s !== 'unknown' && s !== 'unavailable') ? Math.round((new Date(s + 'T00:00:00') - new Date(new Date().setHours(0, 0, 0, 0))) / 86400000) : null;
               if (d === undefined || d === null) return 'var(--disabled-color)';
               if (d === 0) return 'var(--error-color)';
               if (d === 1) return '#ea580c';
@@ -569,6 +599,8 @@ A built-in `statistics-graph` card showing daily consumption from the external s
 
 Adjust `d <= 6` to `d <= 13` if your waste is collected every two weeks and you want the yellow warning earlier.
 
-**Edge cases.** The `days_until_pickup` attribute is absent when the coordinator has no data yet. All templates above handle this gracefully (neutral grey / "Okänt datum").
+**Live countdown.** All templates above compute the day count from the sensor's *state* (the absolute pickup date) using `now()`, rather than reading the `days_until_pickup` attribute. Because they reference `now()`, the cards re-render every minute, so the countdown stays correct even when a BankID session has expired and the integration can no longer refresh -- the absolute date does not change, only how many days remain. A negative value means the stored date has passed without fresh data.
 
-**Binary sensors vs. `days_until_pickup`.** The binary sensors (`pickup_tomorrow`) are best for automations (notifications). For dashboard display, `days_until_pickup` is more flexible since it drives a color gradient rather than just on/off.
+**Edge cases.** When the sensor has no data yet its state is `unknown`/`unavailable`; the templates set `d` to `none` and handle it gracefully (neutral grey / "Okänt datum").
+
+**Binary sensors vs. the countdown.** The binary sensors (`pickup_tomorrow`) are best for automations (notifications). For dashboard display, the day count is more flexible since it drives a color gradient rather than just on/off.

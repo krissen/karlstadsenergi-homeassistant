@@ -7,7 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Waste countdown froze with an expired BankID session** -- the `days_until_pickup` attribute was only recomputed when the entity wrote its state, which a coordinator-backed entity does only on a successful refresh. With BankID, refreshes pause once the session dies, so the countdown stuck at its last value (e.g. "in 6 days" while the pickup was really 3 days away), even though the underlying pickup *date* stayed correct. Waste sensors now also rewrite their state once per day at local midnight, so the countdown keeps ticking down regardless of the coordinator. The attribute name, meaning, and value range are unchanged.
+
 ### Changed
+- **Docs: dashboard waste countdown computed live** -- the Mushroom/button-card examples and the template-sensor example now derive the day count from the sensor's date *state* with `now()` instead of the `days_until_pickup` attribute, so the cards re-render every minute and stay correct even when the integration cannot refresh (expired BankID session).
 - **Docs: per-day consumption graph example** -- added a `statistics-graph` example for daily consumption and documented that custom statistics-graph/ApexCharts cards must use `stat_types: [change]` (the consumed amount per period), not `state` (which plots each day's last hourly reading and makes the graph look ~20x too low).
 
 ## [0.4.1] - 2026-06-08
