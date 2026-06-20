@@ -273,6 +273,7 @@ cards:
 
   - type: custom:button-card
     entity: sensor.karlstadsenergi_food_and_residual_waste
+    triggers_update: sensor.time
     name: Mat- och restavfall
     icon: mdi:trash-can
     show_icon: true
@@ -327,6 +328,7 @@ cards:
 
   - type: custom:button-card
     entity: sensor.karlstadsenergi_glass_metal
+    triggers_update: sensor.time
     name: Glas/Metall
     icon: mdi:recycle
     show_icon: true
@@ -381,6 +383,7 @@ cards:
 
   - type: custom:button-card
     entity: sensor.karlstadsenergi_plastic_paper_packaging
+    triggers_update: sensor.time
     name: Plast/Papper
     icon: mdi:package-variant
     show_icon: true
@@ -621,7 +624,7 @@ A built-in `statistics-graph` card showing daily consumption from the external s
 
 Adjust `d <= 6` to `d <= 13` if your waste is collected every two weeks and you want the yellow warning earlier.
 
-**Live countdown.** All templates above compute the day count from the sensor's *state* (the absolute pickup date) using `now()`, rather than reading the `days_until_pickup` attribute. Because they reference `now()`, the cards re-render every minute, so the countdown stays correct even when a BankID session has expired and the integration can no longer refresh -- the absolute date does not change, only how many days remain. A negative count means the stored date has passed without fresh data; those cards show "Inväntar uppdatering · &lt;date&gt;" (grey) instead of a misleading "Hämtas IDAG".
+**Live countdown.** All examples compute the day count from the sensor's *state* (the absolute pickup date) rather than the `days_until_pickup` attribute, so the countdown stays correct even when a BankID session has expired and the integration can no longer refresh -- the absolute date does not change, only how many days remain. The Mushroom/Jinja templates reference `now()`, which Home Assistant re-renders every minute, so they update on their own. The `custom:button-card` examples are JavaScript and only re-evaluate when a tracked entity changes; the examples add `triggers_update: sensor.time` so they refresh every minute too -- this needs the [Time & Date](https://www.home-assistant.io/integrations/time_date/) integration's `sensor.time` enabled. A negative count means the stored date has passed without fresh data; those cards show "Inväntar uppdatering · &lt;date&gt;" (grey) instead of a misleading "Hämtas IDAG".
 
 **Edge cases.** When the sensor has no data yet its state is `unknown`/`unavailable`; the templates set `d` to `none` and handle it gracefully (neutral grey / "Okänt datum").
 
