@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.4.2-rc1] - 2026-06-20
+## [0.4.2] - 2026-06-20
 
 ### Fixed
 - **Waste countdown froze with an expired BankID session** -- the `days_until_pickup` attribute was only recomputed when the entity wrote its state, which a coordinator-backed entity does only on a successful refresh. With BankID, refreshes pause once the session dies, so the countdown stuck at its last value (e.g. "in 6 days" while the pickup was really 3 days away), even though the underlying pickup *date* stayed correct. Waste sensors now also rewrite their state once per day at local midnight, so the countdown keeps ticking down regardless of the coordinator. The attribute name and meaning are unchanged.
