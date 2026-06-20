@@ -203,7 +203,7 @@ class TestWasteCollectionSensor:
         assert attrs["days_until_pickup"] == 0
 
     def test_pickup_is_today_false_when_past(self) -> None:
-        # Pickup date == yesterday => pickup_is_today is False, days_until_pickup clamped to 0
+        # Pickup date == yesterday => pickup_is_today is False, days_until_pickup is -1
         data = {"dates": {"1": "2026-04-14"}}
         sensor = _make_waste_sensor(data)
         with patch("custom_components.karlstadsenergi.sensor.dt_util") as mock_dt:
@@ -212,7 +212,7 @@ class TestWasteCollectionSensor:
             )
             attrs = sensor.extra_state_attributes
         assert attrs["pickup_is_today"] is False
-        assert attrs["days_until_pickup"] == 0
+        assert attrs["days_until_pickup"] == -1
 
 
 # ---------------------------------------------------------------------------
@@ -333,7 +333,7 @@ class TestWasteCollectionSummary:
         assert attrs["days_until_pickup"] == 0
 
     def test_pickup_is_today_false_when_past(self) -> None:
-        # Pickup date == yesterday => pickup_is_today is False, days_until_pickup clamped to 0
+        # Pickup date == yesterday => pickup_is_today is False, days_until_pickup is -1
         data = {"next_dates": [{"Type": "Mat- och restavfall", "Date": "2026-04-14"}]}
         sensor = _make_summary_sensor(data)
         with patch("custom_components.karlstadsenergi.sensor.dt_util") as mock_dt:
@@ -342,7 +342,7 @@ class TestWasteCollectionSummary:
             )
             attrs = sensor.extra_state_attributes
         assert attrs["pickup_is_today"] is False
-        assert attrs["days_until_pickup"] == 0
+        assert attrs["days_until_pickup"] == -1
 
 
 # ---------------------------------------------------------------------------

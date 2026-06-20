@@ -467,7 +467,10 @@ class WasteCollectionSensor(
         if pickup_date:
             today = dt_util.now().date()
             delta = (pickup_date - today).days
-            attrs["days_until_pickup"] = max(delta, 0)
+            # Report the real signed delta: it goes negative once the stored
+            # date has passed without a fresh fetch (e.g. a dead BankID
+            # session). A clamped 0 used to read as "today" on dashboards.
+            attrs["days_until_pickup"] = delta
             attrs["pickup_is_today"] = delta == 0
             attrs["pickup_is_tomorrow"] = delta == 1
         return attrs
@@ -527,7 +530,10 @@ class WasteCollectionSummary(
         if pickup_date:
             today = dt_util.now().date()
             delta = (pickup_date - today).days
-            attrs["days_until_pickup"] = max(delta, 0)
+            # Report the real signed delta: it goes negative once the stored
+            # date has passed without a fresh fetch (e.g. a dead BankID
+            # session). A clamped 0 used to read as "today" on dashboards.
+            attrs["days_until_pickup"] = delta
             attrs["pickup_is_today"] = delta == 0
             attrs["pickup_is_tomorrow"] = delta == 1
         return attrs
