@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.2-rc1] - 2026-06-20
+
 ### Fixed
 - **Waste countdown froze with an expired BankID session** -- the `days_until_pickup` attribute was only recomputed when the entity wrote its state, which a coordinator-backed entity does only on a successful refresh. With BankID, refreshes pause once the session dies, so the countdown stuck at its last value (e.g. "in 6 days" while the pickup was really 3 days away), even though the underlying pickup *date* stayed correct. Waste sensors now also rewrite their state once per day at local midnight, so the countdown keeps ticking down regardless of the coordinator. The attribute name and meaning are unchanged.
 - **A passed pickup date showed as "today"** -- `days_until_pickup` was clamped to `0` once a date had passed, so dashboards branching on `== 0` rendered "Hämtas IDAG" for an overdue/stale date (common with a dead BankID session, where the stored date goes stale without a fresh "next pickup"). The attribute now reports the real signed value -- negative once the date has passed -- so consumers can tell an overdue/stale date from an actual same-day pickup. `pickup_is_today`/`pickup_is_tomorrow` are unchanged.
