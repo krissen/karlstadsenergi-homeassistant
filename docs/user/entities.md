@@ -51,6 +51,16 @@ When the integration retrieves full service data (the normal case), all attribut
 
 When the integration falls back to summary data (detailed services unavailable), `frequency` and `service_id` are not present. All other attributes are present when a pickup date is available.
 
+> **Freshness of `days_until_pickup`.** The sensor *state* is the absolute
+> pickup date, which stays correct even when the data is stale. The relative
+> `days_until_pickup` attribute is recomputed whenever the entity writes its
+> state -- on every coordinator refresh, and additionally once per day at local
+> midnight (so the countdown still ticks down even if a BankID session has
+> expired and refreshes are paused). For per-minute accuracy in a dashboard,
+> compute the countdown from the date state instead of reading the attribute --
+> see [Dashboard examples](dashboard-examples.md). A negative value means the
+> stored date has passed without fresh data.
+
 ---
 
 ## Waste collection calendar
@@ -349,6 +359,7 @@ template:
   - sensor:
       - name: "Days until waste pickup"
         state: >
-          {{ state_attr('sensor.karlstadsenergi_food_and_residual_waste', 'days_until_pickup') }}
+          {% set p = states('sensor.karlstadsenergi_food_and_residual_waste') %}
+          {{ (as_datetime(p).date() - now().date()).days if p not in ['unknown', 'unavailable'] else none }}
         unit_of_measurement: "days"
 ```
