@@ -48,6 +48,7 @@ cards:
       {% set d = (as_datetime(p).date() - now().date()).days if p not in ['unknown', 'unavailable'] else none %}
       {% if d == 0 %}Hämtas IDAG
       {% elif d == 1 %}Imorgon ({{ states('sensor.karlstadsenergi_food_and_residual_waste') }})
+      {% elif d is not none and d < 0 %}Inväntar uppdatering · {{ p }}
       {% elif d is not none %}Om {{ d }} dagar ({{ states('sensor.karlstadsenergi_food_and_residual_waste') }})
       {% else %}Okänt datum{% endif %}
     icon: mdi:trash-can
@@ -55,6 +56,7 @@ cards:
       {% set p = states('sensor.karlstadsenergi_food_and_residual_waste') %}
       {% set d = (as_datetime(p).date() - now().date()).days if p not in ['unknown', 'unavailable'] else none %}
       {% if d is none %}disabled
+      {% elif d < 0 %}disabled
       {% elif d == 0 %}red
       {% elif d == 1 %}orange
       {% elif d <= 6 %}yellow
@@ -68,6 +70,7 @@ cards:
       {% set d = (as_datetime(p).date() - now().date()).days if p not in ['unknown', 'unavailable'] else none %}
       {% if d == 0 %}Hämtas IDAG
       {% elif d == 1 %}Imorgon ({{ states('sensor.karlstadsenergi_glass_metal') }})
+      {% elif d is not none and d < 0 %}Inväntar uppdatering · {{ p }}
       {% elif d is not none %}Om {{ d }} dagar ({{ states('sensor.karlstadsenergi_glass_metal') }})
       {% else %}Okänt datum{% endif %}
     icon: mdi:recycle
@@ -75,6 +78,7 @@ cards:
       {% set p = states('sensor.karlstadsenergi_glass_metal') %}
       {% set d = (as_datetime(p).date() - now().date()).days if p not in ['unknown', 'unavailable'] else none %}
       {% if d is none %}disabled
+      {% elif d < 0 %}disabled
       {% elif d == 0 %}red
       {% elif d == 1 %}orange
       {% elif d <= 6 %}yellow
@@ -88,6 +92,7 @@ cards:
       {% set d = (as_datetime(p).date() - now().date()).days if p not in ['unknown', 'unavailable'] else none %}
       {% if d == 0 %}Hämtas IDAG
       {% elif d == 1 %}Imorgon ({{ states('sensor.karlstadsenergi_plastic_paper_packaging') }})
+      {% elif d is not none and d < 0 %}Inväntar uppdatering · {{ p }}
       {% elif d is not none %}Om {{ d }} dagar ({{ states('sensor.karlstadsenergi_plastic_paper_packaging') }})
       {% else %}Okänt datum{% endif %}
     icon: mdi:package-variant
@@ -95,6 +100,7 @@ cards:
       {% set p = states('sensor.karlstadsenergi_plastic_paper_packaging') %}
       {% set d = (as_datetime(p).date() - now().date()).days if p not in ['unknown', 'unavailable'] else none %}
       {% if d is none %}disabled
+      {% elif d < 0 %}disabled
       {% elif d == 0 %}red
       {% elif d == 1 %}orange
       {% elif d <= 6 %}yellow
@@ -119,19 +125,21 @@ cards:
       {% set d = (as_datetime(p).date() - now().date()).days if p not in ['unknown', 'unavailable'] else none %}
       {% if d == 0 %}Hämtas IDAG
       {% elif d == 1 %}Imorgon · {{ states('sensor.karlstadsenergi_food_and_residual_waste') }}
+      {% elif d is not none and d < 0 %}Inväntar uppdatering · {{ p }}
       {% elif d is not none %}Om {{ d }} dagar · {{ states('sensor.karlstadsenergi_food_and_residual_waste') }}
       {% else %}Okänt datum{% endif %}
     icon: mdi:trash-can
     icon_color: >-
       {% set p = states('sensor.karlstadsenergi_food_and_residual_waste') %}
       {% set d = (as_datetime(p).date() - now().date()).days if p not in ['unknown', 'unavailable'] else none %}
-      {% if d is none %}disabled{% elif d == 0 %}red{% elif d == 1 %}orange{% elif d <= 6 %}yellow{% else %}green{% endif %}
+      {% if d is none %}disabled{% elif d < 0 %}disabled{% elif d == 0 %}red{% elif d == 1 %}orange{% elif d <= 6 %}yellow{% else %}green{% endif %}
     card_mod:
       style: >
         {% set p = states('sensor.karlstadsenergi_food_and_residual_waste') %}
         {% set d = (as_datetime(p).date() - now().date()).days if p not in ['unknown', 'unavailable'] else none %}
         ha-card {
           {% if d is none %}background: rgba(128,128,128,0.08);
+          {% elif d < 0 %}background: rgba(128,128,128,0.08);
           {% elif d == 0 %}background: rgba(var(--rgb-red), 0.12);
           {% elif d == 1 %}background: rgba(var(--rgb-orange), 0.10);
           {% elif d <= 6 %}background: rgba(var(--rgb-yellow), 0.08);
@@ -147,19 +155,21 @@ cards:
       {% set d = (as_datetime(p).date() - now().date()).days if p not in ['unknown', 'unavailable'] else none %}
       {% if d == 0 %}Hämtas IDAG
       {% elif d == 1 %}Imorgon · {{ states('sensor.karlstadsenergi_glass_metal') }}
+      {% elif d is not none and d < 0 %}Inväntar uppdatering · {{ p }}
       {% elif d is not none %}Om {{ d }} dagar · {{ states('sensor.karlstadsenergi_glass_metal') }}
       {% else %}Okänt datum{% endif %}
     icon: mdi:recycle
     icon_color: >-
       {% set p = states('sensor.karlstadsenergi_glass_metal') %}
       {% set d = (as_datetime(p).date() - now().date()).days if p not in ['unknown', 'unavailable'] else none %}
-      {% if d is none %}disabled{% elif d == 0 %}red{% elif d == 1 %}orange{% elif d <= 6 %}yellow{% else %}green{% endif %}
+      {% if d is none %}disabled{% elif d < 0 %}disabled{% elif d == 0 %}red{% elif d == 1 %}orange{% elif d <= 6 %}yellow{% else %}green{% endif %}
     card_mod:
       style: >
         {% set p = states('sensor.karlstadsenergi_glass_metal') %}
         {% set d = (as_datetime(p).date() - now().date()).days if p not in ['unknown', 'unavailable'] else none %}
         ha-card {
           {% if d is none %}background: rgba(128,128,128,0.08);
+          {% elif d < 0 %}background: rgba(128,128,128,0.08);
           {% elif d == 0 %}background: rgba(var(--rgb-red), 0.12);
           {% elif d == 1 %}background: rgba(var(--rgb-orange), 0.10);
           {% elif d <= 6 %}background: rgba(var(--rgb-yellow), 0.08);
@@ -175,19 +185,21 @@ cards:
       {% set d = (as_datetime(p).date() - now().date()).days if p not in ['unknown', 'unavailable'] else none %}
       {% if d == 0 %}Hämtas IDAG
       {% elif d == 1 %}Imorgon · {{ states('sensor.karlstadsenergi_plastic_paper_packaging') }}
+      {% elif d is not none and d < 0 %}Inväntar uppdatering · {{ p }}
       {% elif d is not none %}Om {{ d }} dagar · {{ states('sensor.karlstadsenergi_plastic_paper_packaging') }}
       {% else %}Okänt datum{% endif %}
     icon: mdi:package-variant
     icon_color: >-
       {% set p = states('sensor.karlstadsenergi_plastic_paper_packaging') %}
       {% set d = (as_datetime(p).date() - now().date()).days if p not in ['unknown', 'unavailable'] else none %}
-      {% if d is none %}disabled{% elif d == 0 %}red{% elif d == 1 %}orange{% elif d <= 6 %}yellow{% else %}green{% endif %}
+      {% if d is none %}disabled{% elif d < 0 %}disabled{% elif d == 0 %}red{% elif d == 1 %}orange{% elif d <= 6 %}yellow{% else %}green{% endif %}
     card_mod:
       style: >
         {% set p = states('sensor.karlstadsenergi_plastic_paper_packaging') %}
         {% set d = (as_datetime(p).date() - now().date()).days if p not in ['unknown', 'unavailable'] else none %}
         ha-card {
           {% if d is none %}background: rgba(128,128,128,0.08);
+          {% elif d < 0 %}background: rgba(128,128,128,0.08);
           {% elif d == 0 %}background: rgba(var(--rgb-red), 0.12);
           {% elif d == 1 %}background: rgba(var(--rgb-orange), 0.10);
           {% elif d <= 6 %}background: rgba(var(--rgb-yellow), 0.08);
@@ -214,11 +226,11 @@ chips:
     content: >-
       {% set p = states('sensor.karlstadsenergi_food_and_residual_waste') %}
       {% set d = (as_datetime(p).date() - now().date()).days if p not in ['unknown', 'unavailable'] else none %}
-      {% if d == 0 %}Idag!{% elif d == 1 %}Imorgon{% elif d is not none %}{{ d }}d{% else %}-{% endif %}
+      {% if d == 0 %}Idag!{% elif d == 1 %}Imorgon{% elif d is not none and d < 0 %}gammalt{% elif d is not none %}{{ d }}d{% else %}-{% endif %}
     icon_color: >-
       {% set p = states('sensor.karlstadsenergi_food_and_residual_waste') %}
       {% set d = (as_datetime(p).date() - now().date()).days if p not in ['unknown', 'unavailable'] else none %}
-      {% if d is none %}disabled{% elif d == 0 %}red{% elif d == 1 %}orange{% elif d <= 6 %}yellow{% else %}green{% endif %}
+      {% if d is none %}disabled{% elif d < 0 %}disabled{% elif d == 0 %}red{% elif d == 1 %}orange{% elif d <= 6 %}yellow{% else %}green{% endif %}
 
   - type: template
     entity: sensor.karlstadsenergi_glass_metal
@@ -226,11 +238,11 @@ chips:
     content: >-
       {% set p = states('sensor.karlstadsenergi_glass_metal') %}
       {% set d = (as_datetime(p).date() - now().date()).days if p not in ['unknown', 'unavailable'] else none %}
-      {% if d == 0 %}Idag!{% elif d == 1 %}Imorgon{% elif d is not none %}{{ d }}d{% else %}-{% endif %}
+      {% if d == 0 %}Idag!{% elif d == 1 %}Imorgon{% elif d is not none and d < 0 %}gammalt{% elif d is not none %}{{ d }}d{% else %}-{% endif %}
     icon_color: >-
       {% set p = states('sensor.karlstadsenergi_glass_metal') %}
       {% set d = (as_datetime(p).date() - now().date()).days if p not in ['unknown', 'unavailable'] else none %}
-      {% if d is none %}disabled{% elif d == 0 %}red{% elif d == 1 %}orange{% elif d <= 6 %}yellow{% else %}green{% endif %}
+      {% if d is none %}disabled{% elif d < 0 %}disabled{% elif d == 0 %}red{% elif d == 1 %}orange{% elif d <= 6 %}yellow{% else %}green{% endif %}
 
   - type: template
     entity: sensor.karlstadsenergi_plastic_paper_packaging
@@ -238,11 +250,11 @@ chips:
     content: >-
       {% set p = states('sensor.karlstadsenergi_plastic_paper_packaging') %}
       {% set d = (as_datetime(p).date() - now().date()).days if p not in ['unknown', 'unavailable'] else none %}
-      {% if d == 0 %}Idag!{% elif d == 1 %}Imorgon{% elif d is not none %}{{ d }}d{% else %}-{% endif %}
+      {% if d == 0 %}Idag!{% elif d == 1 %}Imorgon{% elif d is not none and d < 0 %}gammalt{% elif d is not none %}{{ d }}d{% else %}-{% endif %}
     icon_color: >-
       {% set p = states('sensor.karlstadsenergi_plastic_paper_packaging') %}
       {% set d = (as_datetime(p).date() - now().date()).days if p not in ['unknown', 'unavailable'] else none %}
-      {% if d is none %}disabled{% elif d == 0 %}red{% elif d == 1 %}orange{% elif d <= 6 %}yellow{% else %}green{% endif %}
+      {% if d is none %}disabled{% elif d < 0 %}disabled{% elif d == 0 %}red{% elif d == 1 %}orange{% elif d <= 6 %}yellow{% else %}green{% endif %}
 ```
 
 ---
@@ -275,6 +287,7 @@ cards:
         if (d === undefined || d === null) return 'Okänt datum';
         if (d === 0) return 'Hämtas IDAG';
         if (d === 1) return 'Imorgon · ' + entity.state;
+        if (d < 0) return 'Inväntar uppdatering · ' + entity.state;
         return 'Om ' + d + ' dagar · ' + entity.state;
       ]]]
     styles:
@@ -286,6 +299,7 @@ cards:
               const s = entity.state;
               const d = (s && s !== 'unknown' && s !== 'unavailable') ? Math.round((new Date(s + 'T00:00:00') - new Date(new Date().setHours(0, 0, 0, 0))) / 86400000) : null;
               if (d === undefined || d === null) return 'rgba(128,128,128,0.1)';
+              if (d < 0) return 'rgba(128,128,128,0.1)';
               if (d === 0) return 'rgba(220,38,38,0.18)';
               if (d === 1) return 'rgba(234,88,12,0.16)';
               if (d <= 6) return 'rgba(202,138,4,0.12)';
@@ -297,6 +311,7 @@ cards:
               const s = entity.state;
               const d = (s && s !== 'unknown' && s !== 'unavailable') ? Math.round((new Date(s + 'T00:00:00') - new Date(new Date().setHours(0, 0, 0, 0))) / 86400000) : null;
               if (d === undefined || d === null) return 'var(--disabled-color)';
+              if (d < 0) return 'var(--disabled-color)';
               if (d === 0) return 'var(--error-color)';
               if (d === 1) return '#ea580c';
               if (d <= 6) return '#ca8a04';
@@ -326,6 +341,7 @@ cards:
         if (d === undefined || d === null) return 'Okänt datum';
         if (d === 0) return 'Hämtas IDAG';
         if (d === 1) return 'Imorgon · ' + entity.state;
+        if (d < 0) return 'Inväntar uppdatering · ' + entity.state;
         return 'Om ' + d + ' dagar · ' + entity.state;
       ]]]
     styles:
@@ -337,6 +353,7 @@ cards:
               const s = entity.state;
               const d = (s && s !== 'unknown' && s !== 'unavailable') ? Math.round((new Date(s + 'T00:00:00') - new Date(new Date().setHours(0, 0, 0, 0))) / 86400000) : null;
               if (d === undefined || d === null) return 'rgba(128,128,128,0.1)';
+              if (d < 0) return 'rgba(128,128,128,0.1)';
               if (d === 0) return 'rgba(220,38,38,0.18)';
               if (d === 1) return 'rgba(234,88,12,0.16)';
               if (d <= 6) return 'rgba(202,138,4,0.12)';
@@ -348,6 +365,7 @@ cards:
               const s = entity.state;
               const d = (s && s !== 'unknown' && s !== 'unavailable') ? Math.round((new Date(s + 'T00:00:00') - new Date(new Date().setHours(0, 0, 0, 0))) / 86400000) : null;
               if (d === undefined || d === null) return 'var(--disabled-color)';
+              if (d < 0) return 'var(--disabled-color)';
               if (d === 0) return 'var(--error-color)';
               if (d === 1) return '#ea580c';
               if (d <= 6) return '#ca8a04';
@@ -377,6 +395,7 @@ cards:
         if (d === undefined || d === null) return 'Okänt datum';
         if (d === 0) return 'Hämtas IDAG';
         if (d === 1) return 'Imorgon · ' + entity.state;
+        if (d < 0) return 'Inväntar uppdatering · ' + entity.state;
         return 'Om ' + d + ' dagar · ' + entity.state;
       ]]]
     styles:
@@ -388,6 +407,7 @@ cards:
               const s = entity.state;
               const d = (s && s !== 'unknown' && s !== 'unavailable') ? Math.round((new Date(s + 'T00:00:00') - new Date(new Date().setHours(0, 0, 0, 0))) / 86400000) : null;
               if (d === undefined || d === null) return 'rgba(128,128,128,0.1)';
+              if (d < 0) return 'rgba(128,128,128,0.1)';
               if (d === 0) return 'rgba(220,38,38,0.18)';
               if (d === 1) return 'rgba(234,88,12,0.16)';
               if (d <= 6) return 'rgba(202,138,4,0.12)';
@@ -399,6 +419,7 @@ cards:
               const s = entity.state;
               const d = (s && s !== 'unknown' && s !== 'unavailable') ? Math.round((new Date(s + 'T00:00:00') - new Date(new Date().setHours(0, 0, 0, 0))) / 86400000) : null;
               if (d === undefined || d === null) return 'var(--disabled-color)';
+              if (d < 0) return 'var(--disabled-color)';
               if (d === 0) return 'var(--error-color)';
               if (d === 1) return '#ea580c';
               if (d <= 6) return '#ca8a04';
@@ -596,10 +617,11 @@ A built-in `statistics-graph` card showing daily consumption from the external s
 | 2--6 | Yellow | Coming up |
 | 1 | Orange | Tomorrow |
 | 0 | Red | Today |
+| < 0 | Grey | Passed without fresh data |
 
 Adjust `d <= 6` to `d <= 13` if your waste is collected every two weeks and you want the yellow warning earlier.
 
-**Live countdown.** All templates above compute the day count from the sensor's *state* (the absolute pickup date) using `now()`, rather than reading the `days_until_pickup` attribute. Because they reference `now()`, the cards re-render every minute, so the countdown stays correct even when a BankID session has expired and the integration can no longer refresh -- the absolute date does not change, only how many days remain. A negative value means the stored date has passed without fresh data.
+**Live countdown.** All templates above compute the day count from the sensor's *state* (the absolute pickup date) using `now()`, rather than reading the `days_until_pickup` attribute. Because they reference `now()`, the cards re-render every minute, so the countdown stays correct even when a BankID session has expired and the integration can no longer refresh -- the absolute date does not change, only how many days remain. A negative count means the stored date has passed without fresh data; those cards show "Inväntar uppdatering · &lt;date&gt;" (grey) instead of a misleading "Hämtas IDAG".
 
 **Edge cases.** When the sensor has no data yet its state is `unknown`/`unavailable`; the templates set `d` to `none` and handle it gracefully (neutral grey / "Okänt datum").
 
