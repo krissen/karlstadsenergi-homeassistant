@@ -11,9 +11,10 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 from homeassistant.const import EntityCategory, UnitOfEnergy
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.event import async_track_time_change
 from .entity import KarlstadsenergiEntity
 from homeassistant.util import dt as dt_util
 
@@ -378,7 +379,35 @@ async def async_setup_entry(
 # ── Waste sensors ───────────────────────────────────────────────
 
 
+class _WasteCountdownRefreshMixin:
+    """Rewrite state at local midnight so the relative ``days_until_pickup``
+    attribute recomputes daily even when the coordinator is stuck.
+
+    The pickup date itself is an absolute value and stays correct while frozen,
+    but ``days_until_pickup`` is only re-evaluated when the entity writes its
+    state -- which a ``CoordinatorEntity`` does only on a coordinator refresh.
+    A dead BankID session pauses refreshes, so without this the countdown would
+    freeze at its last value. A daily midnight rewrite keeps it accurate for
+    every consumer of the attribute, independent of the coordinator.
+    """
+
+    async def async_added_to_hass(self) -> None:
+        """Register the coordinator listener plus a midnight refresh."""
+        await super().async_added_to_hass()
+        self.async_on_remove(
+            async_track_time_change(
+                self.hass, self._handle_midnight, hour=0, minute=0, second=0
+            )
+        )
+
+    @callback
+    def _handle_midnight(self, now: datetime.datetime) -> None:
+        """Recompute time-dependent attributes at the start of a new day."""
+        self.async_write_ha_state()
+
+
 class WasteCollectionSensor(
+    _WasteCountdownRefreshMixin,
     KarlstadsenergiEntity[KarlstadsenergiWasteCoordinator],
     SensorEntity,
 ):
@@ -445,6 +474,7 @@ class WasteCollectionSensor(
 
 
 class WasteCollectionSummary(
+    _WasteCountdownRefreshMixin,
     KarlstadsenergiEntity[KarlstadsenergiWasteCoordinator],
     SensorEntity,
 ):

@@ -216,6 +216,62 @@ class TestWasteCollectionSensor:
 
 
 # ---------------------------------------------------------------------------
+# Daily midnight refresh (keeps days_until_pickup accurate when the
+# coordinator is stuck, e.g. an expired BankID session)
+# ---------------------------------------------------------------------------
+
+
+class TestWasteCountdownMidnightRefresh:
+    @pytest.mark.asyncio
+    async def test_added_to_hass_registers_midnight_refresh(self) -> None:
+        sensor = _make_waste_sensor({"dates": {"1": "2026-04-15"}})
+        sensor.hass = MagicMock()
+        with patch(
+            "custom_components.karlstadsenergi.sensor.async_track_time_change"
+        ) as mock_track:
+            await sensor.async_added_to_hass()
+        mock_track.assert_called_once()
+        args, kwargs = mock_track.call_args
+        # Fires the entity's midnight handler at local 00:00:00.
+        assert args[1] == sensor._handle_midnight
+        assert kwargs == {"hour": 0, "minute": 0, "second": 0}
+
+    @pytest.mark.asyncio
+    async def test_summary_sensor_also_registers_midnight_refresh(self) -> None:
+        sensor = _make_summary_sensor(
+            {"next_dates": [{"Type": "Mat- och restavfall", "Date": "2026-04-15"}]}
+        )
+        sensor.hass = MagicMock()
+        with patch(
+            "custom_components.karlstadsenergi.sensor.async_track_time_change"
+        ) as mock_track:
+            await sensor.async_added_to_hass()
+        mock_track.assert_called_once()
+
+    def test_handle_midnight_rewrites_state(self) -> None:
+        sensor = _make_waste_sensor({"dates": {"1": "2026-04-15"}})
+        with patch.object(sensor, "async_write_ha_state") as mock_write:
+            sensor._handle_midnight(
+                datetime.datetime(2026, 4, 15, 0, 0, 0, tzinfo=datetime.timezone.utc)
+            )
+        mock_write.assert_called_once()
+
+    def test_countdown_decrements_after_a_day_without_a_refresh(self) -> None:
+        # Same coordinator data (frozen pickup date), only the wall clock moves.
+        # The recomputed attribute must follow the clock, not the stale value.
+        sensor = _make_waste_sensor({"dates": {"1": "2026-04-15"}})
+        with patch("custom_components.karlstadsenergi.sensor.dt_util") as mock_dt:
+            mock_dt.now.return_value = datetime.datetime(
+                2026, 4, 13, 12, 0, 0, tzinfo=datetime.timezone.utc
+            )
+            assert sensor.extra_state_attributes["days_until_pickup"] == 2
+            mock_dt.now.return_value = datetime.datetime(
+                2026, 4, 14, 12, 0, 0, tzinfo=datetime.timezone.utc
+            )
+            assert sensor.extra_state_attributes["days_until_pickup"] == 1
+
+
+# ---------------------------------------------------------------------------
 # WasteCollectionSummary
 # ---------------------------------------------------------------------------
 
