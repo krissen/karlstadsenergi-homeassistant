@@ -1055,9 +1055,11 @@ async def async_setup_entry(
     # coordinator from it and use async_refresh() instead of
     # async_config_entry_first_refresh() so a dead session at startup does NOT
     # abort setup -- entities load with their last (stale) values. The reauth
-    # prompt is NOT suppressed: async_refresh() auto-calls async_start_reauth()
-    # on ConfigEntryAuthFailed (see homeassistant/helpers/update_coordinator.py),
-    # and entities still report data_stale=True. With no cache (fresh install)
+    # prompt is NOT suppressed: async_refresh() auto-triggers reauth on
+    # ConfigEntryAuthFailed (see homeassistant/helpers/update_coordinator.py --
+    # async_start_reauth() up to HA 2026.6, async_start_reauth_if_available()
+    # from 2026.7, which delegates because our config flow implements a reauth
+    # step), and entities still report data_stale=True. With no cache (fresh install)
     # we keep the strict behaviour: a failed first fetch aborts/prompts reauth.
     cache = _DataCache(hass, entry)
     cached = await cache.async_load()
