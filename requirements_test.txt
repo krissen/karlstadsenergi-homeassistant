@@ -1,6 +1,13 @@
 # Test dependencies for karlstadsenergi-ha
-pytest>=8.0
-pytest-asyncio>=0.24
-# homeassistant is required to import the integration modules.
-# Pin to a recent stable release; adjust if you need a newer HA API.
-homeassistant>=2025.11
+#
+# Pinned exact for reproducible CI: a floating "latest" HA (or ruff/pytest)
+# release periodically broke `main` with no change on our side. Dependabot
+# proposes monthly bumps (see .github/dependabot.yml) so a breaking release
+# surfaces as a red check on the bump PR instead of a red main.
+# Dependabot only bumps `==` pins, so keep these exact.
+#
+# homeassistant is required to import the integration modules (CI/test only --
+# not a runtime dependency; the manifest carries no HA version constraint).
+homeassistant==2026.7.1
+pytest==9.1.1
+pytest-asyncio==1.4.0
