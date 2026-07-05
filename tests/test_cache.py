@@ -206,6 +206,7 @@ def _make_entry() -> MagicMock:
     entry.async_on_unload = MagicMock()
     entry.add_update_listener = MagicMock(return_value=MagicMock())
     entry.async_start_reauth = MagicMock()
+    entry.async_start_reauth_if_available = MagicMock()
     return entry
 
 
@@ -297,7 +298,11 @@ async def test_cache_present_survives_dead_session_and_starts_reauth() -> None:
     assert entry.runtime_data.waste_coordinator.data == WASTE_DATA
     assert entry.runtime_data.waste_coordinator.last_update_success is False
     # ...and the "action needed" reauth prompt was still triggered.
-    assert entry.async_start_reauth.called
+    # HA <2026.7 calls async_start_reauth; >=2026.7 calls the _if_available
+    # variant, which delegates when the config flow implements a reauth step.
+    assert (
+        entry.async_start_reauth.called or entry.async_start_reauth_if_available.called
+    )
 
 
 @pytest.mark.asyncio
