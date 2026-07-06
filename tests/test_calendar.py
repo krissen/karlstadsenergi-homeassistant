@@ -256,11 +256,11 @@ class TestDetailedIdentifiers:
         cal = _make_detailed_calendar(coord, customer_id="CUST01")
         assert "CUST01" in cal.unique_id
 
-    def test_unique_id_contains_slug(self) -> None:
+    def test_unique_id_contains_service_id(self) -> None:
         coord = _mock_coordinator(None)
         cal = _make_detailed_calendar(coord)
-        # "Mat- och restavfall" -> "food_and_residual_waste"
-        assert "food_and_residual_waste" in cal.unique_id
+        # Keyed on the stable FlexServiceId (123), not the name slug.
+        assert "_123_" in cal.unique_id
 
     def test_unique_id_ends_with_calendar(self) -> None:
         coord = _mock_coordinator(None)
@@ -270,7 +270,8 @@ class TestDetailedIdentifiers:
     def test_unique_id_format(self) -> None:
         coord = _mock_coordinator(None)
         cal = _make_detailed_calendar(coord)
-        expected = f"{DOMAIN}_CUST01_P001_food_and_residual_waste_calendar"
+        # Keyed on the stable FlexServiceId (123), not the name slug.
+        expected = f"{DOMAIN}_CUST01_P001_123_calendar"
         assert cal.unique_id == expected
 
     def test_device_info_identifiers_contain_place_id(self) -> None:

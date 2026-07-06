@@ -100,13 +100,14 @@ class WasteCollectionCalendar(
         self._customer_id = customer_id
         self._service_id = service["FlexServiceId"]
         self._waste_type = service.get("FlexServiceContainTypeValue", "")
-        self._slug = slug_for_waste_type(self._waste_type)
         self._address = service.get("FlexServicePlaceAddress", "")
         self._frequency = service.get("FetchFrequency", "")
         self._place_id = service.get("FlexServicePlaceId", "")
 
+        # Stable FlexServiceId key (see WasteCollectionSensor) so a portal
+        # rename does not orphan the calendar; existing installs are migrated.
         self._attr_unique_id = (
-            f"{DOMAIN}_{customer_id}_{self._place_id}_{self._slug}_calendar"
+            f"{DOMAIN}_{customer_id}_{self._place_id}_{self._service_id}_calendar"
         )
         self._attr_name = self._waste_type
 

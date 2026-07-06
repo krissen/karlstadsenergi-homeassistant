@@ -103,13 +103,12 @@ class WastePickupTomorrowSensor(
         self._customer_id = customer_id
         self._service_id = service["FlexServiceId"]
         self._waste_type = service.get("FlexServiceContainTypeValue", "")
-        self._slug = slug_for_waste_type(self._waste_type)
         self._address = service.get("FlexServicePlaceAddress", "")
         self._place_id = service.get("FlexServicePlaceId", "")
 
-        self._attr_unique_id = (
-            f"{DOMAIN}_{customer_id}_{self._place_id}_{self._slug}_pickup_tomorrow"
-        )
+        # Stable FlexServiceId key (see WasteCollectionSensor) so a portal
+        # rename does not orphan this binary sensor; installs are migrated.
+        self._attr_unique_id = f"{DOMAIN}_{customer_id}_{self._place_id}_{self._service_id}_pickup_tomorrow"
         self._attr_translation_key = "pickup_tomorrow"
         self._attr_translation_placeholders = {"waste_type": self._waste_type}
 
