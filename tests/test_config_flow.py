@@ -484,7 +484,21 @@ class TestStepReauth:
         result = await flow.async_step_reauth(entry_data)
 
         assert result["type"] == "form"
-        assert result["step_id"] == "reauth_confirm_password"
+        assert result["step_id"] == "reauth_confirm"
+
+    @pytest.mark.asyncio
+    async def test_stores_customer_code_from_entry_data(self) -> None:
+        """async_step_reauth must stash customer_code for password pre-fill."""
+        flow = _make_flow(source="reauth")
+
+        entry_data = {
+            CONF_PERSONNUMMER: "199001011234",
+            CONF_AUTH_METHOD: AUTH_BANKID,
+            "customer_code": "123456",
+        }
+        await flow.async_step_reauth(entry_data)
+
+        assert flow._reauth_customer_code == "123456"
 
     @pytest.mark.asyncio
     async def test_defaults_auth_method_to_password_when_missing(self) -> None:
@@ -499,7 +513,7 @@ class TestStepReauth:
 class TestStepReauthConfirm:
     @pytest.mark.asyncio
     async def test_no_input_returns_reauth_confirm_form(self) -> None:
-        """With no user_input the form must be shown."""
+        """With no user_input the method-choice form must be shown."""
         flow = _make_flow(source="reauth")
         flow._personnummer = "199001011234"
         flow._auth_method = AUTH_PASSWORD
@@ -507,19 +521,20 @@ class TestStepReauthConfirm:
         result = await flow.async_step_reauth_confirm(user_input=None)
 
         assert result["type"] == "form"
-        assert result["step_id"] == "reauth_confirm_password"
+        assert result["step_id"] == "reauth_confirm"
 
     @pytest.mark.asyncio
-    async def test_bankid_returns_reauth_confirm_bankid_form(self) -> None:
-        """BankID reauth must show the bankid-specific form."""
+    async def test_form_defaults_to_stored_method(self) -> None:
+        """The selector default must match the entry's stored auth method."""
         flow = _make_flow(source="reauth")
         flow._personnummer = "199001011234"
         flow._auth_method = AUTH_BANKID
 
         result = await flow.async_step_reauth_confirm(user_input=None)
 
-        assert result["type"] == "form"
-        assert result["step_id"] == "reauth_confirm_bankid"
+        marker = next(iter(result["data_schema"].schema.keys()))
+        assert marker == CONF_AUTH_METHOD
+        assert marker.default() == AUTH_BANKID
 
     @pytest.mark.asyncio
     async def test_form_does_not_expose_personnummer(self) -> None:
@@ -532,22 +547,27 @@ class TestStepReauthConfirm:
 
         placeholders = result.get("description_placeholders") or {}
         assert "personnummer" not in placeholders
+        # Only the auth-method selector may be present, nothing identity-bearing.
+        schema_keys = [str(k) for k in result["data_schema"].schema.keys()]
+        assert schema_keys == [CONF_AUTH_METHOD]
 
     @pytest.mark.asyncio
     async def test_with_input_routes_to_password_step_for_password_auth(self) -> None:
-        """Submitting the confirm form when auth_method=password must go to password."""
+        """Submitting with auth_method=password must go to the password step."""
         flow = _make_flow(source="reauth")
         flow._personnummer = "199001011234"
         flow._auth_method = AUTH_PASSWORD
 
-        result = await flow.async_step_reauth_confirm(user_input={})
+        result = await flow.async_step_reauth_confirm(
+            user_input={CONF_AUTH_METHOD: AUTH_PASSWORD}
+        )
 
         assert result["type"] == "form"
         assert result["step_id"] == "password"
 
     @pytest.mark.asyncio
     async def test_with_input_routes_to_bankid_step_for_bankid_auth(self) -> None:
-        """Submitting the confirm form when auth_method=bankid must go to bankid."""
+        """Submitting with auth_method=bankid (valid pnr) must go to bankid."""
         flow = _make_flow(source="reauth")
         flow._personnummer = "199001011234"
         flow._auth_method = AUTH_BANKID
@@ -566,22 +586,51 @@ class TestStepReauthConfirm:
             "custom_components.karlstadsenergi.config_flow.KarlstadsenergiApi",
             return_value=mock_api,
         ):
-            result = await flow.async_step_reauth_confirm(user_input={})
+            result = await flow.async_step_reauth_confirm(
+                user_input={CONF_AUTH_METHOD: AUTH_BANKID}
+            )
 
         assert result["type"] == "form"
         assert result["step_id"] == "bankid"
 
     @pytest.mark.asyncio
-    async def test_empty_schema_on_confirm_form(self) -> None:
-        """The reauth_confirm form has no fields -- schema must be empty."""
+    async def test_bankid_entry_can_switch_to_password(self) -> None:
+        """A BankID entry may reauth with password; customer_number pre-fills."""
         flow = _make_flow(source="reauth")
         flow._personnummer = "199001011234"
+        flow._auth_method = AUTH_BANKID
+        flow._reauth_customer_code = "123456"
+
+        result = await flow.async_step_reauth_confirm(
+            user_input={CONF_AUTH_METHOD: AUTH_PASSWORD}
+        )
+
+        assert result["type"] == "form"
+        assert result["step_id"] == "password"
+        assert flow._auth_method == AUTH_PASSWORD
+        # customer_number field must default to the stored customer code.
+        marker = next(
+            k
+            for k in result["data_schema"].schema.keys()
+            if str(k) == "customer_number"
+        )
+        assert marker.default() == "123456"
+
+    @pytest.mark.asyncio
+    async def test_password_entry_switch_to_bankid_needs_personnummer(self) -> None:
+        """Switching password->bankid when the stored id is not a valid pnr
+        must ask for the personnummer instead of jumping to the QR step."""
+        flow = _make_flow(source="reauth")
+        # A password entry stores the customer number here, not a personnummer.
+        flow._personnummer = "123456"
         flow._auth_method = AUTH_PASSWORD
 
-        result = await flow.async_step_reauth_confirm(user_input=None)
+        result = await flow.async_step_reauth_confirm(
+            user_input={CONF_AUTH_METHOD: AUTH_BANKID}
+        )
 
-        schema_keys = list(result["data_schema"].schema.keys())
-        assert schema_keys == []
+        assert result["type"] == "form"
+        assert result["step_id"] == "bankid_personnummer"
 
 
 # ---------------------------------------------------------------------------

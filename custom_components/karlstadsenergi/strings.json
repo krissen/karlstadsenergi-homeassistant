@@ -56,15 +56,15 @@
           "account": "Select the customer account to configure."
         }
       },
-      "reauth_confirm_password": {
+      "reauth_confirm": {
         "title": "Karlstadsenergi - Re-authenticate",
-        "description": "Session expired. You will be asked to re-authenticate with your customer number and password. Click Submit to continue.",
-        "data": {}
-      },
-      "reauth_confirm_bankid": {
-        "title": "Karlstadsenergi - Re-authenticate",
-        "description": "Session expired. You will be asked to re-authenticate with BankID. Click Submit to continue.",
-        "data": {}
+        "description": "Your session has expired. Choose how to sign in again. You can switch method, e.g. from BankID to customer number & password.",
+        "data": {
+          "auth_method": "Authentication method"
+        },
+        "data_description": {
+          "auth_method": "Customer number & password is non-interactive and can refresh automatically. BankID requires signing in the app each time."
+        }
       }
     },
     "error": {
