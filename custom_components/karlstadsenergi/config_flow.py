@@ -118,14 +118,23 @@ def _register_qr_view(hass: HomeAssistant) -> None:
     hass.data[_QR_VIEW_KEY] = True
 
 
+def _auth_method_selector() -> SelectSelector:
+    """Build the password/BankID method selector.
+
+    Shared by the initial ``user`` step and the ``reauth_confirm`` step so a
+    user can pick (or switch) auth method in either place.
+    """
+    return SelectSelector(
+        SelectSelectorConfig(
+            options=[AUTH_PASSWORD, AUTH_BANKID],
+            translation_key=CONF_AUTH_METHOD,
+        )
+    )
+
+
 _USER_STEP_SCHEMA = vol.Schema(
     {
-        vol.Required(CONF_AUTH_METHOD, default=AUTH_PASSWORD): SelectSelector(
-            SelectSelectorConfig(
-                options=[AUTH_PASSWORD, AUTH_BANKID],
-                translation_key=CONF_AUTH_METHOD,
-            )
-        ),
+        vol.Required(CONF_AUTH_METHOD, default=AUTH_PASSWORD): _auth_method_selector(),
     }
 )
 
@@ -142,6 +151,7 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
         self._api: KarlstadsenergiApi | None = None
         self._bankid_init: dict[str, str] = {}
         self._accounts: list[dict[str, Any]] = []
+        self._reauth_customer_code: str = ""
 
     def _reauth_update_and_reload(self, new_data: dict[str, Any]) -> ConfigFlowResult:
         """Finish reauth: update the entry and schedule an explicit reload.
@@ -470,39 +480,45 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
         """Handle re-authentication when session expires."""
         self._personnummer = entry_data.get(CONF_PERSONNUMMER, "")
         self._auth_method = entry_data.get(CONF_AUTH_METHOD, AUTH_PASSWORD)
+        self._reauth_customer_code = entry_data.get("customer_code", "")
         return await self.async_step_reauth_confirm()
 
     async def async_step_reauth_confirm(
         self,
         user_input: dict[str, Any] | None = None,
     ) -> ConfigFlowResult:
-        """Route reauth to the correct method-specific step."""
-        if self._auth_method == AUTH_PASSWORD:
-            return await self.async_step_reauth_confirm_password(user_input)
-        return await self.async_step_reauth_confirm_bankid(user_input)
+        """Let the user (re)choose the auth method, then run it.
 
-    async def async_step_reauth_confirm_password(
-        self,
-        user_input: dict[str, Any] | None = None,
-    ) -> ConfigFlowResult:
-        """Reauth confirmation for password users."""
+        Reauth is not locked to the entry's stored method: a BankID entry can
+        switch to customer number & password (and vice versa). The method is
+        pre-selected to whatever the entry currently uses.
+        """
         if user_input is not None:
-            return await self.async_step_password()
-        return self.async_show_form(
-            step_id="reauth_confirm_password",
-            data_schema=vol.Schema({}),
-        )
+            self._auth_method = user_input.get(CONF_AUTH_METHOD, self._auth_method)
 
-    async def async_step_reauth_confirm_bankid(
-        self,
-        user_input: dict[str, Any] | None = None,
-    ) -> ConfigFlowResult:
-        """Reauth confirmation for BankID users."""
-        if user_input is not None:
-            return await self.async_step_bankid()
+            if self._auth_method == AUTH_PASSWORD:
+                # Pre-fill the customer number from the stored customer code
+                # instead of the personnummer (which BankID entries store).
+                if self._reauth_customer_code:
+                    self._personnummer = self._reauth_customer_code
+                return await self.async_step_password()
+
+            # BankID needs a valid personnummer. A password entry stores a
+            # customer number here, so fall back to asking for the personnummer.
+            if self._personnummer.isdigit() and len(self._personnummer) in (10, 12):
+                return await self.async_step_bankid()
+            return await self.async_step_bankid_personnummer()
+
         return self.async_show_form(
-            step_id="reauth_confirm_bankid",
-            data_schema=vol.Schema({}),
+            step_id="reauth_confirm",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        CONF_AUTH_METHOD,
+                        default=self._auth_method,
+                    ): _auth_method_selector(),
+                }
+            ),
         )
 
     async def _do_bankid_login(

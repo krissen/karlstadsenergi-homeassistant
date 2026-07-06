@@ -56,15 +56,15 @@
           "account": "Välj det kundkonto som ska konfigureras."
         }
       },
-      "reauth_confirm_password": {
+      "reauth_confirm": {
         "title": "Karlstadsenergi - Ny inloggning krävs",
-        "description": "Sessionen har gått ut. Du loggas in igen med kundnummer och lösenord. Klicka Skicka för att fortsätta.",
-        "data": {}
-      },
-      "reauth_confirm_bankid": {
-        "title": "Karlstadsenergi - Ny inloggning krävs",
-        "description": "Sessionen har gått ut. Du loggas in igen med BankID. Klicka Skicka för att fortsätta.",
-        "data": {}
+        "description": "Sessionen har gått ut. Välj hur du vill logga in igen. Du kan byta metod, t.ex. från BankID till kundnummer och lösenord.",
+        "data": {
+          "auth_method": "Autentiseringsmetod"
+        },
+        "data_description": {
+          "auth_method": "Kundnummer och lösenord är icke-interaktivt och kan förnyas automatiskt. BankID kräver signering i appen varje gång."
+        }
       }
     },
     "error": {
