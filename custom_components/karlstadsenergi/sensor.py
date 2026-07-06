@@ -427,13 +427,18 @@ class WasteCollectionSensor(
         self._customer_id = customer_id
         self._service_id = service["FlexServiceId"]
         self._waste_type = service.get("FlexServiceContainTypeValue", "")
-        self._slug = slug_for_waste_type(self._waste_type)
         self._address = service.get("FlexServicePlaceAddress", "")
         self._container_size = service.get("SizeOfFlexIndividual", "")
         self._frequency = service.get("FetchFrequency", "")
         self._place_id = service.get("FlexServicePlaceId", "")
 
-        self._attr_unique_id = f"{DOMAIN}_{customer_id}_{self._place_id}_{self._slug}"
+        # Key on the stable FlexServiceId, not a slug of the name: the portal
+        # occasionally renames a service (e.g. "Glas/Metall" -> "Glas- och
+        # metallforpackningar"), and a name-derived unique_id would orphan the
+        # entity on rename. Existing installs are migrated in __init__.
+        self._attr_unique_id = (
+            f"{DOMAIN}_{customer_id}_{self._place_id}_{self._service_id}"
+        )
         # Review note (V7): Entity names use the Swedish waste type string
         # from the API (e.g. "Mat- och restavfall") intentionally. Translating
         # them would break the match with the actual service names shown on

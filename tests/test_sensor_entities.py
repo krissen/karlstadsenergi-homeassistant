@@ -119,7 +119,8 @@ class TestWasteCollectionSensor:
 
     def test_unique_id_format(self) -> None:
         sensor = _make_waste_sensor()
-        expected = f"{DOMAIN}_CUST01_P001_food_and_residual_waste"
+        # Keyed on the stable FlexServiceId (1), not the name slug.
+        expected = f"{DOMAIN}_CUST01_P001_1"
         assert sensor.unique_id == expected
 
     def test_name_is_waste_type(self) -> None:

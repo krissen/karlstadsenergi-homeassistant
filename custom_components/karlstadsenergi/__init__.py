@@ -35,8 +35,9 @@ except ImportError:
     _ENERGY_UNIT_CLASS = None
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_PASSWORD, UnitOfEnergy
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.storage import Store
@@ -65,6 +66,7 @@ from .const import (
     PLATFORMS,
     SKIP_GROUP_NAMES,
     URL_SPOT_PRICES,
+    slug_for_waste_type,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -1014,6 +1016,87 @@ class KarlstadsenergiSpotPriceCoordinator(DataUpdateCoordinator[dict]):
         }
 
 
+def _waste_uid_migration_map(
+    customer_id: str,
+    services: list[dict[str, Any]],
+) -> dict[tuple[str, str], str]:
+    """Build a {(platform, old_slug_uid): new_service_id_uid} map for renames.
+
+    Early versions derived the waste entity unique_id from a slug of the
+    (Swedish) service name. When Karlstadsenergi renames a service (e.g.
+    "Glas/Metall" -> "Glas- och metallforpackningar") the slug changes, so HA
+    creates brand-new entities and orphans the old ones -- dashboards then show
+    "unknown". FlexServiceId is stable across such renames, so this maps each
+    current service's legacy slug-based unique_id to the stable id-based one,
+    per platform (sensor / binary_sensor / calendar).
+    """
+    mapping: dict[tuple[str, str], str] = {}
+    for service in services:
+        service_id = service.get("FlexServiceId")
+        if service_id is None:
+            continue
+        place_id = service.get("FlexServicePlaceId", "")
+        slug = slug_for_waste_type(service.get("FlexServiceContainTypeValue", ""))
+        old_base = f"{DOMAIN}_{customer_id}_{place_id}_{slug}"
+        new_base = f"{DOMAIN}_{customer_id}_{place_id}_{service_id}"
+        if old_base == new_base:
+            continue
+        mapping[("sensor", old_base)] = new_base
+        mapping[("binary_sensor", f"{old_base}_pickup_tomorrow")] = (
+            f"{new_base}_pickup_tomorrow"
+        )
+        mapping[("calendar", f"{old_base}_calendar")] = f"{new_base}_calendar"
+    return mapping
+
+
+async def _migrate_waste_unique_ids(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    customer_id: str,
+    services: list[dict[str, Any]],
+) -> None:
+    """Re-key legacy slug-based waste entities to the stable FlexServiceId.
+
+    Runs before the platforms are forwarded, so the rename lands before the
+    entities are (re)added -- preserving entity_id and history instead of
+    churning. See _waste_uid_migration_map for the rationale.
+    """
+    mapping = _waste_uid_migration_map(customer_id, services)
+    if not mapping:
+        return
+
+    registry = er.async_get(hass)
+
+    @callback
+    def _update(entity: er.RegistryEntry) -> dict[str, str] | None:
+        new_uid = mapping.get((entity.domain, entity.unique_id))
+        if not new_uid or new_uid == entity.unique_id:
+            return None
+        # A target already claimed by another entity would make the rename
+        # collide; leave this one and let the freshly created entity win.
+        if registry.async_get_entity_id(entity.domain, DOMAIN, new_uid):
+            _LOGGER.debug(
+                "Skip waste unique_id migration for %s: %s already exists",
+                entity.entity_id,
+                new_uid,
+            )
+            return None
+        _LOGGER.info(
+            "Migrating waste entity %s unique_id %s -> %s",
+            entity.entity_id,
+            entity.unique_id,
+            new_uid,
+        )
+        return {"new_unique_id": new_uid}
+
+    # A failed unique_id migration must never abort setup: on error the entities
+    # simply keep their legacy ids (at worst re-orphaned on a future rename).
+    try:
+        await er.async_migrate_entries(hass, entry.entry_id, _update)
+    except Exception:  # noqa: BLE001 -- migration is best-effort
+        _LOGGER.exception("Waste unique_id migration failed; skipping")
+
+
 async def async_setup_entry(
     hass: HomeAssistant, entry: KarlstadsenergiConfigEntry
 ) -> bool:
@@ -1115,6 +1198,16 @@ async def async_setup_entry(
     # Waste is the primary feature: a non-auth failure with no cache aborts
     # setup (ConfigEntryNotReady) so HA retries.
     await _refresh(waste_coordinator, critical=True)
+
+    # Re-key any legacy slug-based waste entities to the stable FlexServiceId
+    # before the platforms create entities, so portal renames don't orphan them.
+    if waste_coordinator.data:
+        await _migrate_waste_unique_ids(
+            hass,
+            entry,
+            customer_id,
+            waste_coordinator.data.get("services") or [],
+        )
 
     # Consumption: a dead/expired session must surface reauth (handled inside
     # _refresh). A non-auth failure with no cache is logged and setup continues

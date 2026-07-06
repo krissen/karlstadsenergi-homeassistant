@@ -183,7 +183,8 @@ class TestDetailedIdentifiers:
     def test_unique_id_format(self) -> None:
         coord = _mock_coordinator(None)
         sensor = _make_detailed_sensor(coord)
-        expected = f"{DOMAIN}_CUST01_P001_food_and_residual_waste_pickup_tomorrow"
+        # Keyed on the stable FlexServiceId (123), not the name slug.
+        expected = f"{DOMAIN}_CUST01_P001_123_pickup_tomorrow"
         assert sensor.unique_id == expected
 
     def test_unique_id_contains_place_id(self) -> None:
