@@ -34,7 +34,7 @@ A Home Assistant integration for [Karlstads Energi](https://www.karlstadsenergi.
 - **Historical statistics** -- Hourly consumption and monthly cost data imported into HA long-term statistics with configurable depth (1--10 years, default 2). The portal API has data going back to contract start -- this integration unlocks it for Energy Dashboard graphs and history analysis.
 - **Contract overview** -- Sensors for each contract (grid, trading, waste) with contract type, dates, and identifiers
 - **Computed attributes** -- `days_until_pickup`, `pickup_is_today`, `pickup_is_tomorrow`
-- **Session management** -- Cookie persistence across restarts and automatic re-authentication on session expiry (silent and indefinite for password logins; BankID expires after ~15 min and needs a manual re-scan -- see below). When the session expires, sensors keep their last values (marked `data_stale`) instead of going unavailable, and those values are cached on disk so they also survive a Home Assistant restart or integration reload (the re-authentication prompt still appears when action is needed).
+- **Session management** -- Cookie persistence across restarts and automatic re-authentication on session expiry (silent and indefinite for password logins; BankID expires after ~15 min and needs a manual re-scan -- see below). When the session expires, sensors keep their last values (marked `data_stale`) instead of going unavailable, and those values are cached on disk so they also survive a Home Assistant restart or integration reload (the re-authentication prompt still appears when action is needed). At re-authentication you can also **switch login method** -- for example move a BankID account over to customer number & password without re-adding the integration.
 - **Configurable update interval** -- Set how often data is refreshed (1--24 hours)
 
 ---
@@ -89,6 +89,8 @@ The integration supports two login methods. **Customer number & password is by f
 4. If your personnummer is linked to multiple accounts, select which one to use.
 
 > **On a phone:** the in-app "Open BankID app" link may not launch BankID from inside the Home Assistant Companion app (it can route back to Home Assistant). If that happens, scan the QR code from a computer, or open this page in your phone's browser. Cross-device -- Home Assistant on a computer, BankID app on your phone -- is the most reliable.
+
+> **Already set up with BankID?** You can switch to customer number & password without removing the integration. When the re-authentication prompt appears -- or any time via **Settings -> Devices & Services -> Karlstadsenergi -> Reconfigure** -- choose **Kundnummer & lösenord** and enter your customer number and password. Since password logins re-authenticate silently and indefinitely, this is the recommended way to escape the ~15-minute BankID re-scan cycle.
 
 ### Options
 
@@ -152,7 +154,12 @@ The consumption sensor is informational only (no `state_class`) because the port
 
 ### Orphaned entity registry entries
 
-The integration creates waste entities in one of two modes -- detailed (one entity per service line) or summary (one entity per waste type) -- depending on what data the API returns at startup. If the mode changes between restarts (for example, the detailed Flex API becomes available after initially being unreachable), both sets of entities may appear in the entity registry and the old set will show as "unavailable". To remove the stale entries: go to **Settings -> Devices & Services -> Entities**, filter by "unavailable", and delete them manually.
+Two situations can leave a waste entity showing as "unavailable" in the entity registry:
+
+- **A service was renamed before v0.5.0.** Earlier versions identified waste entities by the service *name*, so when Karlstadsenergi renamed a collection service (for example "Glas/Metall" -> "Glas- och metallförpackningar") the old entity was orphaned and a new one created. As of v0.5.0 entities are keyed on a stable service id and renames are handled transparently -- existing entities are migrated automatically on update -- but a service renamed *before* you updated leaves one stale entry per waste line.
+- **The entity mode changed.** The integration creates waste entities in one of two modes -- detailed (one entity per service line) or summary (one entity per waste type) -- depending on what data the API returns at startup. If the mode changes between restarts (for example, the detailed Flex API becomes available after initially being unreachable), both sets of entities may appear and the old set shows as "unavailable".
+
+To remove stale entries: go to **Settings -> Devices & Services -> Entities**, filter by "unavailable", and delete them manually.
 
 ### Personnummer in API URLs
 

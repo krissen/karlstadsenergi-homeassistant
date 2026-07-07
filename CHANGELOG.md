@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-07-07
+
+### Added
+- **Choose your authentication method when re-authenticating** -- when a session expires, the re-authentication ("Reconfigure") dialog now lets you pick how to sign in again -- customer number & password, or Mobile BankID -- instead of being locked to the method you first set up with. This makes it easy to move a BankID account over to customer number & password (which re-authenticates silently and indefinitely) without deleting and re-adding the integration.
+
+### Fixed
+- **Waste entities no longer break when the portal renames a service** -- waste sensors, calendars, and "pickup tomorrow" binary sensors were keyed on a slug of the service's name, so when Karlstadsenergi renamed a collection service (for example "Glas/Metall" -> "Glas- och metallförpackningar") the old entity went `unavailable` and a new one appeared, leaving dashboards and automations pointing at the dead entity. Entities are now keyed on the stable service id, so a rename simply updates the entity's name. Existing installations are migrated automatically on update -- entities keep their `entity_id` and history. (A service renamed *before* this update leaves one stale `unavailable` entity per waste line that can be removed manually; see Known limitations in the README.)
+
+### Changed
+- **Release build reports the correct version** -- the device `sw_version` (from `const.VERSION`) is now set from the release tag alongside the manifest version, so a released build no longer reports a stale version number.
+
 ## [0.4.2] - 2026-06-20
 
 ### Fixed
