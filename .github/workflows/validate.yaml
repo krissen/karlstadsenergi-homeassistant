@@ -4,7 +4,8 @@ on:
   push:
   pull_request:
   schedule:
-    - cron: "0 0 * * *"
+    # Odd off-peak time avoids the midnight UTC rush that rate-limits hacs/action.
+    - cron: "17 4 * * *"
 
 jobs:
   ruff:
@@ -37,9 +38,14 @@ jobs:
       - uses: "actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0"  # v7.0.0
       - uses: "home-assistant/actions/hassfest@f4ca6f671bd429efb108c0f2fa0ae8af0215986c"  # master 2026-03-18
 
+  # hacs/action validates the branch via the GitHub API rather than the local
+  # checkout. On feature branches this races against post-merge branch deletion
+  # ("branch has been removed") and fails spuriously, so restrict it to schedule
+  # runs and pushes to main; ruff/pytest/hassfest still gate PRs.
   hacs:
     name: HACS Validation
     runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     steps:
       - uses: "actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0"  # v7.0.0
       - name: HACS validation
