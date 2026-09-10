@@ -97,9 +97,7 @@ def _make_fee_data(series: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def _make_series(
-    series_id: str, data_points: list[tuple[str, float]]
-) -> dict[str, Any]:
+def _make_series(series_id: str, data_points: list[tuple[str, float]]) -> dict[str, Any]:
     """Build one series entry. data_points is list of (dateInterval, y) tuples."""
     return {
         "id": series_id,

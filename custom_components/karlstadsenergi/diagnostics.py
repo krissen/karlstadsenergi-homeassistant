@@ -41,7 +41,7 @@ TO_REDACT_DATA = {
 
 
 async def async_get_config_entry_diagnostics(
-    hass: HomeAssistant,
+    hass: HomeAssistant,  # noqa: ARG001 -- required by HA's diagnostics-handler contract
     entry: KarlstadsenergiConfigEntry,
 ) -> dict[str, Any]:
     """Return diagnostics for a config entry."""
@@ -49,22 +49,14 @@ async def async_get_config_entry_diagnostics(
 
     return {
         "config_entry": async_redact_data(entry.as_dict(), TO_REDACT_CONFIG),
-        "waste_data": async_redact_data(
-            runtime.waste_coordinator.data or {}, TO_REDACT_DATA
-        ),
+        "waste_data": async_redact_data(runtime.waste_coordinator.data or {}, TO_REDACT_DATA),
         "consumption_data": async_redact_data(
             runtime.consumption_coordinator.data or {}, TO_REDACT_DATA
         ),
-        "contract_data": async_redact_data(
-            runtime.contract_coordinator.data or {}, TO_REDACT_DATA
-        ),
+        "contract_data": async_redact_data(runtime.contract_coordinator.data or {}, TO_REDACT_DATA),
         "spot_price_data": {
-            "current_price": (runtime.spot_price_coordinator.data or {}).get(
-                "current_price"
-            ),
+            "current_price": (runtime.spot_price_coordinator.data or {}).get("current_price"),
             "region": (runtime.spot_price_coordinator.data or {}).get("region"),
-            "price_count": len(
-                (runtime.spot_price_coordinator.data or {}).get("prices") or []
-            ),
+            "price_count": len((runtime.spot_price_coordinator.data or {}).get("prices") or []),
         },
     }

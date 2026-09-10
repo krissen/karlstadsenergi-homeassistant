@@ -17,7 +17,6 @@ from custom_components.karlstadsenergi.const import (
     slug_for_waste_type,
 )
 
-
 # ---------------------------------------------------------------------------
 # slug_for_waste_type
 # ---------------------------------------------------------------------------
@@ -190,9 +189,9 @@ class TestPickupDateForType:
             ]
         }
         assert pickup_date_for_type(data, "Glas/Metall") == datetime.date(2026, 4, 22)
-        assert pickup_date_for_type(
-            data, "Plast- och pappersförpackningar"
-        ) == datetime.date(2026, 4, 29)
+        assert pickup_date_for_type(data, "Plast- och pappersförpackningar") == datetime.date(
+            2026, 4, 29
+        )
 
     def test_type_match_is_exact(self) -> None:
         data = {

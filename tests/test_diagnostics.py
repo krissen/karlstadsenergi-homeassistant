@@ -6,14 +6,12 @@ directly -- no config entry or HA runtime needed.
 
 from __future__ import annotations
 
-
 from homeassistant.components.diagnostics import async_redact_data
 
 from custom_components.karlstadsenergi.diagnostics import (
     TO_REDACT_CONFIG,
     TO_REDACT_DATA,
 )
-
 
 _REDACTED = "**REDACTED**"
 
@@ -196,10 +194,7 @@ class TestDataRedaction:
         }
         result = async_redact_data(data, TO_REDACT_DATA)
         assert result["services"][0]["FlexServicePlaceAddress"] == _REDACTED
-        assert (
-            result["services"][0]["FlexServiceContainTypeValue"]
-            == "Mat- och restavfall"
-        )
+        assert result["services"][0]["FlexServiceContainTypeValue"] == "Mat- och restavfall"
 
 
 # ---------------------------------------------------------------------------

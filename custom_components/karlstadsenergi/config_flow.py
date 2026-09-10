@@ -11,7 +11,6 @@ from typing import Any
 
 import voluptuous as vol
 from aiohttp import web
-
 from homeassistant.components.http import HomeAssistantView
 from homeassistant.config_entries import (
     ConfigEntry,
@@ -82,7 +81,7 @@ class KarlstadsenergiBankIDQRView(HomeAssistantView):
     name = "api:karlstadsenergi:bankid_qr"
     requires_auth = False
 
-    async def get(self, request: web.Request, token: str) -> web.Response:
+    async def get(self, request: web.Request, token: str) -> web.Response:  # noqa: ARG002 -- required by HomeAssistantView's request-handler contract
         """Return the cached QR PNG for a transaction, or 404."""
         data = _QR_STORE.get(token)
         if data is None:
@@ -374,8 +373,7 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
                 # literal http(s) URLs in translated strings (TRANSLATIONS check)
                 # and requires a placeholder.
                 "bankid_url": (
-                    "https://app.bankid.com/"
-                    f"?autostarttoken={auto_start_token}&redirect=null"
+                    f"https://app.bankid.com/?autostarttoken={auto_start_token}&redirect=null"
                 ),
                 # Also provide auto_start_token (the older placeholder name) so a
                 # stale cached translation from an earlier version still renders
@@ -435,9 +433,7 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
             step_id="select_account",
             data_schema=vol.Schema(
                 {
-                    vol.Required("account"): SelectSelector(
-                        SelectSelectorConfig(options=options)
-                    ),
+                    vol.Required("account"): SelectSelector(SelectSelectorConfig(options=options)),
                 }
             ),
             errors=errors,
@@ -590,7 +586,7 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
     @staticmethod
     @callback
     def async_get_options_flow(
-        config_entry: ConfigEntry,
+        config_entry: ConfigEntry,  # noqa: ARG004 -- required by HA's ConfigFlow contract
     ) -> OptionsFlow:
         return KarlstadsenergiOptionsFlow()
 
@@ -604,9 +600,7 @@ class KarlstadsenergiOptionsFlow(OptionsFlow):
     ) -> ConfigFlowResult:
         errors: dict[str, str] = {}
         if user_input is not None:
-            interval = int(
-                user_input.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL)
-            )
+            interval = int(user_input.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL))
             history = int(user_input.get(CONF_HISTORY_YEARS, DEFAULT_HISTORY_YEARS))
             if not (MIN_UPDATE_INTERVAL <= interval <= MAX_UPDATE_INTERVAL):
                 errors["base"] = "invalid_interval"

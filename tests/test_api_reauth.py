@@ -25,7 +25,6 @@ from custom_components.karlstadsenergi.const import (
     URL_CONTRACT_DETAILS,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -130,9 +129,7 @@ class TestConsumptionReauthSuccess:
 
         urls = _get_urls(api._session)
         # Each page should be visited twice (once before first attempt, once after re-auth)
-        start_visits = [
-            u for u in urls if "start.aspx" in u and "consumption" not in u.lower()
-        ]
+        start_visits = [u for u in urls if "start.aspx" in u and "consumption" not in u.lower()]
         consumption_visits = [u for u in urls if "consumption/consumption.aspx" in u]
         assert len(start_visits) == 2, (
             f"Expected 2 start.aspx visits, got {len(start_visits)}: {urls}"
@@ -196,9 +193,7 @@ class TestConsumptionReauthFails:
         api = KarlstadsenergiApi("1234567890", AUTH_PASSWORD, "pass")
         api._authenticated = True
 
-        api._request = AsyncMock(
-            side_effect=KarlstadsenergiAuthError("Session expired")
-        )
+        api._request = AsyncMock(side_effect=KarlstadsenergiAuthError("Session expired"))
 
         # Re-auth also fails
         api.authenticate_password = AsyncMock(
@@ -214,9 +209,7 @@ class TestConsumptionReauthFails:
         api = KarlstadsenergiApi("1234567890", AUTH_PASSWORD, "pass")
         api._authenticated = True
 
-        api._request = AsyncMock(
-            side_effect=KarlstadsenergiAuthError("Session expired")
-        )
+        api._request = AsyncMock(side_effect=KarlstadsenergiAuthError("Session expired"))
 
         api.authenticate_password = AsyncMock(
             side_effect=KarlstadsenergiAuthError("Bad credentials")
@@ -273,12 +266,8 @@ class TestFlexServicesReauthSuccess:
 
         urls = _get_urls(api._session)
         start_idx = next(i for i, u in enumerate(urls) if "start.aspx" in u.lower())
-        flex_idx = next(
-            i for i, u in enumerate(urls) if "flexservices.aspx" in u.lower()
-        )
-        assert start_idx < flex_idx, (
-            f"start.aspx must precede flexservices.aspx, got: {urls}"
-        )
+        flex_idx = next(i for i, u in enumerate(urls) if "flexservices.aspx" in u.lower())
+        assert start_idx < flex_idx, f"start.aspx must precede flexservices.aspx, got: {urls}"
 
     async def test_flex_page_visited_twice(self) -> None:
         """After re-auth, flexservices.aspx must be visited again."""
@@ -301,9 +290,7 @@ class TestFlexServicesReauthSuccess:
 
         urls = _get_urls(api._session)
         flex_visits = [u for u in urls if "flexservices.aspx" in u.lower()]
-        assert len(flex_visits) == 2, (
-            f"Expected 2 flex page visits, got {len(flex_visits)}: {urls}"
-        )
+        assert len(flex_visits) == 2, f"Expected 2 flex page visits, got {len(flex_visits)}: {urls}"
 
     async def test_authenticate_called_for_reauth(self) -> None:
         """Re-auth triggers authenticate_password."""

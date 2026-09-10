@@ -11,20 +11,18 @@ import datetime
 from typing import Any
 from unittest.mock import MagicMock, patch
 
-
 from custom_components.karlstadsenergi.binary_sensor import (
     WastePickupTomorrowSensor,
     WastePickupTomorrowSummarySensor,
 )
 from custom_components.karlstadsenergi.const import DOMAIN
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
 # "Today" as seen by the mocked dt_util.now()
-_TODAY = datetime.datetime(2026, 4, 14, 12, 0, 0, tzinfo=datetime.timezone.utc)
+_TODAY = datetime.datetime(2026, 4, 14, 12, 0, 0, tzinfo=datetime.UTC)
 _TOMORROW_DATE = datetime.date(2026, 4, 15)
 _TODAY_DATE = datetime.date(2026, 4, 14)
 _YESTERDAY_DATE = datetime.date(2026, 4, 13)
@@ -93,27 +91,21 @@ class TestDetailedIsOn:
     def test_is_on_true_when_pickup_is_tomorrow(self) -> None:
         coord = _mock_coordinator({"dates": {"123": _TOMORROW_DATE.isoformat()}})
         sensor = _make_detailed_sensor(coord)
-        with patch(
-            "custom_components.karlstadsenergi.binary_sensor.dt_util"
-        ) as mock_dt:
+        with patch("custom_components.karlstadsenergi.binary_sensor.dt_util") as mock_dt:
             mock_dt.now.return_value = _TODAY
             assert sensor.is_on is True
 
     def test_is_on_false_when_pickup_is_today(self) -> None:
         coord = _mock_coordinator({"dates": {"123": _TODAY_DATE.isoformat()}})
         sensor = _make_detailed_sensor(coord)
-        with patch(
-            "custom_components.karlstadsenergi.binary_sensor.dt_util"
-        ) as mock_dt:
+        with patch("custom_components.karlstadsenergi.binary_sensor.dt_util") as mock_dt:
             mock_dt.now.return_value = _TODAY
             assert sensor.is_on is False
 
     def test_is_on_false_when_pickup_is_yesterday(self) -> None:
         coord = _mock_coordinator({"dates": {"123": _YESTERDAY_DATE.isoformat()}})
         sensor = _make_detailed_sensor(coord)
-        with patch(
-            "custom_components.karlstadsenergi.binary_sensor.dt_util"
-        ) as mock_dt:
+        with patch("custom_components.karlstadsenergi.binary_sensor.dt_util") as mock_dt:
             mock_dt.now.return_value = _TODAY
             assert sensor.is_on is False
 
@@ -121,9 +113,7 @@ class TestDetailedIsOn:
         two_days = (_TODAY_DATE + datetime.timedelta(days=2)).isoformat()
         coord = _mock_coordinator({"dates": {"123": two_days}})
         sensor = _make_detailed_sensor(coord)
-        with patch(
-            "custom_components.karlstadsenergi.binary_sensor.dt_util"
-        ) as mock_dt:
+        with patch("custom_components.karlstadsenergi.binary_sensor.dt_util") as mock_dt:
             mock_dt.now.return_value = _TODAY
             assert sensor.is_on is False
 
@@ -152,18 +142,14 @@ class TestDetailedIcon:
     def test_icon_is_trash_can_when_on(self) -> None:
         coord = _mock_coordinator({"dates": {"123": _TOMORROW_DATE.isoformat()}})
         sensor = _make_detailed_sensor(coord)
-        with patch(
-            "custom_components.karlstadsenergi.binary_sensor.dt_util"
-        ) as mock_dt:
+        with patch("custom_components.karlstadsenergi.binary_sensor.dt_util") as mock_dt:
             mock_dt.now.return_value = _TODAY
             assert sensor.icon == "mdi:trash-can"
 
     def test_icon_is_trash_can_outline_when_off(self) -> None:
         coord = _mock_coordinator({"dates": {"123": _TODAY_DATE.isoformat()}})
         sensor = _make_detailed_sensor(coord)
-        with patch(
-            "custom_components.karlstadsenergi.binary_sensor.dt_util"
-        ) as mock_dt:
+        with patch("custom_components.karlstadsenergi.binary_sensor.dt_util") as mock_dt:
             mock_dt.now.return_value = _TODAY
             assert sensor.icon == "mdi:trash-can-outline"
 
@@ -230,9 +216,7 @@ class TestSummaryIsOn:
             {"next_dates": [{"Type": "Mat- och restavfall", "Date": "2026-04-15"}]}
         )
         sensor = _make_summary_sensor(coord)
-        with patch(
-            "custom_components.karlstadsenergi.binary_sensor.dt_util"
-        ) as mock_dt:
+        with patch("custom_components.karlstadsenergi.binary_sensor.dt_util") as mock_dt:
             mock_dt.now.return_value = _TODAY
             assert sensor.is_on is True
 
@@ -241,9 +225,7 @@ class TestSummaryIsOn:
             {"next_dates": [{"Type": "Mat- och restavfall", "Date": "2026-04-14"}]}
         )
         sensor = _make_summary_sensor(coord)
-        with patch(
-            "custom_components.karlstadsenergi.binary_sensor.dt_util"
-        ) as mock_dt:
+        with patch("custom_components.karlstadsenergi.binary_sensor.dt_util") as mock_dt:
             mock_dt.now.return_value = _TODAY
             assert sensor.is_on is False
 
@@ -252,9 +234,7 @@ class TestSummaryIsOn:
             {"next_dates": [{"Type": "Mat- och restavfall", "Date": "2026-04-21"}]}
         )
         sensor = _make_summary_sensor(coord)
-        with patch(
-            "custom_components.karlstadsenergi.binary_sensor.dt_util"
-        ) as mock_dt:
+        with patch("custom_components.karlstadsenergi.binary_sensor.dt_util") as mock_dt:
             mock_dt.now.return_value = _TODAY
             assert sensor.is_on is False
 
@@ -264,9 +244,7 @@ class TestSummaryIsOn:
         assert sensor.is_on is None
 
     def test_is_on_none_when_type_not_found_in_next_dates(self) -> None:
-        coord = _mock_coordinator(
-            {"next_dates": [{"Type": "Glas/Metall", "Date": "2026-04-15"}]}
-        )
+        coord = _mock_coordinator({"next_dates": [{"Type": "Glas/Metall", "Date": "2026-04-15"}]})
         sensor = _make_summary_sensor(coord)
         assert sensor.is_on is None
 
@@ -289,13 +267,9 @@ class TestSummaryIsOn:
             }
         )
         sensor = _make_summary_sensor(coord, item=item)
-        with patch(
-            "custom_components.karlstadsenergi.binary_sensor.dt_util"
-        ) as mock_dt:
+        with patch("custom_components.karlstadsenergi.binary_sensor.dt_util") as mock_dt:
             # "today" is 2026-04-21, so Glas/Metall (2026-04-22) is tomorrow
-            mock_dt.now.return_value = datetime.datetime(
-                2026, 4, 21, 12, 0, 0, tzinfo=datetime.timezone.utc
-            )
+            mock_dt.now.return_value = datetime.datetime(2026, 4, 21, 12, 0, 0, tzinfo=datetime.UTC)
             assert sensor.is_on is True
 
 
@@ -310,9 +284,7 @@ class TestSummaryIcon:
             {"next_dates": [{"Type": "Mat- och restavfall", "Date": "2026-04-15"}]}
         )
         sensor = _make_summary_sensor(coord)
-        with patch(
-            "custom_components.karlstadsenergi.binary_sensor.dt_util"
-        ) as mock_dt:
+        with patch("custom_components.karlstadsenergi.binary_sensor.dt_util") as mock_dt:
             mock_dt.now.return_value = _TODAY
             assert sensor.icon == "mdi:trash-can"
 
@@ -321,9 +293,7 @@ class TestSummaryIcon:
             {"next_dates": [{"Type": "Mat- och restavfall", "Date": "2026-05-01"}]}
         )
         sensor = _make_summary_sensor(coord)
-        with patch(
-            "custom_components.karlstadsenergi.binary_sensor.dt_util"
-        ) as mock_dt:
+        with patch("custom_components.karlstadsenergi.binary_sensor.dt_util") as mock_dt:
             mock_dt.now.return_value = _TODAY
             assert sensor.icon == "mdi:trash-can-outline"
 

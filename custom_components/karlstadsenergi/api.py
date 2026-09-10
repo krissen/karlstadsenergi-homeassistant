@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import contextlib
 import json
 import logging
 import uuid
@@ -178,14 +179,10 @@ class KarlstadsenergiApi:
                     headers=REQUEST_HEADERS,
                     **kwargs,
                 )
-        except asyncio.TimeoutError as err:
-            raise KarlstadsenergiConnectionError(
-                "Timeout connecting to Karlstadsenergi"
-            ) from err
+        except TimeoutError as err:
+            raise KarlstadsenergiConnectionError("Timeout connecting to Karlstadsenergi") from err
         except aiohttp.ClientError as err:
-            raise KarlstadsenergiConnectionError(
-                f"Connection error: {type(err).__name__}"
-            ) from err
+            raise KarlstadsenergiConnectionError(f"Connection error: {type(err).__name__}") from err
 
     # ── Password authentication ──────────────────────────────
 
@@ -288,10 +285,8 @@ class KarlstadsenergiApi:
         if isinstance(raw, dict) and "d" in raw:
             data = _parse_aspnet_response(raw)
         if isinstance(data, str):
-            try:
+            with contextlib.suppress(json.JSONDecodeError, TypeError):
                 data = json.loads(data)
-            except (json.JSONDecodeError, TypeError):
-                pass
         return data
 
     async def bankid_get_customers(
@@ -309,9 +304,7 @@ class KarlstadsenergiApi:
         All requests use HTTPS so the path is encrypted in transit.
         """
         # Get main customers
-        url = (
-            f"{BASE_URL}/api/grp2/GetCustomerByPinCode/{personnummer}/{transaction_id}"
-        )
+        url = f"{BASE_URL}/api/grp2/GetCustomerByPinCode/{personnummer}/{transaction_id}"
         resp = await self._post(url)
         try:
             resp.raise_for_status()
@@ -430,9 +423,7 @@ class KarlstadsenergiApi:
             _LOGGER.debug("BankID authentication successful")
             return True
 
-        raise KarlstadsenergiAuthError(
-            f"BankID login failed: {result.get('Value', 'unknown')}"
-        )
+        raise KarlstadsenergiAuthError(f"BankID login failed: {result.get('Value', 'unknown')}")
 
     async def bankid_authenticate(self) -> bool:
         """Full BankID flow (non-interactive, for re-auth).
@@ -476,9 +467,7 @@ class KarlstadsenergiApi:
         for page in pages:
             try:
                 async with asyncio.timeout(REQUEST_TIMEOUT):
-                    async with session.get(
-                        f"{BASE_URL}/{page}", allow_redirects=False
-                    ) as resp:
+                    async with session.get(f"{BASE_URL}/{page}", allow_redirects=False) as resp:
                         location = resp.headers.get("Location", "")
                         _LOGGER.debug(
                             "Page visit %s -> status=%s%s",
@@ -488,13 +477,10 @@ class KarlstadsenergiApi:
                         )
                         if resp.status in (301, 302, 401, 403):
                             raise KarlstadsenergiAuthError(
-                                f"Session expired visiting {page} "
-                                f"(status {resp.status})"
+                                f"Session expired visiting {page} (status {resp.status})"
                             )
-            except asyncio.TimeoutError as err:
-                raise KarlstadsenergiConnectionError(
-                    f"Timeout visiting {page}"
-                ) from err
+            except TimeoutError as err:
+                raise KarlstadsenergiConnectionError(f"Timeout visiting {page}") from err
             except aiohttp.ClientError as err:
                 raise KarlstadsenergiConnectionError(
                     f"Connection error visiting {page}: {err}"
@@ -526,9 +512,7 @@ class KarlstadsenergiApi:
                     self._authenticated = False
                     await self.authenticate()
                     return await self._request(url, json_data, retry_auth=False)
-                raise KarlstadsenergiAuthError(
-                    f"Session expired (status {resp.status})"
-                )
+                raise KarlstadsenergiAuthError(f"Session expired (status {resp.status})")
 
             if resp.status != 200:
                 raise KarlstadsenergiApiError(f"API returned status {resp.status}")
@@ -675,17 +659,13 @@ class KarlstadsenergiApi:
         pages = ("consumption/consumption.aspx",)
         url = f"{BASE_URL}/Consumption/Consumption.aspx/GetConsumption"
         try:
-            result = await self._request(
-                url, {"data": json.dumps(model)}, retry_auth=False
-            )
+            result = await self._request(url, {"data": json.dumps(model)}, retry_auth=False)
         except KarlstadsenergiAuthError:
             self._authenticated = False
             await self.authenticate()
             session = await self._ensure_session()
             await self._visit_pages(session, pages)
-            result = await self._request(
-                url, {"data": json.dumps(model)}, retry_auth=False
-            )
+            result = await self._request(url, {"data": json.dumps(model)}, retry_auth=False)
         if not isinstance(result, dict):
             return {}
         return result
@@ -745,17 +725,13 @@ class KarlstadsenergiApi:
         pages = ("consumption/consumption.aspx",)
         url = f"{BASE_URL}/Consumption/Consumption.aspx/GetConsumption"
         try:
-            result = await self._request(
-                url, {"data": json.dumps(model)}, retry_auth=False
-            )
+            result = await self._request(url, {"data": json.dumps(model)}, retry_auth=False)
         except KarlstadsenergiAuthError:
             self._authenticated = False
             await self.authenticate()
             session = await self._ensure_session()
             await self._visit_pages(session, pages)
-            result = await self._request(
-                url, {"data": json.dumps(model)}, retry_auth=False
-            )
+            result = await self._request(url, {"data": json.dumps(model)}, retry_auth=False)
         if not isinstance(result, dict):
             return {}
         return result

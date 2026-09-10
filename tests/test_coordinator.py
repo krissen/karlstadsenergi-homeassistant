@@ -7,6 +7,7 @@ minimal MagicMock setups.
 
 from __future__ import annotations
 
+from datetime import UTC
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -182,13 +183,13 @@ class TestParseSpotDataEmpty:
 
 class TestParseSpotDataCurrentPrice:
     def test_current_price_is_none_before_all_buckets(self) -> None:
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         data = _response(
             _make_spotprice_entry("2026-03-29T10:00:00+0000", 100.0),
             _make_spotprice_entry("2026-03-29T10:15:00+0000", 110.0),
         )
-        fake_now = datetime(2026, 3, 29, 9, 59, 59, tzinfo=timezone.utc)
+        fake_now = datetime(2026, 3, 29, 9, 59, 59, tzinfo=UTC)
         with patch("custom_components.karlstadsenergi.datetime") as mock_dt:
             mock_dt.now.return_value = fake_now
             mock_dt.fromisoformat = datetime.fromisoformat
@@ -196,14 +197,14 @@ class TestParseSpotDataCurrentPrice:
         assert result["current_price"] is None
 
     def test_current_price_matches_active_bucket(self) -> None:
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         data = _response(
             _make_spotprice_entry("2026-03-29T10:00:00+0000", 100.0),
             _make_spotprice_entry("2026-03-29T10:15:00+0000", 110.0),
             _make_spotprice_entry("2026-03-29T10:30:00+0000", 120.0),
         )
-        fake_now = datetime(2026, 3, 29, 10, 20, 0, tzinfo=timezone.utc)
+        fake_now = datetime(2026, 3, 29, 10, 20, 0, tzinfo=UTC)
         with patch("custom_components.karlstadsenergi.datetime") as mock_dt:
             mock_dt.now.return_value = fake_now
             mock_dt.fromisoformat = datetime.fromisoformat
@@ -359,7 +360,7 @@ class TestWasteCoordinatorUpdate:
         api = _make_api()
         entry = _make_entry()
 
-        skip_group = list(SKIP_GROUP_NAMES)[0]
+        skip_group = next(iter(SKIP_GROUP_NAMES))
         normal = {
             "FlexServiceId": 1,
             "FSStatusName": "Aktiv",
@@ -500,7 +501,7 @@ class TestWidenStartDate:
     def test_target_date_starts_at_midnight(self) -> None:
         """Widened StartDate should be at midnight, not inherit current time."""
         import re
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         model = {
             "StartDate": "/Date(1711920000000)/",
@@ -510,7 +511,7 @@ class TestWidenStartDate:
         match = re.search(r"/Date\((\d+)\)/", result["StartDate"])
         assert match
         epoch_ms = int(match.group(1))
-        dt = datetime.fromtimestamp(epoch_ms / 1000, tz=timezone.utc)
+        dt = datetime.fromtimestamp(epoch_ms / 1000, tz=UTC)
         assert dt.hour == 0
         assert dt.minute == 0
         assert dt.second == 0
@@ -554,9 +555,7 @@ def _dh_model_with_utilities(*utility_ids: str) -> dict:
         "SiteName": "Testgatan 1",
         "StartDate": "/Date(1711920000000)/",
         "ContractsStartDate": "/Date(1672531200000)/",
-        "SelectedSiteGroupNode": {
-            "Utilities": [{"UtilityId": uid} for uid in utility_ids]
-        },
+        "SelectedSiteGroupNode": {"Utilities": [{"UtilityId": uid} for uid in utility_ids]},
     }
 
 
@@ -697,18 +696,12 @@ class TestDistrictHeatingHasUtility:
 
     def test_no_dh_when_only_electricity(self) -> None:
         model = _dh_model_with_utilities("E")
-        assert not KarlstadsenergiDistrictHeatingCoordinator._has_district_heating(
-            model
-        )
+        assert not KarlstadsenergiDistrictHeatingCoordinator._has_district_heating(model)
 
     def test_no_dh_when_empty_utilities(self) -> None:
         model = {"SelectedSiteGroupNode": {"Utilities": []}}
-        assert not KarlstadsenergiDistrictHeatingCoordinator._has_district_heating(
-            model
-        )
+        assert not KarlstadsenergiDistrictHeatingCoordinator._has_district_heating(model)
 
     def test_no_dh_when_missing_node(self) -> None:
         model = {}
-        assert not KarlstadsenergiDistrictHeatingCoordinator._has_district_heating(
-            model
-        )
+        assert not KarlstadsenergiDistrictHeatingCoordinator._has_district_heating(model)

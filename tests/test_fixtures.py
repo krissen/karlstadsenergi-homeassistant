@@ -44,7 +44,6 @@ from custom_components.karlstadsenergi.sensor import (
 
 from .conftest import load_fixture
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -222,9 +221,7 @@ class TestWasteFixtureFlow:
     def test_slug_generation_for_unknown_type(self, raw_services) -> None:
         """Unknown waste types get sanitized slugs (Swedish chars are alphanumeric in Unicode)."""
         unknown = [
-            s
-            for s in raw_services
-            if s.get("FlexServiceContainTypeValue") == "Trädgårdsavfall"
+            s for s in raw_services if s.get("FlexServiceContainTypeValue") == "Trädgårdsavfall"
         ]
         assert len(unknown) == 1
         slug = slug_for_waste_type("Trädgårdsavfall")
@@ -329,9 +326,7 @@ class TestConsumptionFixtureFlow:
 
         chart = consumption_data["DetailedConsumptionChart"]
         data_points = chart["SeriesList"][0]["data"]
-        total_kwh = sum(
-            p["y"] for p in data_points if p["dateInterval"][:7] in fee_months
-        )
+        total_kwh = sum(p["y"] for p in data_points if p["dateInterval"][:7] in fee_months)
         # 320.5 + 285.0 + 120.0 = 725.5 kWh
         assert total_kwh == pytest.approx(725.5)
 
@@ -550,9 +545,11 @@ class TestApiMethodsWithFixtures:
         fixture = load_fixture("password_auth_failure")
         resp = _mock_response(fixture)
 
-        with patch.object(api, "_post", return_value=resp):
-            with pytest.raises(KarlstadsenergiAuthError, match="Authentication failed"):
-                await api.authenticate_password()
+        with (
+            patch.object(api, "_post", return_value=resp),
+            pytest.raises(KarlstadsenergiAuthError, match="Authentication failed"),
+        ):
+            await api.authenticate_password()
 
     @pytest.mark.asyncio
     async def test_bankid_initiate_with_fixture(self, api) -> None:
@@ -581,9 +578,11 @@ class TestApiMethodsWithFixtures:
         fixture = load_fixture("bankid_poll_error")
         resp = _mock_response(fixture)
 
-        with patch.object(api, "_post", return_value=resp):
-            with pytest.raises(KarlstadsenergiAuthError, match="CANCELLED"):
-                await api.bankid_poll("test-order-ref")
+        with (
+            patch.object(api, "_post", return_value=resp),
+            pytest.raises(KarlstadsenergiAuthError, match="CANCELLED"),
+        ):
+            await api.bankid_poll("test-order-ref")
 
     @pytest.mark.asyncio
     async def test_bankid_get_customers_with_fixture(self, api) -> None:
@@ -599,14 +598,16 @@ class TestApiMethodsWithFixtures:
                 return _mock_response(customers_fixture)
             return _mock_response(sub_users_fixture)
 
-        with patch.object(api, "_post", side_effect=_mock_post):
-            # Also need _parse_grp2_json to work
-            with patch.object(
+        # Also need _parse_grp2_json to work
+        with (
+            patch.object(api, "_post", side_effect=_mock_post),
+            patch.object(
                 api,
                 "_parse_grp2_json",
                 side_effect=[customers_fixture, sub_users_fixture],
-            ):
-                result = await api.bankid_get_customers("199001011234", "txn123")
+            ),
+        ):
+            result = await api.bankid_get_customers("199001011234", "txn123")
 
         assert len(result) == 2
         assert result[0]["full_name"] == "Anna Svensson"
@@ -620,20 +621,22 @@ class TestApiMethodsWithFixtures:
         fixture = load_fixture("bankid_login_success")
         resp = _mock_response(fixture)
 
-        with patch.object(api, "_post", return_value=resp):
-            with patch.object(api, "_ensure_session", return_value=AsyncMock()):
-                # Mock the session.get for start.aspx visit
-                mock_session = AsyncMock()
-                mock_get_resp = AsyncMock()
-                mock_get_resp.status = 200
-                mock_session.get = MagicMock(
-                    return_value=AsyncMock(
-                        __aenter__=AsyncMock(return_value=mock_get_resp),
-                        __aexit__=AsyncMock(return_value=None),
-                    )
+        with (
+            patch.object(api, "_post", return_value=resp),
+            patch.object(api, "_ensure_session", return_value=AsyncMock()),
+        ):
+            # Mock the session.get for start.aspx visit
+            mock_session = AsyncMock()
+            mock_get_resp = AsyncMock()
+            mock_get_resp.status = 200
+            mock_session.get = MagicMock(
+                return_value=AsyncMock(
+                    __aenter__=AsyncMock(return_value=mock_get_resp),
+                    __aexit__=AsyncMock(return_value=None),
                 )
-                with patch.object(api, "_ensure_session", return_value=mock_session):
-                    result = await api.bankid_login("199001011234", "cust-id", "txn123")
+            )
+            with patch.object(api, "_ensure_session", return_value=mock_session):
+                result = await api.bankid_login("199001011234", "cust-id", "txn123")
 
         assert result is True
 
@@ -642,6 +645,8 @@ class TestApiMethodsWithFixtures:
         fixture = load_fixture("bankid_login_failure")
         resp = _mock_response(fixture)
 
-        with patch.object(api, "_post", return_value=resp):
-            with pytest.raises(KarlstadsenergiAuthError, match="Login failed"):
-                await api.bankid_login("199001011234", "cust-id", "txn123")
+        with (
+            patch.object(api, "_post", return_value=resp),
+            pytest.raises(KarlstadsenergiAuthError, match="Login failed"),
+        ):
+            await api.bankid_login("199001011234", "cust-id", "txn123")

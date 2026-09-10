@@ -9,11 +9,6 @@ from typing import Any
 
 import pytest
 
-from custom_components.karlstadsenergi.sensor import (
-    _extract_fee_months,
-    _extract_fee_series,
-    _slug_for_contract,
-)
 from custom_components.karlstadsenergi.const import (
     CONTRACT_TYPE_SLUG,
     FEE_CONSUMPTION,
@@ -22,7 +17,11 @@ from custom_components.karlstadsenergi.const import (
     WASTE_TYPE_SLUG,
     slug_for_waste_type,
 )
-
+from custom_components.karlstadsenergi.sensor import (
+    _extract_fee_months,
+    _extract_fee_series,
+    _slug_for_contract,
+)
 
 # ---------------------------------------------------------------------------
 # Helpers duplicated here for clarity (match conftest shape exactly)
@@ -99,9 +98,7 @@ class TestExtractFeeSeries:
         fees = _extract_fee_series(data)
         assert list(fees.keys()) == [FEE_CONSUMPTION]
 
-    def test_multi_month_data_summed_to_single_total(
-        self, fee_data_multi_month
-    ) -> None:
+    def test_multi_month_data_summed_to_single_total(self, fee_data_multi_month) -> None:
         fees = _extract_fee_series(fee_data_multi_month)
         # Jan 100 + Feb 200 = 300
         assert fees[FEE_CONSUMPTION] == pytest.approx(300.0)
@@ -194,9 +191,7 @@ class TestExtractFeeMonths:
     def test_deduplicates_same_month_across_series(self) -> None:
         data = _make_fee_data(
             [
-                _make_series(
-                    "ConsumptionFee", [("2026-02-01", 100.0), ("2026-02-15", 200.0)]
-                ),
+                _make_series("ConsumptionFee", [("2026-02-01", 100.0), ("2026-02-15", 200.0)]),
                 _make_series("PowerFee", [("2026-02-01", 80.0)]),
             ]
         )
