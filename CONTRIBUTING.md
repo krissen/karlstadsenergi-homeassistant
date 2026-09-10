@@ -69,6 +69,11 @@ The project uses a dedicated Home Assistant test instance at `../hass-test/confi
 
 For detailed architecture notes, coordinator design, and API internals, see [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
+Reverse-engineering notes and any large/binary artifacts used to derive the
+API (e.g. a decompiled reference copy of the vendor app) belong in the
+gitignored `research/` directory, never in the tracked tree -- see
+`research/debug/README.md`.
+
 ---
 
 ## Code style

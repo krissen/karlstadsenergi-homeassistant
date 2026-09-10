@@ -50,7 +50,13 @@ research/
 +-- references.md          # Bibliography
 +-- _txt/                  # Text extracts from PDFs
 +-- _analys/               # Primers and summaries
++-- debug/                 # Reverse-engineering / debug artifacts (see debug/README.md)
 ```
+
+`research/` is gitignored -- nothing under it is tracked in this repository.
+Large or binary artifacts (e.g. a decompiled reference copy of the vendor
+Android app, used to reverse-engineer the customer-portal API) belong here,
+not in the tracked tree -- see `research/debug/README.md`.
 
 ### Reference Format
 

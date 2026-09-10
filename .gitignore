@@ -11,6 +11,7 @@ build/
 .pytest_cache/
 .ruff_cache/
 .check.log
+*.xapk
 research/
 CLAUDE.md
 .claude/

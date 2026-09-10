@@ -34,18 +34,11 @@ repos:
         # reports as newly ADDED relative to a diff target, which is
         # empty on a clean checkout with nothing staged. --enforce-all
         # makes it check every file it's given, matching --all-files.
-        #
-        # --maxkb=3500: "Karlstads Energi_1.1_APKPure.xapk" (3.3 MB) is a
-        # tracked decompiled copy of the vendor Android app, used per
-        # research/debug/README.md (gitignored, not in this worktree) to
-        # reverse-engineer the customer-portal API this integration talks
-        # to. It is NOT excluded by name here -- exclude would hide any
-        # *future* oversized file added by accident -- the threshold is
-        # raised instead, deliberately, to let this one known file pass.
-        # Flagged to the maintainer as a decision point: move it to
-        # research/ (gitignored, already the convention for this kind of
-        # artifact) or Git LFS, and lower this back to 1000 once it's gone.
-        args: ["--maxkb=3500", "--enforce-all"]
+        args: ["--maxkb=1000", "--enforce-all"]
+        # docs/images/electricity.png (1.35 MB) is a pre-existing README
+        # screenshot, not going to shrink or change; excluded by name
+        # rather than raising the threshold for the whole repo.
+        exclude: '^docs/images/electricity\.png$'
         stages: [pre-commit]
       - id: end-of-file-fixer
         stages: [pre-commit]
