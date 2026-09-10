@@ -1,0 +1,6 @@
+# Revisions to ignore in `git blame` (see GUIDELINES.md, `git config
+# blame.ignoreRevsFile .git-blame-ignore-revs`).
+#
+# Mechanical ruff --fix + ruff format under the newly pinned select list
+# and line-length (portfolio quality-gates rollout).
+b867289de9500ffcdf4a587303b3b747b1c65dbe
