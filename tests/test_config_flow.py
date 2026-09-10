@@ -30,7 +30,6 @@ from custom_components.karlstadsenergi.const import (
     CONF_PERSONNUMMER,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -99,9 +98,7 @@ class TestStepUser:
     async def test_password_method_routes_to_password_step(self) -> None:
         """Selecting AUTH_PASSWORD must advance to step 'password'."""
         flow = _make_flow()
-        result = await flow.async_step_user(
-            user_input={CONF_AUTH_METHOD: AUTH_PASSWORD}
-        )
+        result = await flow.async_step_user(user_input={CONF_AUTH_METHOD: AUTH_PASSWORD})
         assert result["type"] == "form"
         assert result["step_id"] == "password"
 
@@ -150,9 +147,7 @@ class TestStepBankidPersonnummer:
     async def test_empty_personnummer_shows_error(self) -> None:
         """Empty personnummer should stay on the form with an error."""
         flow = _make_flow()
-        result = await flow.async_step_bankid_personnummer(
-            user_input={CONF_PERSONNUMMER: ""}
-        )
+        result = await flow.async_step_bankid_personnummer(user_input={CONF_PERSONNUMMER: ""})
         assert result["type"] == "form"
         assert result["step_id"] == "bankid_personnummer"
         assert "base" in result.get("errors", {})
@@ -214,9 +209,7 @@ class TestStepPassword:
         flow.async_set_unique_id = AsyncMock()
         flow._abort_if_unique_id_configured = MagicMock()
 
-        mock_api = _mock_password_api(
-            auth_side_effect=KarlstadsenergiAuthError("bad credentials")
-        )
+        mock_api = _mock_password_api(auth_side_effect=KarlstadsenergiAuthError("bad credentials"))
         with patch(
             "custom_components.karlstadsenergi.config_flow.KarlstadsenergiApi",
             return_value=mock_api,
@@ -240,9 +233,7 @@ class TestStepPassword:
         flow.async_set_unique_id = AsyncMock()
         flow._abort_if_unique_id_configured = MagicMock()
 
-        mock_api = _mock_password_api(
-            auth_side_effect=KarlstadsenergiAccountLockedError("locked")
-        )
+        mock_api = _mock_password_api(auth_side_effect=KarlstadsenergiAccountLockedError("locked"))
         with patch(
             "custom_components.karlstadsenergi.config_flow.KarlstadsenergiApi",
             return_value=mock_api,
@@ -262,9 +253,7 @@ class TestStepPassword:
         flow.async_set_unique_id = AsyncMock()
         flow._abort_if_unique_id_configured = MagicMock()
 
-        mock_api = _mock_password_api(
-            auth_side_effect=KarlstadsenergiConnectionError("timeout")
-        )
+        mock_api = _mock_password_api(auth_side_effect=KarlstadsenergiConnectionError("timeout"))
         with patch(
             "custom_components.karlstadsenergi.config_flow.KarlstadsenergiApi",
             return_value=mock_api,
@@ -303,9 +292,7 @@ class TestStepPassword:
 
         flow = _make_flow()
         flow.async_set_unique_id = AsyncMock()
-        flow._abort_if_unique_id_configured = MagicMock(
-            side_effect=AbortFlow("already_configured")
-        )
+        flow._abort_if_unique_id_configured = MagicMock(side_effect=AbortFlow("already_configured"))
 
         with pytest.raises(AbortFlow, match="already_configured"):
             await flow.async_step_password(
@@ -336,9 +323,7 @@ class TestStepPassword:
 
         assert result["type"] == "abort"
         assert result["reason"] == "reauth_successful"
-        flow.hass.config_entries.async_schedule_reload.assert_called_once_with(
-            "reauth-entry-id"
-        )
+        flow.hass.config_entries.async_schedule_reload.assert_called_once_with("reauth-entry-id")
 
 
 # ---------------------------------------------------------------------------
@@ -558,9 +543,7 @@ class TestStepReauthConfirm:
         flow._personnummer = "199001011234"
         flow._auth_method = AUTH_PASSWORD
 
-        result = await flow.async_step_reauth_confirm(
-            user_input={CONF_AUTH_METHOD: AUTH_PASSWORD}
-        )
+        result = await flow.async_step_reauth_confirm(user_input={CONF_AUTH_METHOD: AUTH_PASSWORD})
 
         assert result["type"] == "form"
         assert result["step_id"] == "password"
@@ -601,19 +584,13 @@ class TestStepReauthConfirm:
         flow._auth_method = AUTH_BANKID
         flow._reauth_customer_code = "123456"
 
-        result = await flow.async_step_reauth_confirm(
-            user_input={CONF_AUTH_METHOD: AUTH_PASSWORD}
-        )
+        result = await flow.async_step_reauth_confirm(user_input={CONF_AUTH_METHOD: AUTH_PASSWORD})
 
         assert result["type"] == "form"
         assert result["step_id"] == "password"
         assert flow._auth_method == AUTH_PASSWORD
         # customer_number field must default to the stored customer code.
-        marker = next(
-            k
-            for k in result["data_schema"].schema.keys()
-            if str(k) == "customer_number"
-        )
+        marker = next(k for k in result["data_schema"].schema.keys() if str(k) == "customer_number")
         assert marker.default() == "123456"
 
     @pytest.mark.asyncio
@@ -625,9 +602,7 @@ class TestStepReauthConfirm:
         flow._personnummer = "123456"
         flow._auth_method = AUTH_PASSWORD
 
-        result = await flow.async_step_reauth_confirm(
-            user_input={CONF_AUTH_METHOD: AUTH_BANKID}
-        )
+        result = await flow.async_step_reauth_confirm(user_input={CONF_AUTH_METHOD: AUTH_BANKID})
 
         assert result["type"] == "form"
         assert result["step_id"] == "bankid_personnummer"
@@ -724,9 +699,7 @@ class TestStepBankid:
         flow._bankid_init = {}
 
         mock_api = _make_bankid_api()
-        mock_api.bankid_initiate = AsyncMock(
-            side_effect=KarlstadsenergiConnectionError("boom")
-        )
+        mock_api.bankid_initiate = AsyncMock(side_effect=KarlstadsenergiConnectionError("boom"))
         with patch(
             "custom_components.karlstadsenergi.config_flow.KarlstadsenergiApi",
             return_value=mock_api,

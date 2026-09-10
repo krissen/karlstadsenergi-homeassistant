@@ -8,14 +8,14 @@ No HA instance required.
 from __future__ import annotations
 
 import datetime
+from datetime import UTC
 from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from homeassistant.const import EntityCategory
 
-from custom_components.karlstadsenergi.const import DOMAIN
+from custom_components.karlstadsenergi.const import DOMAIN, FEE_SENSORS, FEE_SUM
 from custom_components.karlstadsenergi.sensor import (
     ContractSensor,
     DistrictHeatingConsumptionSensor,
@@ -23,15 +23,13 @@ from custom_components.karlstadsenergi.sensor import (
     DistrictHeatingDtSensor,
     DistrictHeatingFlowSensor,
     DistrictHeatingPriceSensor,
-    ElectricityCostSensor,
     ElectricityConsumptionSensor,
+    ElectricityCostSensor,
     ElectricityPriceSensor,
     SpotPriceSensor,
     WasteCollectionSensor,
     WasteCollectionSummary,
 )
-from custom_components.karlstadsenergi.const import FEE_SUM, FEE_SENSORS
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -139,9 +137,7 @@ class TestWasteCollectionSensor:
         data = {"dates": {"1": "2026-04-15"}}
         sensor = _make_waste_sensor(data)
         with patch("custom_components.karlstadsenergi.sensor.dt_util") as mock_dt:
-            mock_dt.now.return_value = datetime.datetime(
-                2026, 4, 14, 12, 0, 0, tzinfo=datetime.timezone.utc
-            )
+            mock_dt.now.return_value = datetime.datetime(2026, 4, 14, 12, 0, 0, tzinfo=datetime.UTC)
             attrs = sensor.extra_state_attributes
         assert attrs["address"] == "Testgatan 1"
 
@@ -149,9 +145,7 @@ class TestWasteCollectionSensor:
         data = {"dates": {"1": "2026-04-15"}}
         sensor = _make_waste_sensor(data)
         with patch("custom_components.karlstadsenergi.sensor.dt_util") as mock_dt:
-            mock_dt.now.return_value = datetime.datetime(
-                2026, 4, 14, 12, 0, 0, tzinfo=datetime.timezone.utc
-            )
+            mock_dt.now.return_value = datetime.datetime(2026, 4, 14, 12, 0, 0, tzinfo=datetime.UTC)
             attrs = sensor.extra_state_attributes
         assert attrs["days_until_pickup"] == 1
 
@@ -159,9 +153,7 @@ class TestWasteCollectionSensor:
         data = {"dates": {"1": "2026-04-15"}}
         sensor = _make_waste_sensor(data)
         with patch("custom_components.karlstadsenergi.sensor.dt_util") as mock_dt:
-            mock_dt.now.return_value = datetime.datetime(
-                2026, 4, 14, 12, 0, 0, tzinfo=datetime.timezone.utc
-            )
+            mock_dt.now.return_value = datetime.datetime(2026, 4, 14, 12, 0, 0, tzinfo=datetime.UTC)
             attrs = sensor.extra_state_attributes
         assert attrs["pickup_is_tomorrow"] is True
 
@@ -169,9 +161,7 @@ class TestWasteCollectionSensor:
         data = {"dates": {"1": "2026-04-15"}}
         sensor = _make_waste_sensor(data)
         with patch("custom_components.karlstadsenergi.sensor.dt_util") as mock_dt:
-            mock_dt.now.return_value = datetime.datetime(
-                2026, 4, 14, 12, 0, 0, tzinfo=datetime.timezone.utc
-            )
+            mock_dt.now.return_value = datetime.datetime(2026, 4, 14, 12, 0, 0, tzinfo=datetime.UTC)
             attrs = sensor.extra_state_attributes
         assert attrs["pickup_is_today"] is False
 
@@ -185,9 +175,7 @@ class TestWasteCollectionSensor:
         data = {"dates": {"1": "2026-04-15"}}
         sensor = _make_waste_sensor(data)
         with patch("custom_components.karlstadsenergi.sensor.dt_util") as mock_dt:
-            mock_dt.now.return_value = datetime.datetime(
-                2026, 4, 14, 12, 0, 0, tzinfo=datetime.timezone.utc
-            )
+            mock_dt.now.return_value = datetime.datetime(2026, 4, 14, 12, 0, 0, tzinfo=datetime.UTC)
             attrs = sensor.extra_state_attributes
         assert attrs["container_size"] == "140L"
 
@@ -196,9 +184,7 @@ class TestWasteCollectionSensor:
         data = {"dates": {"1": "2026-04-15"}}
         sensor = _make_waste_sensor(data)
         with patch("custom_components.karlstadsenergi.sensor.dt_util") as mock_dt:
-            mock_dt.now.return_value = datetime.datetime(
-                2026, 4, 15, 8, 0, 0, tzinfo=datetime.timezone.utc
-            )
+            mock_dt.now.return_value = datetime.datetime(2026, 4, 15, 8, 0, 0, tzinfo=datetime.UTC)
             attrs = sensor.extra_state_attributes
         assert attrs["pickup_is_today"] is True
         assert attrs["days_until_pickup"] == 0
@@ -208,9 +194,7 @@ class TestWasteCollectionSensor:
         data = {"dates": {"1": "2026-04-14"}}
         sensor = _make_waste_sensor(data)
         with patch("custom_components.karlstadsenergi.sensor.dt_util") as mock_dt:
-            mock_dt.now.return_value = datetime.datetime(
-                2026, 4, 15, 8, 0, 0, tzinfo=datetime.timezone.utc
-            )
+            mock_dt.now.return_value = datetime.datetime(2026, 4, 15, 8, 0, 0, tzinfo=datetime.UTC)
             attrs = sensor.extra_state_attributes
         assert attrs["pickup_is_today"] is False
         assert attrs["days_until_pickup"] == -1
@@ -252,9 +236,7 @@ class TestWasteCountdownMidnightRefresh:
     def test_handle_midnight_rewrites_state(self) -> None:
         sensor = _make_waste_sensor({"dates": {"1": "2026-04-15"}})
         with patch.object(sensor, "async_write_ha_state") as mock_write:
-            sensor._handle_midnight(
-                datetime.datetime(2026, 4, 15, 0, 0, 0, tzinfo=datetime.timezone.utc)
-            )
+            sensor._handle_midnight(datetime.datetime(2026, 4, 15, 0, 0, 0, tzinfo=datetime.UTC))
         mock_write.assert_called_once()
 
     def test_countdown_decrements_after_a_day_without_a_refresh(self) -> None:
@@ -262,13 +244,9 @@ class TestWasteCountdownMidnightRefresh:
         # The recomputed attribute must follow the clock, not the stale value.
         sensor = _make_waste_sensor({"dates": {"1": "2026-04-15"}})
         with patch("custom_components.karlstadsenergi.sensor.dt_util") as mock_dt:
-            mock_dt.now.return_value = datetime.datetime(
-                2026, 4, 13, 12, 0, 0, tzinfo=datetime.timezone.utc
-            )
+            mock_dt.now.return_value = datetime.datetime(2026, 4, 13, 12, 0, 0, tzinfo=datetime.UTC)
             assert sensor.extra_state_attributes["days_until_pickup"] == 2
-            mock_dt.now.return_value = datetime.datetime(
-                2026, 4, 14, 12, 0, 0, tzinfo=datetime.timezone.utc
-            )
+            mock_dt.now.return_value = datetime.datetime(2026, 4, 14, 12, 0, 0, tzinfo=datetime.UTC)
             assert sensor.extra_state_attributes["days_until_pickup"] == 1
 
 
@@ -305,9 +283,7 @@ class TestWasteCollectionSummary:
         data = {"next_dates": [{"Type": "Mat- och restavfall", "Date": "2026-04-15"}]}
         sensor = _make_summary_sensor(data)
         with patch("custom_components.karlstadsenergi.sensor.dt_util") as mock_dt:
-            mock_dt.now.return_value = datetime.datetime(
-                2026, 4, 14, 12, 0, 0, tzinfo=datetime.timezone.utc
-            )
+            mock_dt.now.return_value = datetime.datetime(2026, 4, 14, 12, 0, 0, tzinfo=datetime.UTC)
             attrs = sensor.extra_state_attributes
         assert attrs["days_until_pickup"] == 1
 
@@ -326,9 +302,7 @@ class TestWasteCollectionSummary:
         data = {"next_dates": [{"Type": "Mat- och restavfall", "Date": "2026-04-15"}]}
         sensor = _make_summary_sensor(data)
         with patch("custom_components.karlstadsenergi.sensor.dt_util") as mock_dt:
-            mock_dt.now.return_value = datetime.datetime(
-                2026, 4, 15, 8, 0, 0, tzinfo=datetime.timezone.utc
-            )
+            mock_dt.now.return_value = datetime.datetime(2026, 4, 15, 8, 0, 0, tzinfo=datetime.UTC)
             attrs = sensor.extra_state_attributes
         assert attrs["pickup_is_today"] is True
         assert attrs["days_until_pickup"] == 0
@@ -338,9 +312,7 @@ class TestWasteCollectionSummary:
         data = {"next_dates": [{"Type": "Mat- och restavfall", "Date": "2026-04-14"}]}
         sensor = _make_summary_sensor(data)
         with patch("custom_components.karlstadsenergi.sensor.dt_util") as mock_dt:
-            mock_dt.now.return_value = datetime.datetime(
-                2026, 4, 15, 8, 0, 0, tzinfo=datetime.timezone.utc
-            )
+            mock_dt.now.return_value = datetime.datetime(2026, 4, 15, 8, 0, 0, tzinfo=datetime.UTC)
             attrs = sensor.extra_state_attributes
         assert attrs["pickup_is_today"] is False
         assert attrs["days_until_pickup"] == -1
@@ -397,9 +369,7 @@ class TestElectricityConsumptionSensor:
         assert sensor.native_value is None
 
     def test_native_value_returns_none_when_data_points_empty(self) -> None:
-        data = {
-            "consumption": {"DetailedConsumptionChart": {"SeriesList": [{"data": []}]}}
-        }
+        data = {"consumption": {"DetailedConsumptionChart": {"SeriesList": [{"data": []}]}}}
         sensor = self._make_sensor(data)
         assert sensor.native_value is None
 
@@ -407,9 +377,7 @@ class TestElectricityConsumptionSensor:
         data = {
             "consumption": {
                 "DetailedConsumptionChart": {
-                    "SeriesList": [
-                        {"data": [{"dateInterval": "2026-03-01", "y": 123.4567}]}
-                    ]
+                    "SeriesList": [{"data": [{"dateInterval": "2026-03-01", "y": 123.4567}]}]
                 }
             }
         }
@@ -425,9 +393,7 @@ class TestElectricityConsumptionSensor:
     def test_no_state_class(self) -> None:
         """Consumption sensor must not have state_class -- use external statistics."""
         sensor = self._make_sensor()
-        assert (
-            not hasattr(sensor, "_attr_state_class") or sensor._attr_state_class is None
-        )
+        assert not hasattr(sensor, "_attr_state_class") or sensor._attr_state_class is None
 
     def test_translation_key_is_electricity_consumption(self) -> None:
         sensor = self._make_sensor()
@@ -599,10 +565,7 @@ class TestElectricityPriceSensor:
     def test_no_device_class(self) -> None:
         """Price sensors must not use MONETARY with compound unit SEK/kWh."""
         sensor = self._make_sensor()
-        assert (
-            not hasattr(sensor, "_attr_device_class")
-            or sensor._attr_device_class is None
-        )
+        assert not hasattr(sensor, "_attr_device_class") or sensor._attr_device_class is None
 
 
 # ---------------------------------------------------------------------------
@@ -627,9 +590,7 @@ class TestSpotPriceSensor:
         )
 
     def test_native_value_returns_current_price(self) -> None:
-        sensor = self._make_sensor(
-            {"current_price": 1.25, "prices": [], "region": "SE3"}
-        )
+        sensor = self._make_sensor({"current_price": 1.25, "prices": [], "region": "SE3"})
         assert sensor.native_value == pytest.approx(1.25)
 
     def test_native_value_returns_none_when_no_data(self) -> None:
@@ -637,9 +598,7 @@ class TestSpotPriceSensor:
         assert sensor.native_value is None
 
     def test_native_value_returns_none_when_current_price_none(self) -> None:
-        sensor = self._make_sensor(
-            {"current_price": None, "prices": [], "region": "SE3"}
-        )
+        sensor = self._make_sensor({"current_price": None, "prices": [], "region": "SE3"})
         assert sensor.native_value is None
 
     def test_unique_id_format(self) -> None:
@@ -653,23 +612,17 @@ class TestSpotPriceSensor:
         assert sensor.extra_state_attributes == {"data_stale": False}
 
     def test_extra_state_attributes_region(self) -> None:
-        sensor = self._make_sensor(
-            {"current_price": 1.25, "prices": [], "region": "SE3"}
-        )
+        sensor = self._make_sensor({"current_price": 1.25, "prices": [], "region": "SE3"})
         attrs = sensor.extra_state_attributes
         assert attrs["region"] == "SE3"
 
     def test_extra_state_attributes_price_ore_kwh(self) -> None:
-        sensor = self._make_sensor(
-            {"current_price": 1.0, "prices": [], "region": "SE3"}
-        )
+        sensor = self._make_sensor({"current_price": 1.0, "prices": [], "region": "SE3"})
         attrs = sensor.extra_state_attributes
         assert attrs["price_ore_kwh"] == pytest.approx(100.0)
 
     def test_extra_state_attributes_no_price_ore_when_none(self) -> None:
-        sensor = self._make_sensor(
-            {"current_price": None, "prices": [], "region": "SE3"}
-        )
+        sensor = self._make_sensor({"current_price": None, "prices": [], "region": "SE3"})
         attrs = sensor.extra_state_attributes
         assert "price_ore_kwh" not in attrs
 
@@ -684,10 +637,10 @@ class TestSpotPriceSensor:
         assert (DOMAIN, "CUST01") in identifiers
 
     def test_extra_state_attributes_today_min_max_avg(self) -> None:
-        from datetime import datetime, timezone, timedelta
+        from datetime import datetime, timedelta
 
         # Build prices for today (UTC)
-        today_utc = datetime(2026, 4, 14, 10, 0, 0, tzinfo=timezone.utc)
+        today_utc = datetime(2026, 4, 14, 10, 0, 0, tzinfo=UTC)
         prices = [
             {"start": today_utc, "price_sek": 1.0, "price_ore": 100.0},
             {
@@ -700,7 +653,7 @@ class TestSpotPriceSensor:
         sensor = self._make_sensor(data)
 
         with patch("custom_components.karlstadsenergi.sensor.dt_util") as mock_dt:
-            mock_now = datetime(2026, 4, 14, 11, 0, 0, tzinfo=timezone.utc)
+            mock_now = datetime(2026, 4, 14, 11, 0, 0, tzinfo=UTC)
             mock_dt.now.return_value = mock_now
             attrs = sensor.extra_state_attributes
 
@@ -711,10 +664,7 @@ class TestSpotPriceSensor:
     def test_no_device_class(self) -> None:
         """Price sensors must not use MONETARY with compound unit SEK/kWh."""
         sensor = self._make_sensor()
-        assert (
-            not hasattr(sensor, "_attr_device_class")
-            or sensor._attr_device_class is None
-        )
+        assert not hasattr(sensor, "_attr_device_class") or sensor._attr_device_class is None
 
 
 # ---------------------------------------------------------------------------
@@ -778,9 +728,7 @@ class TestContractSensor:
         other = self._make_contract(contract_id="C999")
         data = {"contracts": [other]}
         coord = _mock_coord(data)
-        sensor = ContractSensor(
-            coordinator=coord, customer_id="CUST01", contract=contract
-        )
+        sensor = ContractSensor(coordinator=coord, customer_id="CUST01", contract=contract)
         assert sensor.native_value is None
 
     def test_unique_id_format(self) -> None:
@@ -790,9 +738,7 @@ class TestContractSensor:
     def test_translation_key_and_placeholders(self) -> None:
         sensor = self._make_sensor()
         assert sensor._attr_translation_key == "contract"
-        assert (
-            sensor._attr_translation_placeholders["utility_name"] == "Elnät - Nätavtal"
-        )
+        assert sensor._attr_translation_placeholders["utility_name"] == "Elnät - Nätavtal"
 
     def test_extra_state_attributes_present(self) -> None:
         sensor = self._make_sensor()
@@ -805,9 +751,7 @@ class TestContractSensor:
     def test_extra_state_attributes_empty_when_no_data(self) -> None:
         coord = _mock_coord(None)
         contract = self._make_contract()
-        sensor = ContractSensor(
-            coordinator=coord, customer_id="CUST01", contract=contract
-        )
+        sensor = ContractSensor(coordinator=coord, customer_id="CUST01", contract=contract)
         # Entity-specific attrs are empty, but the shared freshness marker is
         # always present (retain-on-failure feature).
         assert sensor.extra_state_attributes == {"data_stale": False}
@@ -848,9 +792,7 @@ class TestElectricityCostSensor:
     def test_no_state_class(self) -> None:
         """Cost sensors must not have state_class -- non-cumulative monthly values."""
         sensor = self._make_sensor()
-        assert (
-            not hasattr(sensor, "_attr_state_class") or sensor._attr_state_class is None
-        )
+        assert not hasattr(sensor, "_attr_state_class") or sensor._attr_state_class is None
 
     def test_native_value_returns_latest_month(self) -> None:
         data = {
@@ -1144,9 +1086,9 @@ class TestRetainOnFailure:
         return ElectricityConsumptionSensor(coordinator=coord, customer_id="CUST01")
 
     def test_available_and_value_retained_after_failed_update(self) -> None:
-        from datetime import datetime, timezone
+        from datetime import datetime
 
-        ts = datetime(2026, 6, 7, 12, 0, tzinfo=timezone.utc)
+        ts = datetime(2026, 6, 7, 12, 0, tzinfo=UTC)
         data = {"consumption": {"CompareModel": {"CurrYearValue": 100}}}
         sensor = self._sensor(data, success=False, last_time=ts)
         # Retained: still available + still showing the last value despite failure

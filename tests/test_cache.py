@@ -12,10 +12,12 @@ test_integration.py.
 from __future__ import annotations
 
 import json
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from homeassistant.config_entries import ConfigEntryState
+from homeassistant.exceptions import ConfigEntryAuthFailed
 
 from custom_components.karlstadsenergi import (
     KarlstadsenergiData,
@@ -33,9 +35,6 @@ from custom_components.karlstadsenergi.const import (
     CONF_PERSONNUMMER,
     DOMAIN,
 )
-from homeassistant.config_entries import ConfigEntryState
-from homeassistant.exceptions import ConfigEntryAuthFailed
-
 
 # ---------------------------------------------------------------------------
 # JSON datetime round-trip
@@ -44,7 +43,7 @@ from homeassistant.exceptions import ConfigEntryAuthFailed
 
 class TestJsonRoundTrip:
     def test_datetime_roundtrip(self) -> None:
-        dt = datetime(2026, 3, 28, 10, 15, tzinfo=timezone.utc)
+        dt = datetime(2026, 3, 28, 10, 15, tzinfo=UTC)
         encoded = _json_encode(dt)
         assert encoded == {"__dt__": dt.isoformat()}
         # must survive a real json dump/load
@@ -66,12 +65,12 @@ class TestJsonRoundTrip:
             "current_price": 0.52,
             "prices": [
                 {
-                    "start": datetime(2026, 3, 28, 8, 0, tzinfo=timezone.utc),
+                    "start": datetime(2026, 3, 28, 8, 0, tzinfo=UTC),
                     "price_ore": 45.1,
                     "price_sek": 0.451,
                 },
                 {
-                    "start": datetime(2026, 3, 28, 8, 15, tzinfo=timezone.utc),
+                    "start": datetime(2026, 3, 28, 8, 15, tzinfo=UTC),
                     "price_ore": 47.3,
                     "price_sek": 0.473,
                 },
@@ -105,14 +104,14 @@ class TestJsonRoundTrip:
                     "dates": {"1": "2026-04-15"},
                     "next_dates": [],
                 },
-                "last_success_time": datetime(2026, 6, 8, 7, 45, tzinfo=timezone.utc),
+                "last_success_time": datetime(2026, 6, 8, 7, 45, tzinfo=UTC),
             },
             f"{DOMAIN}_spot_price": {
                 "data": {
                     "current_price": 0.5,
                     "prices": [
                         {
-                            "start": datetime(2026, 6, 8, 9, 0, tzinfo=timezone.utc),
+                            "start": datetime(2026, 6, 8, 9, 0, tzinfo=UTC),
                             "price_sek": 0.5,
                             "price_ore": 50.0,
                         }
@@ -120,7 +119,7 @@ class TestJsonRoundTrip:
                     "region": "SE3",
                     "stale": False,
                 },
-                "last_success_time": datetime(2026, 6, 8, 7, 45, tzinfo=timezone.utc),
+                "last_success_time": datetime(2026, 6, 8, 7, 45, tzinfo=UTC),
             },
         }
         restored = _json_decode(json.loads(json.dumps(_json_encode(state))))
@@ -142,7 +141,7 @@ class TestPruneHeavySeries:
         cache.record(
             "karlstadsenergi_consumption",
             data,
-            datetime(2026, 6, 8, tzinfo=timezone.utc),
+            datetime(2026, 6, 8, tzinfo=UTC),
         )
         cached = cache._state["karlstadsenergi_consumption"]["data"]
         # only the large 2-year hourly series is dropped...
@@ -166,7 +165,7 @@ class TestPruneHeavySeries:
         with patch("custom_components.karlstadsenergi.Store") as MockStore:
             store = MockStore.return_value
             cache = _DataCache(MagicMock(), MagicMock(entry_id="x"))
-            ts = datetime(2026, 6, 8, tzinfo=timezone.utc)
+            ts = datetime(2026, 6, 8, tzinfo=UTC)
             cache.record("karlstadsenergi_waste", {"v": 1}, ts)
             first_func = store.async_delay_save.call_args.args[0]
             # A later record() mutates self._state...
@@ -271,7 +270,7 @@ async def test_cache_present_survives_dead_session_and_starts_reauth() -> None:
     cached = {
         f"{DOMAIN}_waste": {
             "data": WASTE_DATA,
-            "last_success_time": datetime(2026, 6, 8, 7, 45, tzinfo=timezone.utc),
+            "last_success_time": datetime(2026, 6, 8, 7, 45, tzinfo=UTC),
         }
     }
 
@@ -300,9 +299,7 @@ async def test_cache_present_survives_dead_session_and_starts_reauth() -> None:
     # ...and the "action needed" reauth prompt was still triggered.
     # HA <2026.7 calls async_start_reauth; >=2026.7 calls the _if_available
     # variant, which delegates when the config flow implements a reauth step.
-    assert (
-        entry.async_start_reauth.called or entry.async_start_reauth_if_available.called
-    )
+    assert entry.async_start_reauth.called or entry.async_start_reauth_if_available.called
 
 
 @pytest.mark.asyncio

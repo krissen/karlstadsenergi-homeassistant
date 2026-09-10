@@ -19,7 +19,6 @@ from custom_components.karlstadsenergi.api import (
     _parse_aspnet_response,
 )
 
-
 # ---------------------------------------------------------------------------
 # _parse_aspnet_response
 # ---------------------------------------------------------------------------
@@ -160,17 +159,13 @@ class TestEnsureSession:
     @pytest.mark.asyncio
     async def test_creates_new_session_when_none(self) -> None:
         api = KarlstadsenergiApi("1234567890", AUTH_PASSWORD, "pass")
-        with patch(
-            "custom_components.karlstadsenergi.api.aiohttp.ClientSession"
-        ) as mock_cls:
+        with patch("custom_components.karlstadsenergi.api.aiohttp.ClientSession") as mock_cls:
             mock_session = MagicMock()
             mock_session.closed = False
             mock_jar = MagicMock()
             mock_session.cookie_jar = mock_jar
             mock_cls.return_value = mock_session
-            with patch(
-                "custom_components.karlstadsenergi.api.aiohttp.CookieJar"
-            ) as mock_jar_cls:
+            with patch("custom_components.karlstadsenergi.api.aiohttp.CookieJar") as mock_jar_cls:
                 mock_jar_cls.return_value = mock_jar
                 session = await api._ensure_session()
         assert session is mock_session
@@ -192,17 +187,13 @@ class TestEnsureSession:
         closed_session.closed = True
         api._session = closed_session
 
-        with patch(
-            "custom_components.karlstadsenergi.api.aiohttp.ClientSession"
-        ) as mock_cls:
+        with patch("custom_components.karlstadsenergi.api.aiohttp.ClientSession") as mock_cls:
             mock_session = MagicMock()
             mock_session.closed = False
             mock_jar = MagicMock()
             mock_session.cookie_jar = mock_jar
             mock_cls.return_value = mock_session
-            with patch(
-                "custom_components.karlstadsenergi.api.aiohttp.CookieJar"
-            ) as mock_jar_cls:
+            with patch("custom_components.karlstadsenergi.api.aiohttp.CookieJar") as mock_jar_cls:
                 mock_jar_cls.return_value = mock_jar
                 session = await api._ensure_session()
 
@@ -213,17 +204,13 @@ class TestEnsureSession:
         api = KarlstadsenergiApi("1234567890", AUTH_PASSWORD, "pass")
         api.set_session_cookies({"ASP.NET_SessionId": "abc"})
 
-        with patch(
-            "custom_components.karlstadsenergi.api.aiohttp.ClientSession"
-        ) as mock_cls:
+        with patch("custom_components.karlstadsenergi.api.aiohttp.ClientSession") as mock_cls:
             mock_session = MagicMock()
             mock_session.closed = False
             mock_jar = MagicMock()
             mock_session.cookie_jar = mock_jar
             mock_cls.return_value = mock_session
-            with patch(
-                "custom_components.karlstadsenergi.api.aiohttp.CookieJar"
-            ) as mock_jar_cls:
+            with patch("custom_components.karlstadsenergi.api.aiohttp.CookieJar") as mock_jar_cls:
                 mock_jar_cls.return_value = mock_jar
                 await api._ensure_session()
 
@@ -235,17 +222,13 @@ class TestEnsureSession:
         api = KarlstadsenergiApi("1234567890", AUTH_PASSWORD, "pass")
         api.set_session_cookies({"ASP.NET_SessionId": "abc"})
 
-        with patch(
-            "custom_components.karlstadsenergi.api.aiohttp.ClientSession"
-        ) as mock_cls:
+        with patch("custom_components.karlstadsenergi.api.aiohttp.ClientSession") as mock_cls:
             mock_session = MagicMock()
             mock_session.closed = False
             mock_jar = MagicMock()
             mock_session.cookie_jar = mock_jar
             mock_cls.return_value = mock_session
-            with patch(
-                "custom_components.karlstadsenergi.api.aiohttp.CookieJar"
-            ) as mock_jar_cls:
+            with patch("custom_components.karlstadsenergi.api.aiohttp.CookieJar") as mock_jar_cls:
                 mock_jar_cls.return_value = mock_jar
                 await api._ensure_session()
 
@@ -255,17 +238,13 @@ class TestEnsureSession:
     async def test_does_not_set_authenticated_without_cookies(self) -> None:
         api = KarlstadsenergiApi("1234567890", AUTH_PASSWORD, "pass")
 
-        with patch(
-            "custom_components.karlstadsenergi.api.aiohttp.ClientSession"
-        ) as mock_cls:
+        with patch("custom_components.karlstadsenergi.api.aiohttp.ClientSession") as mock_cls:
             mock_session = MagicMock()
             mock_session.closed = False
             mock_jar = MagicMock()
             mock_session.cookie_jar = mock_jar
             mock_cls.return_value = mock_session
-            with patch(
-                "custom_components.karlstadsenergi.api.aiohttp.CookieJar"
-            ) as mock_jar_cls:
+            with patch("custom_components.karlstadsenergi.api.aiohttp.CookieJar") as mock_jar_cls:
                 mock_jar_cls.return_value = mock_jar
                 await api._ensure_session()
 
@@ -288,9 +267,7 @@ class TestAuthenticate:
     @pytest.mark.asyncio
     async def test_routes_to_bankid_for_bankid_method(self) -> None:
         api = KarlstadsenergiApi("1234567890", AUTH_BANKID)
-        with pytest.raises(
-            KarlstadsenergiAuthError, match="BankID requires interactive"
-        ):
+        with pytest.raises(KarlstadsenergiAuthError, match="BankID requires interactive"):
             await api.authenticate()
 
     @pytest.mark.asyncio
@@ -583,18 +560,14 @@ class TestAuthenticatePassword:
     @pytest.mark.asyncio
     async def test_locked_account_raises_account_locked_error(self) -> None:
         """LoginResultStatus 7 must raise the distinct locked-account error."""
-        api = self._api_with_login_response(
-            {"Result": False, "LoginResultStatus": 7, "Url": ""}
-        )
+        api = self._api_with_login_response({"Result": False, "LoginResultStatus": 7, "Url": ""})
         with pytest.raises(KarlstadsenergiAccountLockedError):
             await api.authenticate_password()
 
     @pytest.mark.asyncio
     async def test_wrong_credentials_is_auth_error_not_locked(self) -> None:
         """LoginResultStatus 1 (NotOK) is a normal auth error, not a lockout."""
-        api = self._api_with_login_response(
-            {"Result": False, "LoginResultStatus": 1, "Url": ""}
-        )
+        api = self._api_with_login_response({"Result": False, "LoginResultStatus": 1, "Url": ""})
         with pytest.raises(KarlstadsenergiAuthError) as exc:
             await api.authenticate_password()
         assert not isinstance(exc.value, KarlstadsenergiAccountLockedError)
@@ -792,9 +765,7 @@ class TestBankidInitiate:
     @pytest.mark.asyncio
     async def test_maps_order_ref_correctly(self) -> None:
         api = KarlstadsenergiApi("1234567890", AUTH_BANKID)
-        api._post = AsyncMock(
-            return_value=_make_bankid_initiate_resp(order_ref="my-order-ref")
-        )
+        api._post = AsyncMock(return_value=_make_bankid_initiate_resp(order_ref="my-order-ref"))
 
         result = await api.bankid_initiate()
 
@@ -835,9 +806,7 @@ class TestBankidInitiate:
         resp = MagicMock()
         resp.raise_for_status = MagicMock()
         resp.release = AsyncMock()
-        resp.json = AsyncMock(
-            return_value={"OrderResponseType": None, "QrCodeBase64": "data"}
-        )
+        resp.json = AsyncMock(return_value={"OrderResponseType": None, "QrCodeBase64": "data"})
         api._post = AsyncMock(return_value=resp)
 
         result = await api.bankid_initiate()
@@ -950,9 +919,7 @@ class TestBankidPoll:
         resp = MagicMock()
         resp.raise_for_status = MagicMock()
         resp.release = AsyncMock()
-        resp.json = AsyncMock(
-            return_value={"CollectResponseType": {}, "HasError": False}
-        )
+        resp.json = AsyncMock(return_value={"CollectResponseType": {}, "HasError": False})
         api._post = AsyncMock(return_value=resp)
 
         result = await api.bankid_poll("ref")
@@ -968,9 +935,7 @@ class TestBankidPoll:
         resp = MagicMock()
         resp.raise_for_status = MagicMock()
         resp.release = AsyncMock()
-        resp.json = AsyncMock(
-            return_value={"CollectResponseType": None, "HasError": False}
-        )
+        resp.json = AsyncMock(return_value={"CollectResponseType": None, "HasError": False})
         api._post = AsyncMock(return_value=resp)
 
         result = await api.bankid_poll("ref")
@@ -1136,9 +1101,7 @@ class TestBankidGetCustomers:
     @pytest.mark.asyncio
     async def test_non_list_sub_users_response_treated_as_empty(self) -> None:
         api = KarlstadsenergiApi("1234567890", AUTH_BANKID)
-        customers_payload = [
-            {"FullName": "Anna", "CustomerCode": "C003", "CustomerId": "id3"}
-        ]
+        customers_payload = [{"FullName": "Anna", "CustomerCode": "C003", "CustomerId": "id3"}]
         api._post = AsyncMock(
             side_effect=[
                 _make_resp_with_json(customers_payload),
@@ -1264,9 +1227,7 @@ class TestBankidLogin:
         login_resp = MagicMock()
         login_resp.raise_for_status = MagicMock()
         login_resp.release = AsyncMock()
-        login_resp.json = AsyncMock(
-            return_value={"Key": False, "Value": "invalid session"}
-        )
+        login_resp.json = AsyncMock(return_value={"Key": False, "Value": "invalid session"})
         api._post = AsyncMock(return_value=login_resp)
 
         with pytest.raises(KarlstadsenergiAuthError, match="BankID login failed"):
@@ -1283,9 +1244,7 @@ class TestBankidLogin:
         api._post = AsyncMock(return_value=login_resp)
         api._session = _make_cm_session_get_for_start_aspx(status=302)
 
-        with pytest.raises(
-            KarlstadsenergiAuthError, match="Session initialization failed"
-        ):
+        with pytest.raises(KarlstadsenergiAuthError, match="Session initialization failed"):
             await api.bankid_login("1234567890", "cust-id-1", "txn-001")
 
     @pytest.mark.asyncio
@@ -1484,9 +1443,7 @@ class TestAsyncGetHourlyConsumption:
         api._authenticated = True
         api._request = AsyncMock(return_value={"series": []})
 
-        await api.async_get_hourly_consumption(
-            {"Interval": "MONTH", "IsPageLoad": True}
-        )
+        await api.async_get_hourly_consumption({"Interval": "MONTH", "IsPageLoad": True})
 
         _, kwargs = api._request.call_args
         import json as _json

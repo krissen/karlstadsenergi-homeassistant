@@ -9,7 +9,6 @@ from homeassistant.components.binary_sensor import BinarySensorEntity
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from .entity import KarlstadsenergiEntity
 from homeassistant.util import dt as dt_util
 
 from . import KarlstadsenergiConfigEntry, KarlstadsenergiWasteCoordinator
@@ -21,6 +20,7 @@ from .const import (
     pickup_date_for_type,
     slug_for_waste_type,
 )
+from .entity import KarlstadsenergiEntity
 
 
 async def async_setup_entry(
@@ -108,7 +108,9 @@ class WastePickupTomorrowSensor(
 
         # Stable FlexServiceId key (see WasteCollectionSensor) so a portal
         # rename does not orphan this binary sensor; installs are migrated.
-        self._attr_unique_id = f"{DOMAIN}_{customer_id}_{self._place_id}_{self._service_id}_pickup_tomorrow"
+        self._attr_unique_id = (
+            f"{DOMAIN}_{customer_id}_{self._place_id}_{self._service_id}_pickup_tomorrow"
+        )
         self._attr_translation_key = "pickup_tomorrow"
         self._attr_translation_placeholders = {"waste_type": self._waste_type}
 

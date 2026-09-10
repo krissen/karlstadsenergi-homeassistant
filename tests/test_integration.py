@@ -12,6 +12,7 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from homeassistant.config_entries import ConfigEntryState
 
 from custom_components.karlstadsenergi import (
     KarlstadsenergiConsumptionCoordinator,
@@ -25,8 +26,6 @@ from custom_components.karlstadsenergi.api import (
     AUTH_PASSWORD,
     BANKID_COMPLETE,
 )
-from homeassistant.config_entries import ConfigEntryState
-
 from custom_components.karlstadsenergi.config_flow import KarlstadsenergiConfigFlow
 from custom_components.karlstadsenergi.const import (
     CONF_AUTH_METHOD,
@@ -34,7 +33,6 @@ from custom_components.karlstadsenergi.const import (
     CONF_UPDATE_INTERVAL,
     PLATFORMS,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -233,13 +231,9 @@ class TestAsyncSetupEntrySuccess:
 
         rd = entry.runtime_data
         assert isinstance(rd.waste_coordinator, KarlstadsenergiWasteCoordinator)
-        assert isinstance(
-            rd.consumption_coordinator, KarlstadsenergiConsumptionCoordinator
-        )
+        assert isinstance(rd.consumption_coordinator, KarlstadsenergiConsumptionCoordinator)
         assert isinstance(rd.contract_coordinator, KarlstadsenergiContractCoordinator)
-        assert isinstance(
-            rd.spot_price_coordinator, KarlstadsenergiSpotPriceCoordinator
-        )
+        assert isinstance(rd.spot_price_coordinator, KarlstadsenergiSpotPriceCoordinator)
 
     @pytest.mark.asyncio
     async def test_platforms_are_forwarded(self) -> None:
@@ -259,9 +253,7 @@ class TestAsyncSetupEntrySuccess:
         ):
             await async_setup_entry(hass, entry)
 
-        hass.config_entries.async_forward_entry_setups.assert_called_once_with(
-            entry, PLATFORMS
-        )
+        hass.config_entries.async_forward_entry_setups.assert_called_once_with(entry, PLATFORMS)
 
     @pytest.mark.asyncio
     async def test_heartbeat_is_registered(self) -> None:
@@ -311,9 +303,7 @@ class TestAsyncSetupEntrySuccess:
         ):
             await async_setup_entry(hass, entry)
 
-        api.set_session_cookies.assert_called_once_with(
-            {"ASP.NET_SessionId": "saved-cookie"}
-        )
+        api.set_session_cookies.assert_called_once_with({"ASP.NET_SessionId": "saved-cookie"})
         api.authenticate.assert_not_called()
 
     @pytest.mark.asyncio
@@ -400,9 +390,7 @@ class TestAsyncSetupEntrySuccess:
         # Add a mock clientsession to hass for the SpotPriceCoordinator
         mock_resp = MagicMock()
         mock_resp.raise_for_status = MagicMock()
-        mock_resp.json = AsyncMock(
-            return_value={"timezone": "Europe/Stockholm", "spotprices": []}
-        )
+        mock_resp.json = AsyncMock(return_value={"timezone": "Europe/Stockholm", "spotprices": []})
         mock_resp.__aenter__ = AsyncMock(return_value=mock_resp)
         mock_resp.__aexit__ = AsyncMock(return_value=False)
 
@@ -496,9 +484,7 @@ class TestAsyncSetupEntryAuthFailure:
             }
         )
         api = _make_api()
-        api.authenticate = AsyncMock(
-            side_effect=KarlstadsenergiAuthError("bad credentials")
-        )
+        api.authenticate = AsyncMock(side_effect=KarlstadsenergiAuthError("bad credentials"))
 
         with (
             patch(
@@ -574,9 +560,7 @@ class TestAsyncSetupEntryConnectionFailure:
             }
         )
         api = _make_api()
-        api.authenticate = AsyncMock(
-            side_effect=KarlstadsenergiConnectionError("timeout")
-        )
+        api.authenticate = AsyncMock(side_effect=KarlstadsenergiConnectionError("timeout"))
 
         with (
             patch(
@@ -714,9 +698,7 @@ class TestAsyncUnloadEntry:
 
         await async_unload_entry(hass, entry)
 
-        hass.config_entries.async_unload_platforms.assert_called_once_with(
-            entry, PLATFORMS
-        )
+        hass.config_entries.async_unload_platforms.assert_called_once_with(entry, PLATFORMS)
 
     @pytest.mark.asyncio
     async def test_api_session_closed_on_unload(self) -> None:
@@ -872,9 +854,7 @@ class TestConsumptionCoordinatorUpdate:
         hass.loop = MagicMock()
         hass.config_entries = MagicMock()
         api = _make_api()
-        api.async_get_consumption = AsyncMock(
-            side_effect=KarlstadsenergiConnectionError("timeout")
-        )
+        api.async_get_consumption = AsyncMock(side_effect=KarlstadsenergiConnectionError("timeout"))
         entry = MagicMock()
         entry.data = {"session_cookies": {}}
 
@@ -909,9 +889,7 @@ class TestConsumptionCoordinatorUpdate:
         hass.loop = MagicMock()
         hass.config_entries = MagicMock()
         api = _make_api()
-        api.async_get_consumption = AsyncMock(
-            side_effect=KarlstadsenergiConnectionError("timeout")
-        )
+        api.async_get_consumption = AsyncMock(side_effect=KarlstadsenergiConnectionError("timeout"))
         entry = MagicMock()
         entry.data = {"session_cookies": {}}
 
@@ -972,9 +950,7 @@ class TestContractCoordinatorUpdate:
         entry = MagicMock()
         entry.data = {"session_cookies": {}}
 
-        coord = KarlstadsenergiContractCoordinator(
-            hass, api, entry, ["site-1", "site-2"]
-        )
+        coord = KarlstadsenergiContractCoordinator(hass, api, entry, ["site-1", "site-2"])
         await coord._async_update_data()
 
         api.async_get_contract_details.assert_called_once_with(["site-1", "site-2"])
@@ -1176,9 +1152,7 @@ class TestBankIdFlowFullPath:
         mock_api.bankid_get_customers = AsyncMock(return_value=[account])
         mock_api.bankid_login = AsyncMock()
         mock_api.async_get_next_flex_dates = AsyncMock(return_value=[])
-        mock_api.get_session_cookies = MagicMock(
-            return_value={"ASP.NET_SessionId": "s"}
-        )
+        mock_api.get_session_cookies = MagicMock(return_value={"ASP.NET_SessionId": "s"})
         mock_api.async_close = AsyncMock()
 
         with patch(
@@ -1269,9 +1243,7 @@ class TestBankIdFlowFullPath:
 
         assert result["type"] == "create_entry"
         assert result["data"]["customer_code"] == "222"
-        mock_api.bankid_login.assert_called_once_with(
-            "199001011234", "c2", "txn-001", ""
-        )
+        mock_api.bankid_login.assert_called_once_with("199001011234", "c2", "txn-001", "")
 
     @pytest.mark.asyncio
     async def test_bankid_pending_shows_error_and_re_initiates(self) -> None:
@@ -1288,9 +1260,7 @@ class TestBankIdFlowFullPath:
             }
         )
         # First poll: pending; second initiate for re-try
-        mock_api.bankid_poll = AsyncMock(
-            return_value={"status": 2}
-        )  # BANKID_OUTSTANDING
+        mock_api.bankid_poll = AsyncMock(return_value={"status": 2})  # BANKID_OUTSTANDING
         mock_api.async_close = AsyncMock()
 
         with patch(
@@ -1346,9 +1316,7 @@ class TestBankIdFlowFullPath:
             "sub_user_id": "",
         }
         mock_api = MagicMock()
-        mock_api.bankid_login = AsyncMock(
-            side_effect=KarlstadsenergiAuthError("login rejected")
-        )
+        mock_api.bankid_login = AsyncMock(side_effect=KarlstadsenergiAuthError("login rejected"))
         mock_api.async_close = AsyncMock()
 
         flow._api = mock_api
@@ -1438,9 +1406,7 @@ class TestDeferredWasteEntityRegistration:
         added_entities: list = []
 
         def _capture_add(entities, **kwargs):
-            added_entities.extend(
-                entities if hasattr(entities, "__iter__") else [entities]
-            )
+            added_entities.extend(entities if hasattr(entities, "__iter__") else [entities])
 
         # Capture the listener that sensor platform registers on the waste coordinator
         registered_listener = None
@@ -1622,8 +1588,9 @@ class TestUpdateIntervalClamping:
 
     @pytest.mark.asyncio
     async def test_interval_zero_clamped_to_minimum(self) -> None:
-        from custom_components.karlstadsenergi.const import MIN_UPDATE_INTERVAL
         from datetime import timedelta
+
+        from custom_components.karlstadsenergi.const import MIN_UPDATE_INTERVAL
 
         hass, entry, api = self._setup_args(0)
 
@@ -1644,8 +1611,9 @@ class TestUpdateIntervalClamping:
 
     @pytest.mark.asyncio
     async def test_interval_999_clamped_to_maximum(self) -> None:
-        from custom_components.karlstadsenergi.const import MAX_UPDATE_INTERVAL
         from datetime import timedelta
+
+        from custom_components.karlstadsenergi.const import MAX_UPDATE_INTERVAL
 
         hass, entry, api = self._setup_args(999)
 
@@ -1666,8 +1634,9 @@ class TestUpdateIntervalClamping:
 
     @pytest.mark.asyncio
     async def test_interval_at_minimum_boundary_is_accepted(self) -> None:
-        from custom_components.karlstadsenergi.const import MIN_UPDATE_INTERVAL
         from datetime import timedelta
+
+        from custom_components.karlstadsenergi.const import MIN_UPDATE_INTERVAL
 
         hass, entry, api = self._setup_args(MIN_UPDATE_INTERVAL)
 
@@ -1688,8 +1657,9 @@ class TestUpdateIntervalClamping:
 
     @pytest.mark.asyncio
     async def test_interval_at_maximum_boundary_is_accepted(self) -> None:
-        from custom_components.karlstadsenergi.const import MAX_UPDATE_INTERVAL
         from datetime import timedelta
+
+        from custom_components.karlstadsenergi.const import MAX_UPDATE_INTERVAL
 
         hass, entry, api = self._setup_args(MAX_UPDATE_INTERVAL)
 

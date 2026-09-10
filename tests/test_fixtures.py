@@ -44,7 +44,6 @@ from custom_components.karlstadsenergi.sensor import (
 
 from .conftest import load_fixture
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -222,9 +221,7 @@ class TestWasteFixtureFlow:
     def test_slug_generation_for_unknown_type(self, raw_services) -> None:
         """Unknown waste types get sanitized slugs (Swedish chars are alphanumeric in Unicode)."""
         unknown = [
-            s
-            for s in raw_services
-            if s.get("FlexServiceContainTypeValue") == "Trädgårdsavfall"
+            s for s in raw_services if s.get("FlexServiceContainTypeValue") == "Trädgårdsavfall"
         ]
         assert len(unknown) == 1
         slug = slug_for_waste_type("Trädgårdsavfall")
@@ -329,9 +326,7 @@ class TestConsumptionFixtureFlow:
 
         chart = consumption_data["DetailedConsumptionChart"]
         data_points = chart["SeriesList"][0]["data"]
-        total_kwh = sum(
-            p["y"] for p in data_points if p["dateInterval"][:7] in fee_months
-        )
+        total_kwh = sum(p["y"] for p in data_points if p["dateInterval"][:7] in fee_months)
         # 320.5 + 285.0 + 120.0 = 725.5 kWh
         assert total_kwh == pytest.approx(725.5)
 

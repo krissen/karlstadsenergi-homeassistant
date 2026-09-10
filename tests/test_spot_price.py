@@ -5,7 +5,7 @@ All tests call the static method directly -- no HA instance needed.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 from unittest.mock import patch
 
@@ -55,9 +55,7 @@ class TestEmptyData:
         assert result["current_price"] is None
 
     def test_entry_missing_price(self) -> None:
-        data = _response(
-            {"Spotprice": {"region": "SE3", "start_time": "2026-03-28T10:00:00+0000"}}
-        )
+        data = _response({"Spotprice": {"region": "SE3", "start_time": "2026-03-28T10:00:00+0000"}})
         result = parse(data)
         assert result["prices"] == []
         assert result["current_price"] is None
@@ -127,7 +125,7 @@ class TestCurrentPriceSelection:
             _make_spotprice_entry("2026-03-28T10:30:00+0000", 120.0),
             _make_spotprice_entry("2026-03-28T10:45:00+0000", 130.0),
         )
-        fake_now = datetime(2026, 3, 28, 10, 20, 0, tzinfo=timezone.utc)
+        fake_now = datetime(2026, 3, 28, 10, 20, 0, tzinfo=UTC)
         with patch("custom_components.karlstadsenergi.datetime") as mock_dt:
             mock_dt.now.return_value = fake_now
             mock_dt.fromisoformat = datetime.fromisoformat
@@ -141,7 +139,7 @@ class TestCurrentPriceSelection:
             _make_spotprice_entry("2026-03-28T10:00:00+0000", 100.0),
             _make_spotprice_entry("2026-03-28T10:15:00+0000", 200.0),
         )
-        fake_now = datetime(2026, 3, 28, 10, 0, 0, tzinfo=timezone.utc)
+        fake_now = datetime(2026, 3, 28, 10, 0, 0, tzinfo=UTC)
         with patch("custom_components.karlstadsenergi.datetime") as mock_dt:
             mock_dt.now.return_value = fake_now
             mock_dt.fromisoformat = datetime.fromisoformat
@@ -155,7 +153,7 @@ class TestCurrentPriceSelection:
             _make_spotprice_entry("2026-03-28T10:00:00+0000", 100.0),
             _make_spotprice_entry("2026-03-28T10:15:00+0000", 200.0),
         )
-        fake_now = datetime(2026, 3, 28, 10, 20, 0, tzinfo=timezone.utc)
+        fake_now = datetime(2026, 3, 28, 10, 20, 0, tzinfo=UTC)
         with patch("custom_components.karlstadsenergi.datetime") as mock_dt:
             mock_dt.now.return_value = fake_now
             mock_dt.fromisoformat = datetime.fromisoformat
@@ -189,7 +187,7 @@ class TestCurrentPriceSelection:
             _make_spotprice_entry("2026-03-29T00:00:00+0000", 60.0),
         )
         # 'now' is at 23:50 UTC on 2026-03-28, should fall in 23:45 bucket
-        fake_now = datetime(2026, 3, 28, 23, 50, 0, tzinfo=timezone.utc)
+        fake_now = datetime(2026, 3, 28, 23, 50, 0, tzinfo=UTC)
         with patch("custom_components.karlstadsenergi.datetime") as mock_dt:
             mock_dt.now.return_value = fake_now
             mock_dt.fromisoformat = datetime.fromisoformat
@@ -203,7 +201,7 @@ class TestCurrentPriceSelection:
             _make_spotprice_entry("2026-03-28T10:00:00+0000", 100.0),
             _make_spotprice_entry("2026-03-28T10:15:00+0000", 110.0),
         )
-        fake_now = datetime(2026, 3, 28, 9, 59, 59, tzinfo=timezone.utc)
+        fake_now = datetime(2026, 3, 28, 9, 59, 59, tzinfo=UTC)
         with patch("custom_components.karlstadsenergi.datetime") as mock_dt:
             mock_dt.now.return_value = fake_now
             mock_dt.fromisoformat = datetime.fromisoformat
@@ -224,7 +222,7 @@ class TestStaleFlag:
             _make_spotprice_entry("2026-03-28T10:00:00+0000", 100.0),
             _make_spotprice_entry("2026-03-28T10:15:00+0000", 110.0),
         )
-        fake_now = datetime(2026, 3, 28, 10, 5, 0, tzinfo=timezone.utc)
+        fake_now = datetime(2026, 3, 28, 10, 5, 0, tzinfo=UTC)
         with patch("custom_components.karlstadsenergi.datetime") as mock_dt:
             mock_dt.now.return_value = fake_now
             mock_dt.fromisoformat = datetime.fromisoformat

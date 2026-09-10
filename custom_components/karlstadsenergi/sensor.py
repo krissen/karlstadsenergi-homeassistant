@@ -15,7 +15,6 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_track_time_change
-from .entity import KarlstadsenergiEntity
 from homeassistant.util import dt as dt_util
 
 from . import (
@@ -44,7 +43,7 @@ from .const import (
     pickup_date_for_type,
     slug_for_waste_type,
 )
-
+from .entity import KarlstadsenergiEntity
 
 # ── Helpers ─────────────────────────────────────────────────────
 
@@ -67,11 +66,7 @@ def _utility_device_info(
 def _dh_device_info(customer_id: str, address: str, place_id: str) -> DeviceInfo:
     """Build DeviceInfo for district heating sensors."""
     identifier = f"{customer_id}_{place_id}_dh" if place_id else f"{customer_id}_dh"
-    name = (
-        f"Karlstadsenergi Fjärrvärme ({address})"
-        if address
-        else "Karlstadsenergi Fjärrvärme"
-    )
+    name = f"Karlstadsenergi Fjärrvärme ({address})" if address else "Karlstadsenergi Fjärrvärme"
     return DeviceInfo(
         identifiers={(DOMAIN, identifier)},
         name=name,
@@ -81,9 +76,7 @@ def _dh_device_info(customer_id: str, address: str, place_id: str) -> DeviceInfo
     )
 
 
-def _extract_fee_series(
-    fee_data: dict, months: set[str] | None = None
-) -> dict[str, float]:
+def _extract_fee_series(fee_data: dict, months: set[str] | None = None) -> dict[str, float]:
     """Extract fee amounts from fee-type consumption response.
 
     Returns dict of series_id -> total SEK for the period.
@@ -99,9 +92,7 @@ def _extract_fee_series(
         data_points = series.get("data") or []
         if months is not None:
             total = sum(
-                p.get("y", 0)
-                for p in data_points
-                if p.get("dateInterval", "")[:7] in months
+                p.get("y", 0) for p in data_points if p.get("dateInterval", "")[:7] in months
             )
         else:
             total = sum(p.get("y", 0) for p in data_points)
@@ -324,9 +315,7 @@ async def async_setup_entry(
     if dh_data and dh_data.get("available"):
         _add_dh_entities()
     if not (dh_base_added and dh_flow_added and dh_dt_added):
-        unsub_dh = runtime.district_heating_coordinator.async_add_listener(
-            _add_dh_entities
-        )
+        unsub_dh = runtime.district_heating_coordinator.async_add_listener(_add_dh_entities)
         entry.async_on_unload(unsub_dh)
 
     # Spot price sensor (always created -- shows unavailable if API is down)
@@ -368,9 +357,7 @@ async def async_setup_entry(
     if runtime.contract_coordinator.data:
         _add_contracts()
     else:
-        unsub_contracts = runtime.contract_coordinator.async_add_listener(
-            _add_contracts
-        )
+        unsub_contracts = runtime.contract_coordinator.async_add_listener(_add_contracts)
         entry.async_on_unload(unsub_contracts)
 
     async_add_entities(entities, update_before_add=False)
@@ -395,9 +382,7 @@ class _WasteCountdownRefreshMixin:
         """Register the coordinator listener plus a midnight refresh."""
         await super().async_added_to_hass()
         self.async_on_remove(
-            async_track_time_change(
-                self.hass, self._handle_midnight, hour=0, minute=0, second=0
-            )
+            async_track_time_change(self.hass, self._handle_midnight, hour=0, minute=0, second=0)
         )
 
     @callback
@@ -436,9 +421,7 @@ class WasteCollectionSensor(
         # occasionally renames a service (e.g. "Glas/Metall" -> "Glas- och
         # metallforpackningar"), and a name-derived unique_id would orphan the
         # entity on rename. Existing installs are migrated in __init__.
-        self._attr_unique_id = (
-            f"{DOMAIN}_{customer_id}_{self._place_id}_{self._service_id}"
-        )
+        self._attr_unique_id = f"{DOMAIN}_{customer_id}_{self._place_id}_{self._service_id}"
         # Review note (V7): Entity names use the Swedish waste type string
         # from the API (e.g. "Mat- och restavfall") intentionally. Translating
         # them would break the match with the actual service names shown on
@@ -639,9 +622,7 @@ class _UtilityConsumptionSensor(
                     month_key = date_str[:7]
                     monthly[month_key] = monthly.get(month_key, 0) + value
             if monthly:
-                attrs["monthly_consumption"] = {
-                    k: round(v, 1) for k, v in monthly.items()
-                }
+                attrs["monthly_consumption"] = {k: round(v, 1) for k, v in monthly.items()}
 
             # Latest date and latest daily value
             if data_points:
@@ -652,17 +633,14 @@ class _UtilityConsumptionSensor(
                     attrs["latest_daily_kwh"] = round(float(last_value), 3)
 
         # Hourly data (last 24h)
-        hourly = (
-            self.coordinator.data.get("hourly") or {} if self.coordinator.data else {}
-        )
+        hourly = self.coordinator.data.get("hourly") or {} if self.coordinator.data else {}
         hourly_chart = hourly.get("DetailedConsumptionChart") or {}
         hourly_series = hourly_chart.get("SeriesList") or []
         if hourly_series:
             hourly_points = hourly_series[0].get("data") or []
             recent = hourly_points[-24:] if len(hourly_points) >= 24 else hourly_points
             attrs["hourly_consumption"] = [
-                {"time": p.get("dateInterval", ""), "kWh": p.get("y", 0)}
-                for p in recent
+                {"time": p.get("dateInterval", ""), "kWh": p.get("y", 0)} for p in recent
             ]
             attrs["hourly_data_points"] = len(hourly_points)
 
@@ -725,9 +703,7 @@ class ElectricityConsumptionSensor(_UtilityConsumptionSensor):
 
     @property
     def device_info(self) -> DeviceInfo:
-        return _utility_device_info(
-            self._customer_id, self._address, self._place_id, "Electricity"
-        )
+        return _utility_device_info(self._customer_id, self._address, self._place_id, "Electricity")
 
 
 class DistrictHeatingConsumptionSensor(_UtilityConsumptionSensor):
@@ -847,13 +823,9 @@ class _UtilityPriceSensor(
                     "vat_sek": fees.get(FEE_VAT),
                     "total_fee_sek": fees.get(FEE_SUM),
                 }
-                variable = sum(
-                    fees.get(k, 0) for k in (FEE_CONSUMPTION, FEE_POWER, FEE_ENERGY_TAX)
-                )
+                variable = sum(fees.get(k, 0) for k in (FEE_CONSUMPTION, FEE_POWER, FEE_ENERGY_TAX))
                 if variable:
-                    attrs["total_variable_price_sek_kwh"] = round(
-                        variable / latest_kwh, 4
-                    )
+                    attrs["total_variable_price_sek_kwh"] = round(variable / latest_kwh, 4)
                 return price, attrs
 
         # Fallback: period average
@@ -879,9 +851,7 @@ class _UtilityPriceSensor(
             "vat_sek": fees.get(FEE_VAT),
             "total_fee_sek": fees.get(FEE_SUM),
         }
-        variable = sum(
-            fees.get(k, 0) for k in (FEE_CONSUMPTION, FEE_POWER, FEE_ENERGY_TAX)
-        )
+        variable = sum(fees.get(k, 0) for k in (FEE_CONSUMPTION, FEE_POWER, FEE_ENERGY_TAX))
         if variable:
             attrs["total_variable_price_sek_kwh"] = round(variable / total_kwh, 4)
         return price, attrs
@@ -918,9 +888,7 @@ class ElectricityPriceSensor(_UtilityPriceSensor):
 
     @property
     def device_info(self) -> DeviceInfo:
-        return _utility_device_info(
-            self._customer_id, self._address, self._place_id, "Electricity"
-        )
+        return _utility_device_info(self._customer_id, self._address, self._place_id, "Electricity")
 
 
 class DistrictHeatingPriceSensor(_UtilityPriceSensor):
@@ -984,14 +952,10 @@ class _UtilityCostSensor(
         self._fee_id = fee_id
         self._address = address
         self._place_id = place_id
-        self._attr_unique_id = (
-            f"{DOMAIN}_{customer_id}_{unique_id_prefix}_{fee_info.stat_suffix}"
-        )
+        self._attr_unique_id = f"{DOMAIN}_{customer_id}_{unique_id_prefix}_{fee_info.stat_suffix}"
         self._attr_icon = fee_info.icon
         if translation_key_prefix:
-            self._attr_translation_key = (
-                f"{translation_key_prefix}_{fee_info.translation_key}"
-            )
+            self._attr_translation_key = f"{translation_key_prefix}_{fee_info.translation_key}"
         else:
             self._attr_translation_key = fee_info.translation_key
 
@@ -1061,9 +1025,7 @@ class ElectricityCostSensor(_UtilityCostSensor):
 
     @property
     def device_info(self) -> DeviceInfo:
-        return _utility_device_info(
-            self._customer_id, self._address, self._place_id, "Electricity"
-        )
+        return _utility_device_info(self._customer_id, self._address, self._place_id, "Electricity")
 
 
 class DistrictHeatingCostSensor(_UtilityCostSensor):
@@ -1277,8 +1239,7 @@ class DistrictHeatingDtSensor(
                     monthly_counts[month_key] = monthly_counts.get(month_key, 0) + 1
             if monthly_sums:
                 attrs["monthly_average_dt"] = {
-                    k: round(monthly_sums[k] / monthly_counts[k], 1)
-                    for k in sorted(monthly_sums)
+                    k: round(monthly_sums[k] / monthly_counts[k], 1) for k in sorted(monthly_sums)
                 }
             last = data_points[-1]
             attrs["latest_date"] = last.get("dateInterval", "")
@@ -1319,9 +1280,7 @@ class SpotPriceSensor(
 
     @property
     def device_info(self) -> DeviceInfo:
-        return _utility_device_info(
-            self._customer_id, self._address, self._place_id, "Electricity"
-        )
+        return _utility_device_info(self._customer_id, self._address, self._place_id, "Electricity")
 
     @property
     def native_value(self) -> float | None:
@@ -1367,9 +1326,7 @@ class SpotPriceSensor(
         if tomorrow_prices:
             attrs["tomorrow_min"] = min(tomorrow_prices)
             attrs["tomorrow_max"] = max(tomorrow_prices)
-            attrs["tomorrow_average"] = round(
-                sum(tomorrow_prices) / len(tomorrow_prices), 4
-            )
+            attrs["tomorrow_average"] = round(sum(tomorrow_prices) / len(tomorrow_prices), 4)
 
         return attrs
 
@@ -1409,9 +1366,7 @@ class ContractSensor(
 
     @property
     def device_info(self) -> DeviceInfo:
-        return _utility_device_info(
-            self._customer_id, self._address, self._place_id, "Contract"
-        )
+        return _utility_device_info(self._customer_id, self._address, self._place_id, "Contract")
 
     def _get_contract(self) -> dict[str, Any]:
         """Find this contract in coordinator data."""

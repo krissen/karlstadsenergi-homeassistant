@@ -88,9 +88,7 @@ async def _get_states(session: aiohttp.ClientSession) -> list[dict[str, Any]]:
         return await resp.json()
 
 
-async def _get_entity(
-    session: aiohttp.ClientSession, entity_id: str
-) -> dict[str, Any] | None:
+async def _get_entity(session: aiohttp.ClientSession, entity_id: str) -> dict[str, Any] | None:
     """Fetch a single entity state."""
     async with session.get(f"{HA_URL}/api/states/{entity_id}") as resp:
         if resp.status == 404:
@@ -210,9 +208,7 @@ class TestWasteEntities:
         ]
         for sensor in waste_sensors:
             attrs = sensor.get("attributes", {})
-            assert "days_until_pickup" in attrs, (
-                f"{sensor['entity_id']} missing days_until_pickup"
-            )
+            assert "days_until_pickup" in attrs, f"{sensor['entity_id']} missing days_until_pickup"
             assert "pickup_is_today" in attrs
             assert "pickup_is_tomorrow" in attrs
 
@@ -220,20 +216,14 @@ class TestWasteEntities:
     async def test_calendar_entities_exist(self, ha_session) -> None:
         """Calendar entities for waste collection should be present."""
         states = await _get_states(ha_session)
-        calendars = [
-            s for s in _ke_entities(states) if s["entity_id"].startswith("calendar.")
-        ]
+        calendars = [s for s in _ke_entities(states) if s["entity_id"].startswith("calendar.")]
         assert len(calendars) >= 1, "No calendar entities found"
 
     @pytest.mark.asyncio
     async def test_binary_sensors_exist(self, ha_session) -> None:
         """Binary sensors for pickup tomorrow should be present."""
         states = await _get_states(ha_session)
-        binary = [
-            s
-            for s in _ke_entities(states)
-            if s["entity_id"].startswith("binary_sensor.")
-        ]
+        binary = [s for s in _ke_entities(states) if s["entity_id"].startswith("binary_sensor.")]
         assert len(binary) >= 1, "No binary sensor entities found"
 
 
@@ -251,8 +241,7 @@ class TestElectricityEntities:
         consumption = [
             s
             for s in _ke_entities(states)
-            if "electricity_consumption" in s["entity_id"]
-            and s["entity_id"].startswith("sensor.")
+            if "electricity_consumption" in s["entity_id"] and s["entity_id"].startswith("sensor.")
         ]
         assert len(consumption) >= 1, "No electricity consumption sensor found"
 
@@ -262,8 +251,7 @@ class TestElectricityEntities:
         consumption = [
             s
             for s in _ke_entities(states)
-            if "electricity_consumption" in s["entity_id"]
-            and s["entity_id"].startswith("sensor.")
+            if "electricity_consumption" in s["entity_id"] and s["entity_id"].startswith("sensor.")
         ]
         for sensor in consumption:
             state = sensor["state"]
@@ -304,9 +292,7 @@ class TestElectricityEntities:
             s
             for s in _ke_entities(states)
             if s["entity_id"].startswith("sensor.")
-            and (
-                "spot_price" in s["entity_id"] or "electricity_price" in s["entity_id"]
-            )
+            and ("spot_price" in s["entity_id"] or "electricity_price" in s["entity_id"])
         ]
         assert len(price_sensors) >= 1, "No price sensors found"
         for sensor in price_sensors:
@@ -359,9 +345,7 @@ class TestConfigEntryMetadata:
             # Title should match "Karlstadsenergi (CODE)" pattern
             # It should NOT contain three words before the parenthesis (name + surname)
             parts_before_paren = title.split("(")[0].strip().split()
-            assert len(parts_before_paren) <= 1 or parts_before_paren == [
-                "Karlstadsenergi"
-            ], (
+            assert len(parts_before_paren) <= 1 or parts_before_paren == ["Karlstadsenergi"], (
                 f"Config entry title '{title}' may contain a personal name. "
                 f"Expected format: 'Karlstadsenergi (CODE)'"
             )
@@ -383,9 +367,7 @@ class TestDiagnostics:
         if not ke_entries:
             pytest.skip("No config entry")
         entry_id = ke_entries[0]["entry_id"]
-        async with ha_session.get(
-            f"{HA_URL}/api/diagnostics/config_entry/{entry_id}"
-        ) as resp:
+        async with ha_session.get(f"{HA_URL}/api/diagnostics/config_entry/{entry_id}") as resp:
             # 200 = diagnostics available, 404 = not supported in this HA version
             assert resp.status in (200, 404)
             if resp.status == 200:
@@ -394,9 +376,7 @@ class TestDiagnostics:
                 config = data.get("data", {}).get("config_entry", {}).get("data", {})
                 pnr = config.get("personnummer", "")
                 if pnr:
-                    assert pnr == "**REDACTED**", (
-                        "personnummer not redacted in diagnostics"
-                    )
+                    assert pnr == "**REDACTED**", "personnummer not redacted in diagnostics"
 
     @pytest.mark.asyncio
     async def test_diagnostics_redacts_contract_id(self, ha_session) -> None:
@@ -406,9 +386,7 @@ class TestDiagnostics:
         if not ke_entries:
             pytest.skip("No config entry")
         entry_id = ke_entries[0]["entry_id"]
-        async with ha_session.get(
-            f"{HA_URL}/api/diagnostics/config_entry/{entry_id}"
-        ) as resp:
+        async with ha_session.get(f"{HA_URL}/api/diagnostics/config_entry/{entry_id}") as resp:
             if resp.status != 200:
                 pytest.skip("Diagnostics not available")
             data = await resp.json()
@@ -418,9 +396,7 @@ class TestDiagnostics:
             for contract in contracts:
                 cid = contract.get("ContractId", "")
                 if cid:
-                    assert cid == "**REDACTED**", (
-                        f"ContractId '{cid}' not redacted in diagnostics"
-                    )
+                    assert cid == "**REDACTED**", f"ContractId '{cid}' not redacted in diagnostics"
 
 
 # ---------------------------------------------------------------------------
@@ -437,6 +413,4 @@ class TestSessionRecovery:
         states = await _get_states(ha_session)
         ke = _ke_entities(states)
         available = [s for s in ke if s["state"] not in ("unavailable", "unknown")]
-        assert len(available) >= 1, (
-            f"All {len(ke)} entities are unavailable/unknown after restart"
-        )
+        assert len(available) >= 1, f"All {len(ke)} entities are unavailable/unknown after restart"

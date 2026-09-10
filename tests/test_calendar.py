@@ -18,7 +18,6 @@ from custom_components.karlstadsenergi.calendar import (
 )
 from custom_components.karlstadsenergi.const import DOMAIN
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -91,9 +90,7 @@ class TestDetailedNextPickupDate:
     """Test date lookup via the event property (date logic in const helpers)."""
 
     def test_returns_correct_date_from_coordinator(self) -> None:
-        coord = _mock_coordinator(
-            {"dates": {"123": "2026-04-15"}, "services": [_make_service()]}
-        )
+        coord = _mock_coordinator({"dates": {"123": "2026-04-15"}, "services": [_make_service()]})
         cal = _make_detailed_calendar(coord)
         assert cal.event is not None
         assert cal.event.start == datetime.date(2026, 4, 15)
@@ -186,8 +183,8 @@ class TestDetailedAsyncGetEvents:
     async def test_returns_event_within_date_range(self) -> None:
         coord = _mock_coordinator({"dates": {"123": "2026-04-15"}})
         cal = _make_detailed_calendar(coord)
-        start = datetime.datetime(2026, 4, 1, tzinfo=datetime.timezone.utc)
-        end = datetime.datetime(2026, 4, 30, tzinfo=datetime.timezone.utc)
+        start = datetime.datetime(2026, 4, 1, tzinfo=datetime.UTC)
+        end = datetime.datetime(2026, 4, 30, tzinfo=datetime.UTC)
         events = await cal.async_get_events(MagicMock(), start, end)
         assert len(events) == 1
         assert events[0].start == datetime.date(2026, 4, 15)
@@ -196,8 +193,8 @@ class TestDetailedAsyncGetEvents:
     async def test_returns_empty_when_pickup_before_range(self) -> None:
         coord = _mock_coordinator({"dates": {"123": "2026-03-10"}})
         cal = _make_detailed_calendar(coord)
-        start = datetime.datetime(2026, 4, 1, tzinfo=datetime.timezone.utc)
-        end = datetime.datetime(2026, 4, 30, tzinfo=datetime.timezone.utc)
+        start = datetime.datetime(2026, 4, 1, tzinfo=datetime.UTC)
+        end = datetime.datetime(2026, 4, 30, tzinfo=datetime.UTC)
         events = await cal.async_get_events(MagicMock(), start, end)
         assert events == []
 
@@ -205,8 +202,8 @@ class TestDetailedAsyncGetEvents:
     async def test_returns_empty_when_pickup_after_range(self) -> None:
         coord = _mock_coordinator({"dates": {"123": "2026-05-01"}})
         cal = _make_detailed_calendar(coord)
-        start = datetime.datetime(2026, 4, 1, tzinfo=datetime.timezone.utc)
-        end = datetime.datetime(2026, 4, 30, tzinfo=datetime.timezone.utc)
+        start = datetime.datetime(2026, 4, 1, tzinfo=datetime.UTC)
+        end = datetime.datetime(2026, 4, 30, tzinfo=datetime.UTC)
         events = await cal.async_get_events(MagicMock(), start, end)
         assert events == []
 
@@ -214,8 +211,8 @@ class TestDetailedAsyncGetEvents:
     async def test_returns_empty_when_no_data(self) -> None:
         coord = _mock_coordinator(None)
         cal = _make_detailed_calendar(coord)
-        start = datetime.datetime(2026, 4, 1, tzinfo=datetime.timezone.utc)
-        end = datetime.datetime(2026, 4, 30, tzinfo=datetime.timezone.utc)
+        start = datetime.datetime(2026, 4, 1, tzinfo=datetime.UTC)
+        end = datetime.datetime(2026, 4, 30, tzinfo=datetime.UTC)
         events = await cal.async_get_events(MagicMock(), start, end)
         assert events == []
 
@@ -224,8 +221,8 @@ class TestDetailedAsyncGetEvents:
         """Pickup on start date must be included (start <= pickup < end)."""
         coord = _mock_coordinator({"dates": {"123": "2026-04-01"}})
         cal = _make_detailed_calendar(coord)
-        start = datetime.datetime(2026, 4, 1, tzinfo=datetime.timezone.utc)
-        end = datetime.datetime(2026, 4, 30, tzinfo=datetime.timezone.utc)
+        start = datetime.datetime(2026, 4, 1, tzinfo=datetime.UTC)
+        end = datetime.datetime(2026, 4, 30, tzinfo=datetime.UTC)
         events = await cal.async_get_events(MagicMock(), start, end)
         assert len(events) == 1
 
@@ -234,8 +231,8 @@ class TestDetailedAsyncGetEvents:
         """Pickup on end date is excluded (strict less-than)."""
         coord = _mock_coordinator({"dates": {"123": "2026-04-30"}})
         cal = _make_detailed_calendar(coord)
-        start = datetime.datetime(2026, 4, 1, tzinfo=datetime.timezone.utc)
-        end = datetime.datetime(2026, 4, 30, tzinfo=datetime.timezone.utc)
+        start = datetime.datetime(2026, 4, 1, tzinfo=datetime.UTC)
+        end = datetime.datetime(2026, 4, 30, tzinfo=datetime.UTC)
         events = await cal.async_get_events(MagicMock(), start, end)
         assert events == []
 
@@ -318,9 +315,7 @@ class TestSummaryNextPickupDate:
         assert cal.event is None
 
     def test_returns_none_when_type_not_found(self) -> None:
-        coord = _mock_coordinator(
-            {"next_dates": [{"Type": "Glas/Metall", "Date": "2026-04-22"}]}
-        )
+        coord = _mock_coordinator({"next_dates": [{"Type": "Glas/Metall", "Date": "2026-04-22"}]})
         cal = _make_summary_calendar(coord)
         assert cal.event is None
 
@@ -400,8 +395,8 @@ class TestSummaryAsyncGetEvents:
             {"next_dates": [{"Type": "Mat- och restavfall", "Date": "2026-04-15"}]}
         )
         cal = _make_summary_calendar(coord)
-        start = datetime.datetime(2026, 4, 1, tzinfo=datetime.timezone.utc)
-        end = datetime.datetime(2026, 4, 30, tzinfo=datetime.timezone.utc)
+        start = datetime.datetime(2026, 4, 1, tzinfo=datetime.UTC)
+        end = datetime.datetime(2026, 4, 30, tzinfo=datetime.UTC)
         events = await cal.async_get_events(MagicMock(), start, end)
         assert len(events) == 1
         assert events[0].start == datetime.date(2026, 4, 15)
@@ -412,8 +407,8 @@ class TestSummaryAsyncGetEvents:
             {"next_dates": [{"Type": "Mat- och restavfall", "Date": "2026-05-10"}]}
         )
         cal = _make_summary_calendar(coord)
-        start = datetime.datetime(2026, 4, 1, tzinfo=datetime.timezone.utc)
-        end = datetime.datetime(2026, 4, 30, tzinfo=datetime.timezone.utc)
+        start = datetime.datetime(2026, 4, 1, tzinfo=datetime.UTC)
+        end = datetime.datetime(2026, 4, 30, tzinfo=datetime.UTC)
         events = await cal.async_get_events(MagicMock(), start, end)
         assert events == []
 
@@ -421,8 +416,8 @@ class TestSummaryAsyncGetEvents:
     async def test_returns_empty_when_no_data(self) -> None:
         coord = _mock_coordinator(None)
         cal = _make_summary_calendar(coord)
-        start = datetime.datetime(2026, 4, 1, tzinfo=datetime.timezone.utc)
-        end = datetime.datetime(2026, 4, 30, tzinfo=datetime.timezone.utc)
+        start = datetime.datetime(2026, 4, 1, tzinfo=datetime.UTC)
+        end = datetime.datetime(2026, 4, 30, tzinfo=datetime.UTC)
         events = await cal.async_get_events(MagicMock(), start, end)
         assert events == []
 

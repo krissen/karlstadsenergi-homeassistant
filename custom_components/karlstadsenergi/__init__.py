@@ -6,13 +6,12 @@ import asyncio
 import json
 import logging
 import re
-from dataclasses import dataclass
 from collections.abc import Callable
-from datetime import date, datetime, timedelta, timezone
+from dataclasses import dataclass
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 import aiohttp
-
 from homeassistant.components.recorder import get_instance
 from homeassistant.components.recorder.models import StatisticData, StatisticMetaData
 from homeassistant.components.recorder.statistics import (
@@ -124,9 +123,7 @@ class _DataCache:
     """Per-entry on-disk cache of coordinator data (HA Store, debounced)."""
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
-        self._store: Store = Store(
-            hass, CACHE_STORAGE_VERSION, f"{DOMAIN}.{entry.entry_id}.cache"
-        )
+        self._store: Store = Store(hass, CACHE_STORAGE_VERSION, f"{DOMAIN}.{entry.entry_id}.cache")
         # name -> {"data": <coordinator.data>, "last_success_time": datetime}
         self._state: dict[str, dict] = {}
         self._dirty = False
@@ -317,16 +314,12 @@ class KarlstadsenergiWasteCoordinator(_CookieSavingCoordinator):
                     and s.get("FlexServiceGroupName") not in SKIP_GROUP_NAMES
                 ]
                 if services:
-                    service_ids = [
-                        s["FlexServiceId"] for s in services if "FlexServiceId" in s
-                    ]
+                    service_ids = [s["FlexServiceId"] for s in services if "FlexServiceId" in s]
                     dates = await self.api.async_get_flex_dates(service_ids)
             except KarlstadsenergiAuthError:
                 raise
             except Exception:
-                _LOGGER.info(
-                    "Detailed flex services unavailable, using summary fallback"
-                )
+                _LOGGER.info("Detailed flex services unavailable, using summary fallback")
                 _LOGGER.debug("Flex service error details", exc_info=True)
 
             # Fallback: simple summary from start page
@@ -375,9 +368,7 @@ class _UtilityConsumptionCoordinator(_CookieSavingCoordinator):
         stat_prefix: str,
         fee_stat_prefix: str,
     ) -> None:
-        super().__init__(
-            hass, api, update_interval_hours, entry, f"{DOMAIN}_{utility_label}"
-        )
+        super().__init__(hass, api, update_interval_hours, entry, f"{DOMAIN}_{utility_label}")
         self._utility_label = utility_label
         self._customer_id = customer_id
         self._history_years = history_years
@@ -395,10 +386,8 @@ class _UtilityConsumptionCoordinator(_CookieSavingCoordinator):
         ContractsStartDate wins.
         """
         widened = {**model}
-        now = datetime.now(tz=timezone.utc)
-        target = datetime(
-            year=now.year - history_years, month=1, day=1, tzinfo=timezone.utc
-        )
+        now = datetime.now(tz=UTC)
+        target = datetime(year=now.year - history_years, month=1, day=1, tzinfo=UTC)
         target_ms = int(target.timestamp() * 1000)
 
         # Parse ContractsStartDate as lower bound
@@ -418,7 +407,7 @@ class _UtilityConsumptionCoordinator(_CookieSavingCoordinator):
         if not match:
             return None
         epoch_ms = int(match.group(1))
-        return datetime.fromtimestamp(epoch_ms / 1000, tz=timezone.utc)
+        return datetime.fromtimestamp(epoch_ms / 1000, tz=UTC)
 
     async def _async_import_consumption_statistics(self, hourly_data: dict) -> None:
         """Import hourly consumption data into HA long-term statistics."""
@@ -525,8 +514,7 @@ class _UtilityConsumptionCoordinator(_CookieSavingCoordinator):
 
             fee_info = FEE_SENSORS[series_id]
             statistic_id = (
-                f"{DOMAIN}:{self._fee_stat_prefix}"
-                f"_{fee_info.stat_suffix}_{self._customer_id}"
+                f"{DOMAIN}:{self._fee_stat_prefix}_{fee_info.stat_suffix}_{self._customer_id}"
             )
             data_points = series.get("data") or []
             if not data_points:
@@ -567,9 +555,7 @@ class _UtilityConsumptionCoordinator(_CookieSavingCoordinator):
                 if not date_str:
                     continue
                 try:
-                    point_dt = datetime.strptime(date_str[:10], "%Y-%m-%d").replace(
-                        tzinfo=timezone.utc
-                    )
+                    point_dt = datetime.strptime(date_str[:10], "%Y-%m-%d").replace(tzinfo=UTC)
                 except (ValueError, TypeError):
                     continue
                 if last_stats_time_dt is not None and point_dt <= last_stats_time_dt:
@@ -652,9 +638,7 @@ class KarlstadsenergiConsumptionCoordinator(_UtilityConsumptionCoordinator):
                 except Exception:
                     _LOGGER.debug("Fee consumption unavailable")
                 try:
-                    monthly_kwh = await self.api.async_get_monthly_consumption(
-                        wide_model
-                    )
+                    monthly_kwh = await self.api.async_get_monthly_consumption(wide_model)
                 except KarlstadsenergiAuthError:
                     raise
                 except Exception:
@@ -773,9 +757,7 @@ class KarlstadsenergiDistrictHeatingCoordinator(_UtilityConsumptionCoordinator):
 
             if not getattr(self, "_logged_utilities", False):
                 node = model.get("SelectedSiteGroupNode") or {}
-                utility_ids = [
-                    u.get("UtilityId", "?") for u in node.get("Utilities") or []
-                ]
+                utility_ids = [u.get("UtilityId", "?") for u in node.get("Utilities") or []]
                 _LOGGER.info("Account utilities: %s", ", ".join(utility_ids) or "none")
                 self._logged_utilities = True
 
@@ -784,9 +766,7 @@ class KarlstadsenergiDistrictHeatingCoordinator(_UtilityConsumptionCoordinator):
 
             # Fetch daily DH consumption (includes CompareModel for sensor)
             dh_daily_model = self._prepare_dh_model(model)
-            dh_consumption = await self.api.async_get_consumption_with_model(
-                dh_daily_model
-            )
+            dh_consumption = await self.api.async_get_consumption_with_model(dh_daily_model)
 
             # Prepare DH models for historical data
             wide_dh_model = self._prepare_dh_model(model, self._history_years)
@@ -929,7 +909,7 @@ class KarlstadsenergiSpotPriceCoordinator(DataUpdateCoordinator[dict]):
                 resp = await session.get(URL_SPOT_PRICES)
                 resp.raise_for_status()
                 data = await resp.json()
-        except asyncio.TimeoutError as err:
+        except TimeoutError as err:
             raise UpdateFailed(f"Spot price fetch timed out: {err}") from err
         except aiohttp.ClientError as err:
             raise UpdateFailed(f"Spot price HTTP error: {err}") from err
@@ -988,7 +968,7 @@ class KarlstadsenergiSpotPriceCoordinator(DataUpdateCoordinator[dict]):
         prices.sort(key=lambda p: p["start"])
 
         # Find current price (fall back to most recent known price if stale)
-        now = datetime.now(tz=timezone.utc) if prices else None
+        now = datetime.now(tz=UTC) if prices else None
         current_price = None
         stale = False
         if now and prices:
@@ -1042,9 +1022,7 @@ def _waste_uid_migration_map(
         if old_base == new_base:
             continue
         mapping[("sensor", old_base)] = new_base
-        mapping[("binary_sensor", f"{old_base}_pickup_tomorrow")] = (
-            f"{new_base}_pickup_tomorrow"
-        )
+        mapping[("binary_sensor", f"{old_base}_pickup_tomorrow")] = f"{new_base}_pickup_tomorrow"
         mapping[("calendar", f"{old_base}_calendar")] = f"{new_base}_calendar"
     return mapping
 
@@ -1097,9 +1075,7 @@ async def _migrate_waste_unique_ids(
         _LOGGER.exception("Waste unique_id migration failed; skipping")
 
 
-async def async_setup_entry(
-    hass: HomeAssistant, entry: KarlstadsenergiConfigEntry
-) -> bool:
+async def async_setup_entry(hass: HomeAssistant, entry: KarlstadsenergiConfigEntry) -> bool:
     """Set up Karlstadsenergi from a config entry."""
     personnummer = entry.data[CONF_PERSONNUMMER]
     auth_method = entry.data.get(CONF_AUTH_METHOD, AUTH_BANKID)
@@ -1156,9 +1132,7 @@ async def async_setup_entry(
             coordinator.last_success_time = slice_.get("last_success_time")
         coordinator.on_success_callback = cache.record
 
-    async def _refresh(
-        coordinator: DataUpdateCoordinator, *, critical: bool = False
-    ) -> None:
+    async def _refresh(coordinator: DataUpdateCoordinator, *, critical: bool = False) -> None:
         """Seed then refresh, choosing the strategy based on cache presence."""
         _seed(coordinator)
         if has_cache:
@@ -1288,9 +1262,7 @@ async def async_setup_entry(
     return True
 
 
-async def async_unload_entry(
-    hass: HomeAssistant, entry: KarlstadsenergiConfigEntry
-) -> bool:
+async def async_unload_entry(hass: HomeAssistant, entry: KarlstadsenergiConfigEntry) -> bool:
     """Unload a config entry."""
     unload_ok = await hass.config_entries.async_unload_platforms(
         entry,
@@ -1305,9 +1277,7 @@ async def async_unload_entry(
     return unload_ok
 
 
-async def async_remove_entry(
-    hass: HomeAssistant, entry: KarlstadsenergiConfigEntry
-) -> None:
+async def async_remove_entry(hass: HomeAssistant, entry: KarlstadsenergiConfigEntry) -> None:
     """Delete the local data cache when the entry is removed."""
     await _DataCache(hass, entry).async_remove()
 

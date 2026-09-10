@@ -9,7 +9,6 @@ from homeassistant.components.calendar import CalendarEntity, CalendarEvent
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from .entity import KarlstadsenergiEntity
 
 from . import KarlstadsenergiConfigEntry, KarlstadsenergiWasteCoordinator
 from .const import (
@@ -20,6 +19,7 @@ from .const import (
     pickup_date_for_type,
     slug_for_waste_type,
 )
+from .entity import KarlstadsenergiEntity
 
 
 async def async_setup_entry(

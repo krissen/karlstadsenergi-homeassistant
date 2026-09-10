@@ -32,9 +32,7 @@ def test_map_rekeys_all_three_platforms_to_service_id() -> None:
     new = f"{DOMAIN}_CUST_P1_23544343926"
 
     assert mapping[("sensor", old)] == new
-    assert mapping[("binary_sensor", f"{old}_pickup_tomorrow")] == (
-        f"{new}_pickup_tomorrow"
-    )
+    assert mapping[("binary_sensor", f"{old}_pickup_tomorrow")] == (f"{new}_pickup_tomorrow")
     assert mapping[("calendar", f"{old}_calendar")] == f"{new}_calendar"
     # Exactly one entry per platform for the single service.
     assert len(mapping) == 3

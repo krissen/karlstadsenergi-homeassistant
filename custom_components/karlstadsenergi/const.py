@@ -17,8 +17,7 @@ BASE_URL = "https://minasidor.karlstadsenergi.se"
 URL_LOGIN = f"{BASE_URL}/default.aspx/Authenticate"
 URL_FLEX_SERVICES = f"{BASE_URL}/Flex/FlexServices.aspx/GetFlexServices"
 URL_FLEX_DATES = (
-    f"{BASE_URL}/Flex/FlexServices.aspx"
-    "/GetNextPlannedFetchDatesOrPrintNameByFlexServiceIds"
+    f"{BASE_URL}/Flex/FlexServices.aspx/GetNextPlannedFetchDatesOrPrintNameByFlexServiceIds"
 )
 URL_CONTRACT_DETAILS = f"{BASE_URL}/Contract/Contracts.aspx/GetContractDetails"
 URL_SPOT_PRICES = (
@@ -76,9 +75,7 @@ def slug_for_waste_type(waste_type: str) -> str:
     return result
 
 
-def pickup_date_for_service(
-    data: dict | None, service_id: int | str
-) -> datetime.date | None:
+def pickup_date_for_service(data: dict | None, service_id: int | str) -> datetime.date | None:
     """Get next pickup date from detailed service data."""
     if not data:
         return None
@@ -127,17 +124,9 @@ FEE_SENSORS: dict[str, FeeSensorInfo] = {
     FEE_CONSUMPTION: FeeSensorInfo(
         "Energiavgift", "mdi:lightning-bolt", "consumption_fee", "consumption_fee"
     ),
-    FEE_POWER: FeeSensorInfo(
-        "Effektavgift", "mdi:transmission-tower", "power_fee", "power_fee"
-    ),
-    FEE_FIXED: FeeSensorInfo(
-        "Fast avgift", "mdi:currency-usd", "fixed_fee", "fixed_fee"
-    ),
-    FEE_ENERGY_TAX: FeeSensorInfo(
-        "Energiskatt", "mdi:bank", "energy_tax", "energy_tax"
-    ),
+    FEE_POWER: FeeSensorInfo("Effektavgift", "mdi:transmission-tower", "power_fee", "power_fee"),
+    FEE_FIXED: FeeSensorInfo("Fast avgift", "mdi:currency-usd", "fixed_fee", "fixed_fee"),
+    FEE_ENERGY_TAX: FeeSensorInfo("Energiskatt", "mdi:bank", "energy_tax", "energy_tax"),
     FEE_VAT: FeeSensorInfo("Moms", "mdi:percent", "vat", "vat"),
-    FEE_SUM: FeeSensorInfo(
-        "Total kostnad", "mdi:cash-multiple", "total_cost", "total_cost"
-    ),
+    FEE_SUM: FeeSensorInfo("Total kostnad", "mdi:cash-multiple", "total_cost", "total_cost"),
 }
