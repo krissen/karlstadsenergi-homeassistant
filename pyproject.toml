@@ -1,0 +1,22 @@
+[tool.ruff]
+line-length = 100
+# hacs.json pins "homeassistant": "2025.11.0" as the minimum supported Home
+# Assistant version; requirements_test.txt pins homeassistant==2026.7.1 for
+# CI/tests, which requires Python >=3.14.2, but that only constrains the
+# test venv, not the lowest Python this integration's code needs to remain
+# valid under. py313 tracks the HA-2025.11-era Python baseline rather than
+# the newer test pin, so target-version doesn't let ruff apply an upgrade
+# rewrite (UP*) that assumes syntax only available in the test venv's 3.14.
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I", "UP", "B", "SIM", "ARG", "RUF"]
+# RUF001-003 flag typographic characters ('-x) that occur intentionally in
+# Swedish UI/log strings this integration handles. RUF100 would silently
+# remove noqa directives that document why a rule was excluded.
+ignore = ["RUF001", "RUF002", "RUF003", "RUF100"]
+
+[tool.ruff.lint.per-file-ignores]
+# pytest fixtures are requested for their side effect and never used in the
+# test body itself.
+"tests/**" = ["ARG001", "ARG002", "ARG005"]
