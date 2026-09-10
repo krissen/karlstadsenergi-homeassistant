@@ -21,7 +21,8 @@ We appreciate all kinds of contributions: code, documentation, bug reports, feat
 
 ### Prerequisites
 
-- Python 3.12+
+- Python 3.13+ (`requirements_test.txt` pins `homeassistant==2026.7.1`,
+  which requires Python >=3.14.2 for the test venv specifically)
 - A working [Home Assistant development environment](https://developers.home-assistant.io/docs/development_environment) or a test instance
 
 ### Local development
@@ -43,7 +44,7 @@ We appreciate all kinds of contributions: code, documentation, bug reports, feat
 3. Install dependencies:
 
    ```bash
-   pip install -r requirements_test.txt
+   pip install -r requirements_test.txt -r requirements_dev.txt
    ```
 
 ### Test instance
@@ -76,17 +77,37 @@ This project uses [ruff](https://docs.astral.sh/ruff/) for linting and formattin
 
 ```bash
 # Format then lint (always format first)
-ruff format custom_components/karlstadsenergi/
-ruff check custom_components/karlstadsenergi/ --fix
+ruff format .
+ruff check . --fix
 ```
 
 ### General conventions
 
-- Python 3.12+ with `from __future__ import annotations`
+- Python 3.13+ with `from __future__ import annotations`
 - Type hints on all public functions
 - Use `aiohttp` for async HTTP (bundled with Home Assistant)
 - No third-party libraries without prior discussion
 - Follow [Home Assistant integration development guidelines](https://developers.home-assistant.io/docs/creating_integration_manifest)
+
+---
+
+## Before opening a PR
+
+```bash
+.venv/bin/pip install -r requirements_dev.txt -r requirements_test.txt
+make check
+```
+
+`make check` runs the same lint/format/secret checks as the commit hook and
+CI (see GUIDELINES.md's "Quality Gates" section) plus the test suite, and
+prints one line on success. See GUIDELINES.md for one-time hook setup
+(`make setup`) and the `SKIP_PREK` / `SKIP=<hook-id>` escape hatches.
+
+Commit messages follow Conventional Commits with a mandatory scope --
+see GUIDELINES.md's "Commit Messages" section.
+
+Pull requests need at least one label (`bug`, `enhancement`, `documentation`,
+etc.) for the repository's own workflows to treat them as triaged.
 
 ---
 
