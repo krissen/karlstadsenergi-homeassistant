@@ -85,7 +85,7 @@ class TestStepUser:
         flow = _make_flow()
         result = await flow.async_step_user(user_input=None)
 
-        schema_keys = [str(k) for k in result["data_schema"].schema.keys()]
+        schema_keys = [str(k) for k in result["data_schema"].schema]
         assert CONF_AUTH_METHOD in schema_keys
 
     @pytest.mark.asyncio
@@ -140,7 +140,7 @@ class TestStepBankidPersonnummer:
     async def test_form_has_personnummer_field(self) -> None:
         flow = _make_flow()
         result = await flow.async_step_bankid_personnummer(user_input=None)
-        schema_keys = [str(k) for k in result["data_schema"].schema.keys()]
+        schema_keys = [str(k) for k in result["data_schema"].schema]
         assert CONF_PERSONNUMMER in schema_keys
 
     @pytest.mark.asyncio
@@ -196,7 +196,7 @@ class TestStepPassword:
     async def test_form_has_required_fields(self) -> None:
         flow = _make_flow()
         result = await flow.async_step_password(user_input=None)
-        schema_keys = [str(k) for k in result["data_schema"].schema.keys()]
+        schema_keys = [str(k) for k in result["data_schema"].schema]
         assert "customer_number" in schema_keys
         assert "password" in schema_keys
 
@@ -533,7 +533,7 @@ class TestStepReauthConfirm:
         placeholders = result.get("description_placeholders") or {}
         assert "personnummer" not in placeholders
         # Only the auth-method selector may be present, nothing identity-bearing.
-        schema_keys = [str(k) for k in result["data_schema"].schema.keys()]
+        schema_keys = [str(k) for k in result["data_schema"].schema]
         assert schema_keys == [CONF_AUTH_METHOD]
 
     @pytest.mark.asyncio
@@ -590,7 +590,7 @@ class TestStepReauthConfirm:
         assert result["step_id"] == "password"
         assert flow._auth_method == AUTH_PASSWORD
         # customer_number field must default to the stored customer code.
-        marker = next(k for k in result["data_schema"].schema.keys() if str(k) == "customer_number")
+        marker = next(k for k in result["data_schema"].schema if str(k) == "customer_number")
         assert marker.default() == "123456"
 
     @pytest.mark.asyncio

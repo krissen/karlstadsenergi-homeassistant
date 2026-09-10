@@ -1445,7 +1445,6 @@ class TestAsyncGetHourlyConsumption:
 
         await api.async_get_hourly_consumption({"Interval": "MONTH", "IsPageLoad": True})
 
-        _, kwargs = api._request.call_args
         import json as _json
 
         sent_model = _json.loads(api._request.call_args[0][1]["data"])

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import contextlib
 import json
 import logging
 import uuid
@@ -284,10 +285,8 @@ class KarlstadsenergiApi:
         if isinstance(raw, dict) and "d" in raw:
             data = _parse_aspnet_response(raw)
         if isinstance(data, str):
-            try:
+            with contextlib.suppress(json.JSONDecodeError, TypeError):
                 data = json.loads(data)
-            except (json.JSONDecodeError, TypeError):
-                pass
         return data
 
     async def bankid_get_customers(

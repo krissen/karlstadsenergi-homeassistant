@@ -360,7 +360,7 @@ class TestWasteCoordinatorUpdate:
         api = _make_api()
         entry = _make_entry()
 
-        skip_group = list(SKIP_GROUP_NAMES)[0]
+        skip_group = next(iter(SKIP_GROUP_NAMES))
         normal = {
             "FlexServiceId": 1,
             "FSStatusName": "Aktiv",
