@@ -10,6 +10,7 @@ build/
 .coverage
 .pytest_cache/
 .ruff_cache/
+.check.log
 research/
 CLAUDE.md
 .claude/
