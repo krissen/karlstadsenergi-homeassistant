@@ -41,7 +41,7 @@ TO_REDACT_DATA = {
 
 
 async def async_get_config_entry_diagnostics(
-    hass: HomeAssistant,
+    hass: HomeAssistant,  # noqa: ARG001 -- required by HA's diagnostics-handler contract
     entry: KarlstadsenergiConfigEntry,
 ) -> dict[str, Any]:
     """Return diagnostics for a config entry."""

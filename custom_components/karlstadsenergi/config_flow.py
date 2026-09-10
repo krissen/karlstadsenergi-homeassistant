@@ -81,7 +81,7 @@ class KarlstadsenergiBankIDQRView(HomeAssistantView):
     name = "api:karlstadsenergi:bankid_qr"
     requires_auth = False
 
-    async def get(self, request: web.Request, token: str) -> web.Response:
+    async def get(self, request: web.Request, token: str) -> web.Response:  # noqa: ARG002 -- required by HomeAssistantView's request-handler contract
         """Return the cached QR PNG for a transaction, or 404."""
         data = _QR_STORE.get(token)
         if data is None:
@@ -586,7 +586,7 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
     @staticmethod
     @callback
     def async_get_options_flow(
-        config_entry: ConfigEntry,
+        config_entry: ConfigEntry,  # noqa: ARG004 -- required by HA's ConfigFlow contract
     ) -> OptionsFlow:
         return KarlstadsenergiOptionsFlow()
 

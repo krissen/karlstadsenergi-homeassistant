@@ -129,7 +129,7 @@ def _slug_for_contract(utility_name: str) -> str:
 
 
 async def async_setup_entry(
-    hass: HomeAssistant,
+    hass: HomeAssistant,  # noqa: ARG001 -- required by HA's platform setup-entry contract
     entry: KarlstadsenergiConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
@@ -386,7 +386,7 @@ class _WasteCountdownRefreshMixin:
         )
 
     @callback
-    def _handle_midnight(self, now: datetime.datetime) -> None:
+    def _handle_midnight(self, now: datetime.datetime) -> None:  # noqa: ARG002 -- required by async_track_time_change's callback contract
         """Recompute time-dependent attributes at the start of a new day."""
         self.async_write_ha_state()
 

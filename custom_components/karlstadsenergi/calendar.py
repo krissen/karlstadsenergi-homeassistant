@@ -23,7 +23,7 @@ from .entity import KarlstadsenergiEntity
 
 
 async def async_setup_entry(
-    hass: HomeAssistant,
+    hass: HomeAssistant,  # noqa: ARG001 -- required by HA's platform setup-entry contract
     entry: KarlstadsenergiConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
@@ -142,7 +142,7 @@ class WasteCollectionCalendar(
 
     async def async_get_events(
         self,
-        hass: HomeAssistant,
+        hass: HomeAssistant,  # noqa: ARG002 -- required by HA's CalendarEntity.async_get_events contract
         start_date: datetime.datetime,
         end_date: datetime.datetime,
     ) -> list[CalendarEvent]:
@@ -213,7 +213,7 @@ class WasteCollectionSummaryCalendar(
 
     async def async_get_events(
         self,
-        hass: HomeAssistant,
+        hass: HomeAssistant,  # noqa: ARG002 -- required by HA's CalendarEntity.async_get_events contract
         start_date: datetime.datetime,
         end_date: datetime.datetime,
     ) -> list[CalendarEvent]:
