@@ -17,8 +17,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: "actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0"  # v7.0.0
-      - uses: "actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1"  # v6.3.0
+      - uses: "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"  # v7.0.1
+      - uses: "actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97"  # v7.0.0
         with:
           python-version: "3.14"
 
@@ -56,8 +56,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: "actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0"  # v7.0.0
-      - uses: "actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1"  # v6.3.0
+      - uses: "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"  # v7.0.1
+      - uses: "actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97"  # v7.0.0
         with:
           python-version: "3.14"
       - run: pip install -r requirements_test.txt
@@ -68,8 +68,8 @@ jobs:
     runs-on: "ubuntu-latest"
     timeout-minutes: 10
     steps:
-      - uses: "actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0"  # v7.0.0
-      - uses: "home-assistant/actions/hassfest@f4ca6f671bd429efb108c0f2fa0ae8af0215986c"  # master 2026-03-18
+      - uses: "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"  # v7.0.1
+      - uses: "home-assistant/actions/hassfest@06749dd8c0b54f350bc69c8752456cee498808a3"  # master 2026-03-18
 
   # hacs/action validates the branch via the GitHub API rather than the local
   # checkout. On feature branches this races against post-merge branch deletion
@@ -81,7 +81,7 @@ jobs:
     timeout-minutes: 10
     if: github.event_name == 'schedule' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     steps:
-      - uses: "actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0"  # v7.0.0
+      - uses: "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"  # v7.0.1
       - name: HACS validation
         uses: hacs/action@1ebf01c408f29afcb6406bd431bc98fd8cbb15aa  # main 2026-01-26
         with:
