@@ -17,7 +17,7 @@ jobs:
 
       - name: Get version
         id: version
-        uses: home-assistant/actions/helpers/version@06749dd8c0b54f350bc69c8752456cee498808a3  # master 2026-03-18
+        uses: home-assistant/actions/helpers/version@86d4564712fa02543c808e3a693dd04f9d3f8361  # master 2026-03-18
 
       - name: Set version number
         run: |
