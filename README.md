@@ -3,7 +3,6 @@
 [![GitHub Release][releases-shield]][releases]
 [![License][license-shield]][license]
 
-[![hacs][hacsbadge]][hacs]
 [![Project Maintenance][maintenance-shield]][user_profile]
 [![BuyMeCoffee][buymecoffeebadge]][buymecoffee]
 
@@ -41,7 +40,15 @@ A Home Assistant integration for [Karlstads Energi](https://www.karlstadsenergi.
 
 ## Installation
 
-### HACS (recommended)
+### Marketplace (recommended, Home Assistant 2026.11+)
+
+[![Open your Home Assistant instance and open this repository in the Marketplace.](https://my.home-assistant.io/badges/marketplace_repository.svg)](https://my.home-assistant.io/redirect/marketplace_repository/?owner=krissen&repository=karlstadsenergi-homeassistant&category=integration)
+
+1. Select the button above, or find **Karlstadsenergi** under **Settings -> Marketplace**.
+2. Select **Install** and confirm.
+3. If Home Assistant needs a restart first, a repair under **Settings -> System -> Repairs** offers it. Otherwise the integration setup opens when the installation is done.
+
+### HACS (Home Assistant 2026.10 and older)
 
 1. Open HACS in Home Assistant.
 2. Search for **Karlstadsenergi** and click **Download**.
@@ -183,8 +190,6 @@ All data is retrieved from the [Karlstads Energi customer portal](https://minasi
 
 ---
 
-[hacs]: https://hacs.xyz
-[hacsbadge]: https://img.shields.io/badge/HACS-Default-blue.svg?style=for-the-badge
 [license-shield]: https://img.shields.io/github/license/krissen/karlstadsenergi-homeassistant.svg?style=for-the-badge
 [license]: https://github.com/krissen/karlstadsenergi-homeassistant/blob/main/LICENSE
 [maintenance-shield]: https://img.shields.io/badge/maintainer-%40krissen-blue.svg?style=for-the-badge
