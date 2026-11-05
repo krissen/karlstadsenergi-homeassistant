@@ -10,15 +10,15 @@ Examples for displaying waste collection data on your Home Assistant dashboard. 
 
 ## Prerequisites
 
-Some examples require custom frontend cards from HACS:
+Some examples require custom frontend cards from the Marketplace (HACS on Home Assistant 2026.10 and older):
 
-| Card | HACS name | Required by |
+| Card | Repository | Required by |
 |------|-----------|-------------|
 | [Mushroom](https://github.com/piitaya/lovelace-mushroom) | `lovelace-mushroom` | Approaches 1a--1c, 4a--4b |
 | [card-mod](https://github.com/thomasloven/lovelace-card-mod) | `lovelace-card-mod` | Approach 1b (background tinting) |
 | [Custom Button Card](https://github.com/custom-cards/button-card) | `lovelace-button-card` | Approach 2 |
 
-Approach 3 uses only built-in HA cards -- no HACS frontend dependencies.
+Approach 3 uses only built-in HA cards -- no custom frontend dependencies.
 
 ---
 
@@ -441,7 +441,7 @@ cards:
 
 ---
 
-## 3. Built-in HA cards (no HACS required)
+## 3. Built-in HA cards (no custom cards required)
 
 ### 3a. Calendar card
 
@@ -583,7 +583,7 @@ Shows the latest invoiced month's total fee and effective variable price per kWh
 
 ### 4c. Consumption per day (statistics graph)
 
-A built-in `statistics-graph` card showing daily consumption from the external statistic. No HACS card required.
+A built-in `statistics-graph` card showing daily consumption from the external statistic. No custom card required.
 
 ```yaml
 - type: statistics-graph

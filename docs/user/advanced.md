@@ -251,7 +251,7 @@ The built-in `statistics-graph` card is limited to **12 months** of data (`days_
   <img width="500" alt="Monthly electricity cost breakdown (Plotly)" src="../images/cost-monthly-plotly.png" />
 </p>
 
-Install Plotly Graph Card via HACS (`lovelace-plotly-graph-card`), then add the following card:
+Install Plotly Graph Card from the Marketplace or HACS (`lovelace-plotly-graph-card`), then add the following card:
 
 ```yaml
 type: custom:plotly-graph

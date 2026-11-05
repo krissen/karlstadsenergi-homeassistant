@@ -189,7 +189,7 @@ sensor.karlstadsenergi_electricity_price_12345
 | Portal works, but all sensors are unavailable | Session or authentication problem | **Integration** (check logs) |
 | Only electricity sensors are affected, waste sensors work | Consumption/fee data issue | **Integration** or **data lag** |
 | Only waste sensors are affected, electricity works | Flex API issue | **Integration** (check logs) |
-| Issue started after a Home Assistant update | HA compatibility | **Integration** (update via HACS) |
+| Issue started after a Home Assistant update | HA compatibility | **Integration** (update via the Marketplace or HACS) |
 | Data values look wrong compared to the portal | Parsing or calculation bug | **Integration** (report with portal comparison) |
 | Spot price not updating, everything else works | Evado API issue | **External** (independent API) |
 
