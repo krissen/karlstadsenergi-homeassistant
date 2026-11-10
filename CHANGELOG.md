@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Spot price list as attributes** -- the spot price sensor now exposes `prices_today` and `prices_tomorrow`: every 15-minute bucket as `{start, end, price}` (local ISO 8601 times, SEK/kWh). Automations and template sensors can use them to estimate what a load will cost over a future time window, which the min/max/average summaries cannot. The lists are kept out of the recorder so they do not bloat the database. (#42)
+
 ## [0.5.0] - 2026-07-07
 
 ### Added

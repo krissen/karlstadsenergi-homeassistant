@@ -152,6 +152,33 @@ template:
           {% endif %}
 ```
 
+### Cost of a load started now
+
+The `prices_today` and `prices_tomorrow` attributes list every 15-minute bucket, so you can price a load whose run spans several buckets. This example assumes an even draw of 15 kWh over 2 hours (8 buckets), for example a sauna, and starts with the current bucket. Spot price only; grid fees, energy tax and VAT come on top.
+
+```yaml
+template:
+  - sensor:
+      - name: "Sauna cost if started now"
+        unit_of_measurement: "SEK"
+        state: >
+          {% set entity = 'sensor.karlstadsenergi_spot_price' %}
+          {% set buckets = (state_attr(entity, 'prices_today') or [])
+                           + (state_attr(entity, 'prices_tomorrow') or []) %}
+          {% set ns = namespace(run=[]) %}
+          {% for b in buckets if as_datetime(b.end) > now() %}
+            {% set ns.run = ns.run + [b.price] %}
+          {% endfor %}
+          {% set run = ns.run[:8] %}
+          {% if run | count < 8 %}
+            unknown
+          {% else %}
+            {{ (run | sum * 15 / 8) | round(2) }}
+          {% endif %}
+```
+
+The result is `unknown` when fewer than 8 buckets are left, which happens late in the evening until tomorrow's prices are published.
+
 ---
 
 ## Conditional notifications based on spot price

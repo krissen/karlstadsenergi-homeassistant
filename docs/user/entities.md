@@ -299,6 +299,8 @@ To try this out:
 | `tomorrow_min` | float | Tomorrow's lowest price (if available) |
 | `tomorrow_max` | float | Tomorrow's highest price (if available) |
 | `tomorrow_average` | float | Tomorrow's average price (if available) |
+| `prices_today` | list | Every 15-minute bucket starting today (local time): `{start, end, price}`, with `start`/`end` as ISO 8601 local time and `price` in SEK/kWh. Not stored in the recorder. |
+| `prices_tomorrow` | list | Same for tomorrow; empty until Nord Pool publishes tomorrow's prices (usually early afternoon). Not stored in the recorder. |
 | `stale` | bool | `true` if the current price is past its validity window (Evado API may be down) |
 
 ---
