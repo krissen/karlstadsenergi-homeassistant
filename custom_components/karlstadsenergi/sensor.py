@@ -1248,6 +1248,8 @@ class DistrictHeatingDtSensor(
 
 # ── Spot price sensor ───────────────────────────────────────────
 
+_SPOT_BUCKET_LENGTH = datetime.timedelta(minutes=15)
+
 
 class SpotPriceSensor(
     KarlstadsenergiEntity[KarlstadsenergiSpotPriceCoordinator],
@@ -1264,6 +1266,8 @@ class SpotPriceSensor(
     _attr_icon = "mdi:flash"
     _attr_suggested_display_precision = 4
     _attr_translation_key = "spot_price"
+    # ~192 buckets per state change would bloat the recorder database.
+    _unrecorded_attributes = frozenset({"prices_today", "prices_tomorrow"})
 
     def __init__(
         self,
@@ -1302,31 +1306,37 @@ class SpotPriceSensor(
         if current_sek is not None:
             attrs["price_ore_kwh"] = round(current_sek * 100, 2)
 
-        # Today's prices summary (use local time for correct day boundaries)
+        # Bucket prices by local start date (local time gives correct day
+        # boundaries, including DST change days with 92/100 buckets).
         prices = data.get("prices") or []
         local_now = dt_util.now()
+        tz = local_now.tzinfo
         today = local_now.date()
         tomorrow = today + datetime.timedelta(days=1)
 
-        today_prices = [
-            p["price_sek"]
-            for p in prices
-            if p["start"].astimezone(local_now.tzinfo).date() == today
-        ]
-        if today_prices:
-            attrs["today_min"] = min(today_prices)
-            attrs["today_max"] = max(today_prices)
-            attrs["today_average"] = round(sum(today_prices) / len(today_prices), 4)
+        buckets: dict[datetime.date, list[dict[str, Any]]] = {today: [], tomorrow: []}
+        for i, p in enumerate(prices):
+            start = p["start"].astimezone(tz)
+            day_buckets = buckets.get(start.date())
+            if day_buckets is None:
+                continue
+            if i + 1 < len(prices):
+                end = prices[i + 1]["start"].astimezone(tz)
+            else:
+                end = start + _SPOT_BUCKET_LENGTH
+            day_buckets.append(
+                {"start": start.isoformat(), "end": end.isoformat(), "price": p["price_sek"]}
+            )
 
-        tomorrow_prices = [
-            p["price_sek"]
-            for p in prices
-            if p["start"].astimezone(local_now.tzinfo).date() == tomorrow
-        ]
-        if tomorrow_prices:
-            attrs["tomorrow_min"] = min(tomorrow_prices)
-            attrs["tomorrow_max"] = max(tomorrow_prices)
-            attrs["tomorrow_average"] = round(sum(tomorrow_prices) / len(tomorrow_prices), 4)
+        for prefix, day in (("today", today), ("tomorrow", tomorrow)):
+            day_prices = [b["price"] for b in buckets[day]]
+            if day_prices:
+                attrs[f"{prefix}_min"] = min(day_prices)
+                attrs[f"{prefix}_max"] = max(day_prices)
+                attrs[f"{prefix}_average"] = round(sum(day_prices) / len(day_prices), 4)
+
+        attrs["prices_today"] = buckets[today]
+        attrs["prices_tomorrow"] = buckets[tomorrow]
 
         return attrs
 
