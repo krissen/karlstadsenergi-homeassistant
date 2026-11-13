@@ -16,6 +16,7 @@ from custom_components.karlstadsenergi.api import (
     KarlstadsenergiApiError,
     KarlstadsenergiAuthError,
     KarlstadsenergiConnectionError,
+    _normalize_fee_series,
     _parse_aspnet_response,
 )
 
@@ -1710,3 +1711,192 @@ class TestAsyncGetFeeConsumption:
         result = await api.async_get_fee_consumption({})
 
         assert result == expected
+
+
+# ---------------------------------------------------------------------------
+# _normalize_fee_series (portal switched the fee series to numeric ids)
+# ---------------------------------------------------------------------------
+
+
+def _fee_series(series_id: str, name: str) -> dict[str, Any]:
+    return {"id": series_id, "name": name, "data": [{"y": 1.0}]}
+
+
+def _fee_chart(*series: dict[str, Any]) -> dict[str, Any]:
+    return {"DetailedConsumptionChart": {"SeriesList": list(series)}}
+
+
+def _fee_ids(result: dict[str, Any]) -> list[str]:
+    return [s["id"] for s in result["DetailedConsumptionChart"]["SeriesList"]]
+
+
+class TestNormalizeFeeSeries:
+    def test_maps_the_electricity_invoice_series(self) -> None:
+        result = _normalize_fee_series(
+            _fee_chart(
+                _fee_series("200", "Elöverföring"),
+                _fee_series("201", "Effektavgift"),
+                _fee_series("202", "Abonnemangsavgift"),
+                _fee_series("203", "Energiskatt"),
+                _fee_series("204", "Elnät moms"),
+                _fee_series("SUM", "Summa"),
+            )
+        )
+
+        assert _fee_ids(result) == [
+            "ConsumptionFee",
+            "PowerFee",
+            "FixFee",
+            "EnergyTax",
+            "VAT",
+            "SUM",
+        ]
+
+    def test_maps_the_district_heating_consumption_series(self) -> None:
+        # The numeric ids are per utility: district heating "200" is the
+        # consumption fee, while electricity "200" is the transfer fee.
+        result = _normalize_fee_series(_fee_chart(_fee_series("200", "Förbrukning")))
+
+        assert _fee_ids(result) == ["ConsumptionFee"]
+
+    def test_tolerates_broken_umlauts_in_series_names(self) -> None:
+        result = _normalize_fee_series(
+            _fee_chart(
+                _fee_series("200", "FÃ¶rbrukning"),
+                _fee_series("200", "ElÃ¶verfÃ¶ring"),
+            )
+        )
+
+        assert _fee_ids(result) == ["ConsumptionFee", "ConsumptionFee"]
+
+    def test_series_with_a_known_id_are_left_alone(self) -> None:
+        result = _normalize_fee_series(_fee_chart(_fee_series("PowerFee", "Something else")))
+
+        assert _fee_ids(result) == ["PowerFee"]
+
+    def test_unrecognised_series_keep_their_id(self) -> None:
+        result = _normalize_fee_series(_fee_chart(_fee_series("999", "Okänd post")))
+
+        assert _fee_ids(result) == ["999"]
+
+    def test_returns_the_same_dict(self) -> None:
+        result = _fee_chart(_fee_series("201", "Effektavgift"))
+
+        assert _normalize_fee_series(result) is result
+
+    @pytest.mark.parametrize(
+        "result",
+        [
+            {},
+            {"DetailedConsumptionChart": None},
+            {"DetailedConsumptionChart": {}},
+            {"DetailedConsumptionChart": {"SeriesList": None}},
+            {"DetailedConsumptionChart": {"SeriesList": ["not a dict", None]}},
+        ],
+    )
+    def test_tolerates_missing_or_malformed_charts(self, result: dict[str, Any]) -> None:
+        assert _normalize_fee_series(result) is result
+
+    @pytest.mark.asyncio
+    async def test_async_get_fee_consumption_returns_normalized_series(self) -> None:
+        api = KarlstadsenergiApi("1234567890", AUTH_PASSWORD, "pass")
+        api._authenticated = True
+        api._request = AsyncMock(
+            return_value=_fee_chart(
+                _fee_series("201", "Effektavgift"),
+                _fee_series("SUM", "Summa"),
+            )
+        )
+
+        result = await api.async_get_fee_consumption({})
+
+        assert _fee_ids(result) == ["PowerFee", "SUM"]
+
+
+# ---------------------------------------------------------------------------
+# _request -- GetConsumption needs selectedMeterServiceIds
+# ---------------------------------------------------------------------------
+
+_GET_CONSUMPTION_URL = "https://example.com/Consumption/Consumption.aspx/GetConsumption"
+
+
+def _ok_response() -> MagicMock:
+    resp = MagicMock()
+    resp.status = 200
+    resp.headers = {"Content-Type": "application/json"}
+    resp.json = AsyncMock(return_value={"d": {}})
+    resp.release = AsyncMock()
+    return resp
+
+
+class TestRequestSelectedMeterServiceIds:
+    """Since October 2026 the portal answers HTTP 500 without the field."""
+
+    @pytest.mark.asyncio
+    async def test_adds_an_empty_list_to_the_get_consumption_body(self) -> None:
+        api = KarlstadsenergiApi("1234567890", AUTH_PASSWORD, "pass")
+        api._authenticated = True
+        api._post = AsyncMock(return_value=_ok_response())
+
+        await api._request(_GET_CONSUMPTION_URL, {"data": "{}"})
+
+        assert api._post.call_args[0][1] == {"data": "{}", "selectedMeterServiceIds": "[]"}
+
+    @pytest.mark.asyncio
+    async def test_keeps_an_explicit_value(self) -> None:
+        api = KarlstadsenergiApi("1234567890", AUTH_PASSWORD, "pass")
+        api._authenticated = True
+        api._post = AsyncMock(return_value=_ok_response())
+
+        await api._request(_GET_CONSUMPTION_URL, {"data": "{}", "selectedMeterServiceIds": "[42]"})
+
+        assert api._post.call_args[0][1]["selectedMeterServiceIds"] == "[42]"
+
+    @pytest.mark.asyncio
+    async def test_does_not_mutate_the_callers_dict(self) -> None:
+        api = KarlstadsenergiApi("1234567890", AUTH_PASSWORD, "pass")
+        api._authenticated = True
+        api._post = AsyncMock(return_value=_ok_response())
+        payload = {"data": "{}"}
+
+        await api._request(_GET_CONSUMPTION_URL, payload)
+
+        assert payload == {"data": "{}"}
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "url",
+        [
+            "https://example.com/Consumption/Consumption.aspx/GetConsumptionViewModelOnLoad",
+            "https://example.com/Start.aspx/GetNextFlexFetchDate",
+        ],
+    )
+    async def test_leaves_other_endpoints_untouched(self, url: str) -> None:
+        api = KarlstadsenergiApi("1234567890", AUTH_PASSWORD, "pass")
+        api._authenticated = True
+        api._post = AsyncMock(return_value=_ok_response())
+
+        await api._request(url, {"data": "{}"})
+
+        assert api._post.call_args[0][1] == {"data": "{}"}
+
+    @pytest.mark.asyncio
+    async def test_field_is_kept_when_the_request_is_retried_after_reauth(self) -> None:
+        api = KarlstadsenergiApi("1234567890", AUTH_PASSWORD, "pass")
+        api._authenticated = True
+
+        redirect_resp = MagicMock()
+        redirect_resp.status = 302
+        redirect_resp.release = AsyncMock()
+        api._post = AsyncMock(side_effect=[redirect_resp, _ok_response()])
+
+        async def _set_auth() -> None:
+            api._authenticated = True
+
+        api.authenticate = AsyncMock(side_effect=_set_auth)
+
+        await api._request(_GET_CONSUMPTION_URL, {"data": "{}"})
+
+        bodies = [call[0][1] for call in api._post.call_args_list]
+        assert len(bodies) == 2
+        assert all(body["selectedMeterServiceIds"] == "[]" for body in bodies)
