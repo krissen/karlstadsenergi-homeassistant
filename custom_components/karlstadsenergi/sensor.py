@@ -12,6 +12,8 @@ from homeassistant.components.sensor import (
 )
 from homeassistant.const import EntityCategory, UnitOfEnergy
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_track_time_change
@@ -143,9 +145,13 @@ async def async_setup_entry(
     # These are captured at setup time for stable device identifiers (Blocker B).
     site_address = ""
     site_place_id = ""
-    if runtime.consumption_coordinator.data:
+    if runtime.consumption_coordinator is not None and runtime.consumption_coordinator.data:
         consumption = runtime.consumption_coordinator.data.get("consumption") or {}
         model = consumption.get("ConsumptionModel") or {}
+        site_address = model.get("SiteName", "")
+        site_place_id = model.get("SiteId", "")
+    elif getattr(runtime, "discovery", None) is not None:
+        model = runtime.discovery.model
         site_address = model.get("SiteName", "")
         site_place_id = model.get("SiteId", "")
 
@@ -157,7 +163,11 @@ async def async_setup_entry(
 
     def _add_waste_entities() -> None:
         nonlocal waste_entities_added
-        if waste_entities_added or not runtime.waste_coordinator.data:
+        if (
+            waste_entities_added
+            or runtime.waste_coordinator is None
+            or not runtime.waste_coordinator.data
+        ):
             return
         data = runtime.waste_coordinator.data
         services = data.get("services") or []
@@ -193,45 +203,44 @@ async def async_setup_entry(
             async_add_entities(new_entities)
             waste_entities_added = True
 
-    waste_data = runtime.waste_coordinator.data
+    waste_data = runtime.waste_coordinator.data if runtime.waste_coordinator is not None else None
     if waste_data and (waste_data.get("services") or waste_data.get("next_dates")):
         _add_waste_entities()
-    else:
+    elif runtime.waste_coordinator is not None:
         unsub_waste = runtime.waste_coordinator.async_add_listener(_add_waste_entities)
         entry.async_on_unload(unsub_waste)
 
     # Electricity consumption + price sensors: always created so entities
     # don't disappear permanently after a transient startup failure.
     # KarlstadsenergiEntity keeps the last value on failure; unavailable only when data is None.
-    entities.append(
-        ElectricityConsumptionSensor(
-            coordinator=runtime.consumption_coordinator,
-            customer_id=customer_id,
-            address=site_address,
-            place_id=site_place_id,
-        )
-    )
-    entities.append(
-        ElectricityPriceSensor(
-            coordinator=runtime.consumption_coordinator,
-            customer_id=customer_id,
-            address=site_address,
-            place_id=site_place_id,
-        )
-    )
-
-    # Cost sensors (one per fee type, always created)
-    for fee_id, fee_info in FEE_SENSORS.items():
+    if runtime.consumption_coordinator is not None:
         entities.append(
-            ElectricityCostSensor(
+            ElectricityConsumptionSensor(
                 coordinator=runtime.consumption_coordinator,
                 customer_id=customer_id,
-                fee_id=fee_id,
-                fee_info=fee_info,
                 address=site_address,
                 place_id=site_place_id,
             )
         )
+        entities.append(
+            ElectricityPriceSensor(
+                coordinator=runtime.consumption_coordinator,
+                customer_id=customer_id,
+                address=site_address,
+                place_id=site_place_id,
+            )
+        )
+        for fee_id, fee_info in FEE_SENSORS.items():
+            entities.append(
+                ElectricityCostSensor(
+                    coordinator=runtime.consumption_coordinator,
+                    customer_id=customer_id,
+                    fee_id=fee_id,
+                    fee_info=fee_info,
+                    address=site_address,
+                    place_id=site_place_id,
+                )
+            )
 
     # District heating sensors: only created when account has DH.
     # Uses the listener pattern (like waste/contracts) so entities
@@ -244,7 +253,10 @@ async def async_setup_entry(
 
     def _add_dh_entities() -> None:
         nonlocal dh_base_added, dh_flow_added, dh_dt_added
-        if not runtime.district_heating_coordinator.data:
+        if (
+            runtime.district_heating_coordinator is None
+            or not runtime.district_heating_coordinator.data
+        ):
             return
         if not runtime.district_heating_coordinator.data.get("available"):
             return
@@ -311,31 +323,41 @@ async def async_setup_entry(
         if new_entities:
             async_add_entities(new_entities)
 
-    dh_data = runtime.district_heating_coordinator.data
+    dh_data = (
+        runtime.district_heating_coordinator.data
+        if runtime.district_heating_coordinator is not None
+        else None
+    )
     if dh_data and dh_data.get("available"):
         _add_dh_entities()
-    if not (dh_base_added and dh_flow_added and dh_dt_added):
+    if runtime.district_heating_coordinator is not None and not (
+        dh_base_added and dh_flow_added and dh_dt_added
+    ):
         unsub_dh = runtime.district_heating_coordinator.async_add_listener(_add_dh_entities)
         entry.async_on_unload(unsub_dh)
 
     # Spot price sensor (always created -- shows unavailable if API is down)
-    entities.append(
-        SpotPriceSensor(
-            coordinator=runtime.spot_price_coordinator,
-            customer_id=customer_id,
-            address=site_address,
-            place_id=site_place_id,
+    if runtime.spot_price_coordinator is not None:
+        entities.append(
+            SpotPriceSensor(
+                coordinator=runtime.spot_price_coordinator,
+                customer_id=customer_id,
+                address=site_address,
+                place_id=site_place_id,
+            )
         )
-    )
 
     # Contract sensors (one per contract).
-    # If contract_coordinator.data is None at setup (first fetch failed),
-    # register a listener so contract sensors are created when data arrives.
+    # Keep polling until usable contracts arrive, including after an empty response.
     contract_entities_added = False
 
     def _add_contracts() -> None:
         nonlocal contract_entities_added
-        if contract_entities_added or not runtime.contract_coordinator.data:
+        if (
+            contract_entities_added
+            or runtime.contract_coordinator is None
+            or not runtime.contract_coordinator.data
+        ):
             return
         new_entities: list[SensorEntity] = []
         for contract in runtime.contract_coordinator.data.get("contracts") or []:
@@ -354,9 +376,9 @@ async def async_setup_entry(
             async_add_entities(new_entities)
             contract_entities_added = True
 
-    if runtime.contract_coordinator.data:
+    if runtime.contract_coordinator is not None and runtime.contract_coordinator.data:
         _add_contracts()
-    else:
+    if runtime.contract_coordinator is not None and not contract_entities_added:
         unsub_contracts = runtime.contract_coordinator.async_add_listener(_add_contracts)
         entry.async_on_unload(unsub_contracts)
 
@@ -1284,6 +1306,17 @@ class SpotPriceSensor(
 
     @property
     def device_info(self) -> DeviceInfo:
+        # Spot-only reloads have no site metadata; retain the registered device.
+        if not self._place_id and self.hass is not None:
+            registry = er.async_get(self.hass)
+            entity_id = registry.async_get_entity_id("sensor", DOMAIN, self.unique_id)
+            if (
+                entity_id is not None
+                and (entity := registry.async_get(entity_id)) is not None
+                and entity.device_id is not None
+                and (device := dr.async_get(self.hass).async_get(entity.device_id)) is not None
+            ):
+                return DeviceInfo(identifiers=device.identifiers)
         return _utility_device_info(self._customer_id, self._address, self._place_id, "Electricity")
 
     @property

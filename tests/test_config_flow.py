@@ -44,7 +44,8 @@ def _make_flow(source: str = "user") -> KarlstadsenergiConfigFlow:
     hass.config_entries.async_get_entry.return_value = None
     flow.hass = hass
     # Provide a context dict (needed by _abort_if_unique_id_configured etc.)
-    flow.context = {"source": source}
+    flow.context = {"source": source, "entry_id": "test-entry"}
+    hass.config_entries.async_get_known_entry.return_value = MagicMock(options={})
     return flow
 
 
@@ -339,13 +340,11 @@ class TestOptionsFlow:
 
         flow = KarlstadsenergiOptionsFlow()
         flow.hass = MagicMock()
-        # Mock config_entry property
         entry = MagicMock()
+        entry.data = {}
         entry.options = {}
-        flow._config_entry = entry
-        # OptionsFlow uses self.config_entry which is a property;
-        # patch it on the instance
-        type(flow).config_entry = property(lambda self: self._config_entry)
+        flow.handler = "test-entry"
+        flow.hass.config_entries.async_get_known_entry.return_value = entry
         return flow
 
     @pytest.mark.asyncio
