@@ -32,14 +32,15 @@ Config Flow (auth) --> async_setup_entry
   --> ConsumptionCoordinator (1h) ---> ElectricityConsumptionSensor
   |                                 +> ElectricityPriceSensor
   |                                 +> ElectricityCostSensor (x6 fee types)
+  --> DistrictHeatingCoordinator (1h) -> Heating consumption, costs, flow and dT
   --> ContractCoordinator (24h) -----> ContractSensor (per contract)
   --> SpotPriceCoordinator (15min) --> SpotPriceSensor
-  --> Heartbeat timer (every 5 min)
+  --> Heartbeat timer (every 5 min, only with portal categories enabled)
 ```
 
 ### Key design decisions
 
-- **Four coordinators**: Each data source has its own refresh interval -- waste (6h), consumption (1h), contracts (24h), spot prices (15min).
+- **Five optional coordinators**: Only selected sources are created -- waste (6h), electricity (1h), district heating (1h), contracts (24h), spot prices (15min), with the default intervals shown here.
 - **Cookie persistence**: Session cookies are saved to the config entry so sessions survive HA restarts.
 - **Heartbeat**: A timer sends a keepalive every 5 minutes to prevent server-side session timeout.
 - **Fallback data**: If detailed services are unavailable, the integration falls back to a simpler summary endpoint.
@@ -215,3 +216,30 @@ Quick reference (the template has full details):
 - [Home Assistant integration development docs](https://developers.home-assistant.io/docs/creating_integration_manifest)
 - [Home Assistant DataUpdateCoordinator](https://developers.home-assistant.io/docs/integration_fetching_data)
 - [aiohttp documentation](https://docs.aiohttp.org/)
+
+## Category selection and lifecycle
+
+`const.resolve_features(data, options)` is the single legacy/default resolver:
+options override data; absent flags mean enabled. New config flows explicitly
+write all five switches with waste-only defaults. Reauth merges credentials
+into existing entry data without replacing selections or options.
+
+Runtime coordinators are optional. Platforms and diagnostics must handle `None`;
+never seed disabled coordinators from cache. Cache availability is computed only
+from enabled slices. Shared `_ModelDiscovery` is created only for heating or
+contracts, reuses enabled electricity, or retains only `ConsumptionModel` from
+`GetConsumptionViewModelOnLoad`. The endpoint also returns consumption charts
+and values: it cannot provide metadata-only discovery. No electricity coordinator,
+backfill or statistics is needed in this case. Waste/spot-only never discover.
+Without electricity, shared discovery expires at the heating interval, or after
+24 hours for contracts-only. A lock coalesces concurrent successful refreshes;
+failed/empty discovery is retried on the next consumer update. With electricity,
+consumers read its current model and recovery follows its normal refreshes.
+
+Each coordinator registers shutdown with HA's config-entry unload callbacks.
+Deferred entity listeners, the portal heartbeat (absent in spot-only), and the
+cache flush are also entry-scoped. Options changes reload; cookie-only updates
+do not. Cache flush cancels delayed writes before a replacement entry can save.
+Entity and statistic IDs are unchanged; switching off never purges registry or
+recorder data. No custom refresh services are registered; standard entity
+refreshes reach only their enabled coordinator.

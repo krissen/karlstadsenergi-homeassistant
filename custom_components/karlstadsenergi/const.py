@@ -2,6 +2,7 @@
 
 import datetime
 import hashlib
+from collections.abc import Mapping
 from dataclasses import dataclass
 
 from homeassistant.const import Platform
@@ -29,6 +30,19 @@ URL_SPOT_PRICES = (
 CONF_PERSONNUMMER = "personnummer"
 CONF_AUTH_METHOD = "auth_method"
 CONF_UPDATE_INTERVAL = "update_interval"
+CONF_WASTE = "enable_waste"
+CONF_ELECTRICITY = "enable_electricity"
+CONF_DISTRICT_HEATING = "enable_district_heating"
+CONF_CONTRACTS = "enable_contracts"
+CONF_SPOT = "enable_spot_prices"
+FEATURE_KEYS = (CONF_WASTE, CONF_ELECTRICITY, CONF_DISTRICT_HEATING, CONF_CONTRACTS, CONF_SPOT)
+NEW_FEATURE_DEFAULTS = {key: key == CONF_WASTE for key in FEATURE_KEYS}
+
+
+def resolve_features(data: Mapping, options: Mapping) -> dict[str, bool]:
+    """Resolve selections; entries predating switches retain all features."""
+    return {key: options.get(key, data.get(key, True)) for key in FEATURE_KEYS}
+
 
 # Defaults
 DEFAULT_UPDATE_INTERVAL = 6  # hours

@@ -44,13 +44,17 @@ from .const import (
     CONF_HISTORY_YEARS,
     CONF_PERSONNUMMER,
     CONF_UPDATE_INTERVAL,
+    CONF_WASTE,
     DEFAULT_HISTORY_YEARS,
     DEFAULT_UPDATE_INTERVAL,
     DOMAIN,
+    FEATURE_KEYS,
     MAX_HISTORY_YEARS,
     MAX_UPDATE_INTERVAL,
     MIN_HISTORY_YEARS,
     MIN_UPDATE_INTERVAL,
+    NEW_FEATURE_DEFAULTS,
+    resolve_features,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -131,13 +135,6 @@ def _auth_method_selector() -> SelectSelector:
     )
 
 
-_USER_STEP_SCHEMA = vol.Schema(
-    {
-        vol.Required(CONF_AUTH_METHOD, default=AUTH_PASSWORD): _auth_method_selector(),
-    }
-)
-
-
 class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Karlstadsenergi."""
 
@@ -151,6 +148,7 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
         self._bankid_init: dict[str, str] = {}
         self._accounts: list[dict[str, Any]] = []
         self._reauth_customer_code: str = ""
+        self._features = dict(NEW_FEATURE_DEFAULTS)
 
     def _reauth_update_and_reload(self, new_data: dict[str, Any]) -> ConfigFlowResult:
         """Finish reauth: update the entry and schedule an explicit reload.
@@ -160,7 +158,7 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
         previous setup failed), so reauth schedules the reload itself.
         """
         reauth_entry = self._get_reauth_entry()
-        result = self.async_update_and_abort(reauth_entry, data=new_data)
+        result = self.async_update_and_abort(reauth_entry, data={**reauth_entry.data, **new_data})
         self.hass.config_entries.async_schedule_reload(reauth_entry.entry_id)
         return result
 
@@ -170,16 +168,18 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
     ) -> ConfigFlowResult:
         """Step 1: Choose auth method and enter personnummer."""
         if user_input is not None:
+            self._features = {
+                key: user_input.get(key, value) for key, value in self._features.items()
+            }
+            if not any(self._features.values()):
+                return self._show_user_form({"base": "no_features"})
             self._auth_method = user_input.get(CONF_AUTH_METHOD, AUTH_PASSWORD)
 
             if self._auth_method == AUTH_PASSWORD:
                 return await self.async_step_password()
             return await self.async_step_bankid_personnummer()
 
-        return self.async_show_form(
-            step_id="user",
-            data_schema=_USER_STEP_SCHEMA,
-        )
+        return self._show_user_form({})
 
     async def async_step_bankid_personnummer(
         self,
@@ -228,7 +228,8 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
             )
             try:
                 await api.authenticate_password()
-                await api.async_get_next_flex_dates()
+                if self._features[CONF_WASTE]:
+                    await api.async_get_next_flex_dates()
                 cookies = api.get_session_cookies()
             except KarlstadsenergiAccountLockedError:
                 errors["base"] = "account_locked"
@@ -256,7 +257,7 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
 
                 return self.async_create_entry(
                     title=f"Karlstadsenergi ({customer_number})",
-                    data=new_data,
+                    data={**new_data, **self._features},
                 )
 
         return self.async_show_form(
@@ -449,7 +450,17 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
     def _show_user_form(self, errors: dict) -> ConfigFlowResult:
         return self.async_show_form(
             step_id="user",
-            data_schema=_USER_STEP_SCHEMA,
+            data_schema=vol.Schema(
+                {
+                    **{
+                        vol.Required(key, default=value): bool
+                        for key, value in self._features.items()
+                    },
+                    vol.Required(
+                        CONF_AUTH_METHOD, default=self._auth_method
+                    ): _auth_method_selector(),
+                }
+            ),
             errors=errors,
         )
 
@@ -477,6 +488,7 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
         self._personnummer = entry_data.get(CONF_PERSONNUMMER, "")
         self._auth_method = entry_data.get(CONF_AUTH_METHOD, AUTH_PASSWORD)
         self._reauth_customer_code = entry_data.get("customer_code", "")
+        self._features = resolve_features(entry_data, self._get_reauth_entry().options)
         return await self.async_step_reauth_confirm()
 
     async def async_step_reauth_confirm(
@@ -537,7 +549,8 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
             _LOGGER.debug("BankID login OK; verifying data access")
 
             # Verify data access
-            await self._api.async_get_next_flex_dates()
+            if self._features[CONF_WASTE]:
+                await self._api.async_get_next_flex_dates()
             _LOGGER.debug("BankID data-access verification OK")
 
             cookies = self._api.get_session_cookies()
@@ -564,7 +577,7 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
             if self.source == "reauth":
                 return self._reauth_update_and_reload(new_data)
 
-            return self.async_create_entry(title=title, data=new_data)
+            return self.async_create_entry(title=title, data={**new_data, **self._features})
 
         except KarlstadsenergiAuthError as err:
             _LOGGER.error("BankID login failed: %s", err)
@@ -599,16 +612,32 @@ class KarlstadsenergiOptionsFlow(OptionsFlow):
         user_input: dict[str, Any] | None = None,
     ) -> ConfigFlowResult:
         errors: dict[str, str] = {}
+        features = resolve_features(self.config_entry.data, self.config_entry.options)
         if user_input is not None:
-            interval = int(user_input.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL))
-            history = int(user_input.get(CONF_HISTORY_YEARS, DEFAULT_HISTORY_YEARS))
-            if not (MIN_UPDATE_INTERVAL <= interval <= MAX_UPDATE_INTERVAL):
+            features.update({key: user_input[key] for key in FEATURE_KEYS if key in user_input})
+            interval = int(
+                user_input.get(
+                    CONF_UPDATE_INTERVAL,
+                    self.config_entry.options.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL),
+                )
+            )
+            history = int(
+                user_input.get(
+                    CONF_HISTORY_YEARS,
+                    self.config_entry.options.get(CONF_HISTORY_YEARS, DEFAULT_HISTORY_YEARS),
+                )
+            )
+            if not any(features.values()):
+                errors["base"] = "no_features"
+            elif not (MIN_UPDATE_INTERVAL <= interval <= MAX_UPDATE_INTERVAL):
                 errors["base"] = "invalid_interval"
             elif not (MIN_HISTORY_YEARS <= history <= MAX_HISTORY_YEARS):
                 errors["base"] = "invalid_history_years"
             else:
                 coerced = {
+                    **self.config_entry.options,
                     **user_input,
+                    **features,
                     CONF_UPDATE_INTERVAL: interval,
                     CONF_HISTORY_YEARS: history,
                 }
@@ -627,6 +656,7 @@ class KarlstadsenergiOptionsFlow(OptionsFlow):
             step_id="init",
             data_schema=vol.Schema(
                 {
+                    **{vol.Required(key, default=value): bool for key, value in features.items()},
                     vol.Required(
                         CONF_UPDATE_INTERVAL,
                         default=current_interval,

@@ -23,6 +23,41 @@ A Home Assistant integration for [Karlstads Energi](https://www.karlstadsenergi.
 
 ## Features
 
+### Choose the data you use
+
+Setup and **Configure** offer five independent switches: waste collection,
+electricity consumption **and costs**, district heating, contracts, and public
+spot prices. New installations explicitly enable **waste only**. Existing entries
+without switches keep all five enabled until you change them. At least one must
+remain enabled. Choices survive reloads, restarts, and password/BankID reauthentication.
+
+Waste-only keeps all waste sensors, attributes, calendars, pickup-tomorrow
+binary sensors, authentication and cached values. It makes **no consumption,
+cost, heating, contract or spot-price requests**. Disabled categories have no
+coordinator, polling, backfill, statistics import or active entities, even when
+old cached data exists. Configure reloads the entry; registry customizations,
+unique IDs, recorder history and statistics are retained when reenabled.
+
+**Portal limitation:** district heating and contracts need the site's
+`ConsumptionModel`/`SiteId`. With electricity disabled, shared discovery visits
+the portal start/consumption pages and calls
+`GetConsumptionViewModelOnLoad`. That endpoint bundles consumption values/charts
+with the metadata: this is **not a metadata-only request**, and electricity
+payload may be downloaded. Only the model is retained, not the bundled charts;
+no electricity follow-up requests, entities or statistics are produced. Discovery
+is shared by heating/contracts and refreshed at the heating interval (or every
+24 hours for contracts-only), with failed/empty discovery retried on the next update. With
+electricity enabled its model is reused, avoiding duplicate discovery. This
+exception never applies to waste-only or spot-only mode.
+
+The update interval remains configurable (default 6 hours) for waste; enabled
+electricity/heating use `max(interval // 6, 1)` hours. Contracts refresh every
+24 hours and spot prices every 15 minutes. History depth (default 2 years)
+applies only to enabled electricity/heating imports. Both settings are preserved
+when unused. Spot-only needs no portal heartbeat or startup portal authentication.
+
+### Available entities
+
 - **Waste collection sensors** -- Next pickup date for each waste type (food & residual waste, glass/metal, plastic & paper packaging)
 - **Waste collection calendar** -- Calendar entities, works with HA's built-in Calendar card and [Mushroom Cards](https://github.com/piitaya/lovelace-mushroom)
 - **Pickup reminders** -- Binary sensors for "pickup tomorrow" per waste type

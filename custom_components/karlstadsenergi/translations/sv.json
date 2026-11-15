@@ -11,8 +11,13 @@
     "step": {
       "user": {
         "title": "Karlstadsenergi",
-        "description": "Logga in på ditt Karlstadsenergi-konto. Kundnummer och lösenord rekommenderas för de flesta användare.",
+        "description": "Välj datakategorier (enbart sophämtning som standard) och logga in på ditt Karlstadsenergi-konto. Kategorierna kan ändras senare under Konfigurera. Kundnummer och lösenord rekommenderas för de flesta användare.",
         "data": {
+          "enable_waste": "Sophämtning",
+          "enable_electricity": "Elförbrukning och kostnader",
+          "enable_district_heating": "Fjärrvärme",
+          "enable_contracts": "Avtal",
+          "enable_spot_prices": "Publika spotpriser",
           "auth_method": "Inloggningssätt"
         },
         "data_description": {
@@ -68,6 +73,7 @@
       }
     },
     "error": {
+      "no_features": "Välj minst en datakategori.",
       "invalid_auth": "Felaktiga inloggningsuppgifter",
       "account_locked": "Det här kontot är låst hos Karlstadsenergi. Kontrollera kontot i kundportalen och försök igen.",
       "invalid_personnummer": "Ogiltigt personnummer. Ange 10 eller 12 siffror.",
@@ -156,18 +162,24 @@
     "step": {
       "init": {
         "title": "Inställningar",
-        "description": "Konfigurera uppdateringsinställningar för Karlstadsenergi-integrationen.",
+        "description": "Välj vilka datakategorier som ska hämtas. Avstängda kategorier uppdateras inte och får inga aktiva entiteter; historiken behålls. Fjärrvärme/avtal kan behöva gemensam portalhämtning även utan el (se README).",
         "data": {
+          "enable_waste": "Sophämtning",
+          "enable_electricity": "Elförbrukning och kostnader",
+          "enable_district_heating": "Fjärrvärme",
+          "enable_contracts": "Avtal",
+          "enable_spot_prices": "Publika spotpriser",
           "update_interval": "Uppdateringsintervall (timmar)",
           "history_years": "Statistikhistorik (år)"
         },
         "data_description": {
-          "update_interval": "Hur ofta data hämtas från Karlstadsenergi (1-24 timmar).",
-          "history_years": "Hur många år av historisk förbruknings- och kostnadsdata som importeras till långtidsstatistik. Mer historik ger rikare grafer i Energi-dashboarden, men den första importen kan ta längre tid med många års timdata (ca 9 000 datapunkter per år). Standard: 2 år."
+          "update_interval": "Intervall för sophämtning (1-24 timmar). Aktiverad el/fjärrvärme uppdateras var max(heltalsdelen av intervallet / 6, 1) timme. Avtal: 24 timmar; spotpriser: 15 minuter.",
+          "history_years": "Antal års förbruknings- och kostnadshistorik för aktiverad el/fjärrvärme (standard: 2). Sparas men används inte vid enbart sophämtning. Befintlig statistik raderas aldrig."
         }
       }
     },
     "error": {
+      "no_features": "Välj minst en datakategori.",
       "invalid_interval": "Uppdateringsintervallet måste vara mellan 1 och 24 timmar.",
       "invalid_history_years": "Statistikhistoriken måste vara mellan 1 och 10 år."
     }
