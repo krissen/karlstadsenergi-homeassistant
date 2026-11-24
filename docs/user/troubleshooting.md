@@ -68,7 +68,7 @@ The consumption sensor shows old data, or consumption values are missing.
 **What to check:**
 
 1. Look at the `latest_date` attribute on the consumption sensor. This shows the actual date of the most recent data point. If this is a few days old, that is normal behavior.
-2. Not all customer accounts have electricity services. If you only have a waste collection contract, the consumption sensor will not appear at all. This is expected.
+2. The consumption sensor only appears when **Electricity** is switched on under **Settings -> Devices & Services -> Karlstadsenergi -> Configure**. New installations collect waste collection data only, so switch it on there; the same applies to district heating, contracts and spot prices. Accounts without electricity services do not get the sensor at all.
 3. Verify that consumption data appears when you log in to the portal directly.
 
 **Update frequency:** The consumption coordinator updates at 1/6 of your configured waste update interval (default: once per hour when the waste interval is 6 hours). You can trigger an immediate refresh using the `homeassistant.update_entity` service call on the consumption sensor.

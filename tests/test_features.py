@@ -15,6 +15,7 @@ import pytest
 from homeassistant.exceptions import ConfigEntryNotReady
 
 from custom_components.karlstadsenergi import (
+    SITE_CACHE_KEY,
     KarlstadsenergiSpotPriceCoordinator,
     _async_reload_entry,
     async_setup_entry,
@@ -45,7 +46,7 @@ from custom_components.karlstadsenergi.diagnostics import async_get_config_entry
 
 from .conftest import load_fixture
 from .test_config_flow import _make_flow, _mock_password_api
-from .test_integration import _FakeCache, _make_api, _make_entry, _make_hass
+from .test_integration import _FakeCache, _make_api, _make_entry, _make_hass, _persistent_cache
 
 COORDINATORS = (
     "waste_coordinator",
@@ -338,6 +339,34 @@ async def test_reauth_preserves_data_options_and_switches(bankid: bool) -> None:
 
 
 @pytest.mark.asyncio
+async def test_reauth_method_switch_drops_old_credentials() -> None:
+    """Password -> BankID at reauth must not keep the stored password."""
+    flow = _make_flow(source="reauth")
+    entry = _make_entry(
+        data={
+            "personnummer": "123",
+            "auth_method": "password",
+            "password": "secret",
+            **selections(CONF_WASTE, CONF_ELECTRICITY),
+        },
+    )
+    flow.hass.config_entries.async_get_known_entry.return_value = entry
+    await flow.async_step_reauth(entry.data)
+    api = _mock_password_api()
+    api.bankid_login = AsyncMock()
+    flow._api = api
+    flow._bankid_init = {"transaction_id": "test"}
+    with patch.object(flow, "async_update_and_abort", return_value={"type": "abort"}) as update:
+        await flow._do_bankid_login({"customer_id": "id", "customer_code": "123"})
+
+    data = update.call_args.kwargs["data"]
+    assert data["auth_method"] == "bankid"
+    assert "password" not in data
+    # The category switches stored in data survive.
+    assert resolve_features(data, {}) == selections(CONF_WASTE, CONF_ELECTRICITY)
+
+
+@pytest.mark.asyncio
 async def test_disable_shutdown_and_reenable_keep_ids(setup_environment: SimpleNamespace) -> None:
     env = setup_environment
     entry = _make_entry(options=selections(CONF_ELECTRICITY))
@@ -462,6 +491,97 @@ async def test_initial_discovery_failure_recovers(
     assert runtime.district_heating_coordinator.data["available"]
     env.api.async_get_contract_details.assert_awaited_with(["site-99"])
     assert env.api.async_get_consumption.await_count == before + 1
+
+
+_SITE_CELLS = [
+    (prev, this, fails, slice_)
+    for prev in (True, False)
+    for this in (True, False)
+    for fails in (False, True)
+    # A missing site slice means an entry from before the slice existed,
+    # which always ran with electricity on.
+    for slice_ in ((True, False) if prev else (True,))
+]
+
+
+async def _setup_and_collect_devices(env: SimpleNamespace, entry) -> dict[str, set]:
+    """Set up the entry and sensor platform; return unique_id -> device identifiers."""
+    await async_setup_entry(env.hass, entry)
+    entities: list = []
+    await sensor.async_setup_entry(env.hass, entry, lambda new, **kwargs: entities.extend(new))
+    devices = {
+        entity.unique_id: set(entity.device_info["identifiers"])
+        for entity in entities
+        if getattr(entity, "device_info", None)
+    }
+    await async_unload_entry(env.hass, entry)
+    for call in reversed(entry.async_on_unload.call_args_list):
+        result = call.args[0]()
+        if inspect.isawaitable(result):
+            await result
+    return devices
+
+
+def _site_options(electricity: bool) -> dict[str, bool]:
+    enabled = [CONF_DISTRICT_HEATING, CONF_CONTRACTS, CONF_SPOT]
+    if electricity:
+        enabled.append(CONF_ELECTRICITY)
+    return selections(*enabled)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("prev_electricity", "this_electricity", "fails", "has_slice"), _SITE_CELLS
+)
+async def test_site_device_identity_matrix(
+    setup_environment: SimpleNamespace,
+    prev_electricity: bool,
+    this_electricity: bool,
+    fails: bool,
+    has_slice: bool,
+) -> None:
+    """Site-scoped entities keep their device across restarts and category changes.
+
+    Electricity, heating, contract and spot entities x previous run with or
+    without electricity x this run with or without electricity x first
+    request ok or failing x site slice present or missing (legacy entry).
+    """
+    env = setup_environment
+    store: dict = {}
+    with patch("custom_components.karlstadsenergi._DataCache", _persistent_cache(store)):
+        before = await _setup_and_collect_devices(
+            env, _make_entry(options=_site_options(prev_electricity))
+        )
+        assert store[SITE_CACHE_KEY]["data"]["SiteId"] == "site-99"
+        if not has_slice:
+            del store[SITE_CACHE_KEY]
+        if fails:
+            env.api.async_get_consumption.side_effect = KarlstadsenergiConnectionError("offline")
+        after = await _setup_and_collect_devices(
+            env, _make_entry(options=_site_options(this_electricity))
+        )
+
+    common = before.keys() & after.keys()
+    assert common
+    for unique_id in common:
+        assert after[unique_id] == before[unique_id], unique_id
+    # Entities that are new in this run still land on the site device.
+    for unique_id, identifiers in after.items():
+        assert any("site-99" in identifier[1] for identifier in identifiers), unique_id
+
+
+@pytest.mark.asyncio
+async def test_new_install_without_known_site_uses_customer_devices(
+    setup_environment: SimpleNamespace,
+) -> None:
+    env = setup_environment
+    env.api.async_get_consumption.side_effect = KarlstadsenergiConnectionError("offline")
+    with patch("custom_components.karlstadsenergi._DataCache", _persistent_cache({})):
+        devices = await _setup_and_collect_devices(env, _make_entry(options=selections(CONF_SPOT)))
+
+    assert devices
+    for identifiers in devices.values():
+        assert not any("site" in identifier[1] for identifier in identifiers)
 
 
 @pytest.mark.asyncio

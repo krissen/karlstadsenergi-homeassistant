@@ -91,6 +91,8 @@ CACHE_SAVE_DELAY = 30  # seconds -- debounce frequent coordinator successes
 # history, so they are small, and the DH flow/dT sensors derive their *state*
 # from them -- pruning would make those sensors go unavailable after a restore.)
 CACHE_PRUNE_KEYS = ("hourly",)
+# Cache slice for the last known site metadata (see _SiteMemory).
+SITE_CACHE_KEY = f"{DOMAIN}_site"
 
 
 def _json_encode(obj: Any) -> Any:
@@ -192,6 +194,54 @@ class KarlstadsenergiData:
     setup_options: dict
     cache: _DataCache
     discovery: _ModelDiscovery | None = None
+    site_memory: _SiteMemory | None = None
+
+
+def _site_from_model(model: Any) -> dict[str, str] | None:
+    """Extract ``{"SiteName", "SiteId"}`` from a ConsumptionModel, if it has a site."""
+    if not isinstance(model, dict) or not model.get("SiteId"):
+        return None
+    return {"SiteName": model.get("SiteName") or "", "SiteId": model["SiteId"]}
+
+
+def _site_from_consumption_data(data: Any) -> dict[str, str] | None:
+    """Extract the site from electricity/heating coordinator data."""
+    if not isinstance(data, dict):
+        return None
+    return _site_from_model((data.get("consumption") or {}).get("ConsumptionModel"))
+
+
+class _SiteMemory:
+    """Last known site metadata, the single fallback for device identifiers.
+
+    Site-scoped entities (electricity, district heating, contracts, spot
+    prices) group under a device keyed on the site id. The live sources --
+    the electricity model and shared discovery -- can be missing at setup
+    (category switched off, first request failed), which would move the
+    entities to a customer-level device. Every source therefore reports the
+    site it sees here, the value is persisted in the on-disk cache, and it is
+    seeded from that cache at setup: from the site slice, or, for entries
+    that never wrote one, from a cached electricity slice.
+    """
+
+    def __init__(self, cached: dict, on_update: Callable[[dict[str, str]], None]) -> None:
+        self._on_update = on_update
+        slice_data = (cached.get(SITE_CACHE_KEY) or {}).get("data")
+        self.site: dict[str, str] = {}
+        if isinstance(slice_data, dict) and slice_data.get("SiteId"):
+            self.site = dict(slice_data)
+        else:
+            legacy = _site_from_consumption_data(
+                (cached.get(f"{DOMAIN}_consumption") or {}).get("data")
+            )
+            if legacy:
+                self.remember(legacy)
+
+    def remember(self, site: dict[str, str] | None) -> None:
+        """Store a site seen by a live source and persist it when it changed."""
+        if site and site != self.site:
+            self.site = dict(site)
+            self._on_update(self.site)
 
 
 class _ModelDiscovery:
@@ -206,6 +256,8 @@ class _ModelDiscovery:
         self.api = api
         self.electricity = electricity
         self.model: dict = {}
+        # Receives the site of every successful discovery (set by setup).
+        self.site_memory: _SiteMemory | None = None
         self._update_interval = timedelta(hours=update_interval_hours)
         self._last_refresh: datetime | None = None
         self._lock = asyncio.Lock()
@@ -225,6 +277,8 @@ class _ModelDiscovery:
                 response = await self.api.async_get_consumption()
                 self.model = response.get("ConsumptionModel") or {}
                 self._last_refresh = dt_util.utcnow()
+                if self.site_memory is not None:
+                    self.site_memory.remember(_site_from_model(self.model))
         return self.model
 
 
@@ -1163,6 +1217,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: KarlstadsenergiConfigEnt
     cache = _DataCache(hass, entry)
     entry.async_on_unload(cache.async_flush)
     cached = await cache.async_load()
+    site_memory = _SiteMemory(
+        cached, lambda site: cache.record(SITE_CACHE_KEY, site, dt_util.utcnow())
+    )
+
+    def _record_success(name: str, data: dict, last_success_time: datetime) -> None:
+        """Persist a coordinator success and report any site it carries."""
+        cache.record(name, data, last_success_time)
+        site_memory.remember(_site_from_consumption_data(data))
+
     enabled_names = {
         f"{DOMAIN}_{name}"
         for key, name in (
@@ -1182,7 +1245,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: KarlstadsenergiConfigEnt
         if slice_ and slice_.get("data") is not None:
             coordinator.data = slice_["data"]
             coordinator.last_success_time = slice_.get("last_success_time")
-        coordinator.on_success_callback = cache.record
+        coordinator.on_success_callback = _record_success
 
     async def _refresh(coordinator: DataUpdateCoordinator, *, critical: bool = False) -> None:
         """Seed then refresh, choosing the strategy based on cache presence."""
@@ -1235,6 +1298,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: KarlstadsenergiConfigEnt
             consumption_coordinator,
             max(update_interval // 6, 1) if features[CONF_DISTRICT_HEATING] else 24,
         )
+        discovery.site_memory = site_memory
     if features[CONF_DISTRICT_HEATING]:
         district_heating_coordinator = KarlstadsenergiDistrictHeatingCoordinator(
             hass,
@@ -1265,6 +1329,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: KarlstadsenergiConfigEnt
         setup_options=dict(entry.options),
         cache=cache,
         discovery=discovery,
+        site_memory=site_memory,
     )
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)

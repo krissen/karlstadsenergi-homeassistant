@@ -12,8 +12,6 @@ from homeassistant.components.sensor import (
 )
 from homeassistant.const import EntityCategory, UnitOfEnergy
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers import device_registry as dr
-from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_track_time_change
@@ -130,6 +128,32 @@ def _slug_for_contract(utility_name: str) -> str:
 # ── Setup ───────────────────────────────────────────────────────
 
 
+def _resolve_site(runtime: Any) -> tuple[str, str]:
+    """Return (SiteName, SiteId) for site-scoped device identifiers.
+
+    Sources in order: the electricity model, the shared discovery model, and
+    the last known site (``_SiteMemory``, persisted in the cache). The last one
+    keeps electricity, heating, contract and spot entities on their site
+    device when the live sources are switched off or failed at startup. Only a
+    new installation without any known site falls back to customer-level
+    devices.
+    """
+    candidates: list[Any] = []
+    coordinator = getattr(runtime, "consumption_coordinator", None)
+    if coordinator is not None and isinstance(coordinator.data, dict):
+        candidates.append((coordinator.data.get("consumption") or {}).get("ConsumptionModel"))
+    discovery = getattr(runtime, "discovery", None)
+    if discovery is not None:
+        candidates.append(getattr(discovery, "model", None))
+    memory = getattr(runtime, "site_memory", None)
+    if memory is not None:
+        candidates.append(getattr(memory, "site", None))
+    for model in candidates:
+        if isinstance(model, dict) and model.get("SiteId"):
+            return model.get("SiteName") or "", model["SiteId"]
+    return "", ""
+
+
 async def async_setup_entry(
     hass: HomeAssistant,  # noqa: ARG001 -- required by HA's platform setup-entry contract
     entry: KarlstadsenergiConfigEntry,
@@ -141,19 +165,10 @@ async def async_setup_entry(
 
     entities: list[SensorEntity] = []
 
-    # Extract address/place_id from consumption data for device grouping.
-    # These are captured at setup time for stable device identifiers (Blocker B).
-    site_address = ""
-    site_place_id = ""
-    if runtime.consumption_coordinator is not None and runtime.consumption_coordinator.data:
-        consumption = runtime.consumption_coordinator.data.get("consumption") or {}
-        model = consumption.get("ConsumptionModel") or {}
-        site_address = model.get("SiteName", "")
-        site_place_id = model.get("SiteId", "")
-    elif getattr(runtime, "discovery", None) is not None:
-        model = runtime.discovery.model
-        site_address = model.get("SiteName", "")
-        site_place_id = model.get("SiteId", "")
+    # Address/place_id for device grouping, captured at setup time for stable
+    # device identifiers (Blocker B). One resolution for every site-scoped
+    # entity; see _resolve_site.
+    site_address, site_place_id = _resolve_site(runtime)
 
     # Waste collection sensors.
     # If data has both empty services and empty next_dates at startup (first
@@ -1306,17 +1321,6 @@ class SpotPriceSensor(
 
     @property
     def device_info(self) -> DeviceInfo:
-        # Spot-only reloads have no site metadata; retain the registered device.
-        if not self._place_id and self.hass is not None:
-            registry = er.async_get(self.hass)
-            entity_id = registry.async_get_entity_id("sensor", DOMAIN, self.unique_id)
-            if (
-                entity_id is not None
-                and (entity := registry.async_get(entity_id)) is not None
-                and entity.device_id is not None
-                and (device := dr.async_get(self.hass).async_get(entity.device_id)) is not None
-            ):
-                return DeviceInfo(identifiers=device.identifiers)
         return _utility_device_info(self._customer_id, self._address, self._place_id, "Electricity")
 
     @property

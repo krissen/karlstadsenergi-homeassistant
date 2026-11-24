@@ -145,6 +145,21 @@ class _FakeCache:
         pass
 
 
+def _persistent_cache(store: dict) -> type[_FakeCache]:
+    """A _FakeCache class whose instances share ``store``, like the on-disk cache
+    does across reloads and restarts of the same entry."""
+
+    class _PersistentCache(_FakeCache):
+        async def async_load(self) -> dict:
+            self._state = store
+            return store
+
+        def record(self, name: str, data: dict, last_success_time) -> None:
+            store[name] = {"data": data, "last_success_time": last_success_time}
+
+    return _PersistentCache
+
+
 @pytest.fixture(autouse=True)
 def _patch_data_cache():
     """Replace the on-disk cache with an in-memory fake for all setup tests."""
