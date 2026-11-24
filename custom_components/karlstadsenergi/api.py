@@ -134,12 +134,23 @@ def _normalize_fee_series(result: dict[str, Any]) -> dict[str, Any]:
     ids are only unique per utility (electricity "200" is the transfer fee,
     district heating "200" is the consumption fee), so the series are matched on
     their name instead. Series that already carry a known id, and series that
-    match nothing, are left untouched. The input is modified in place.
+    match nothing, keep their id.
+
+    Several series can map to the same fee: an account with both electricity
+    trading and grid has "Elförbrukning" and "Elöverföring" (consumption fee),
+    "Fast avgift" and "Abonnemangsavgift" (fixed fee), and "Elhandel moms" and
+    "Elnät moms" (VAT). Such series are merged into one, summing the amounts
+    per invoice month, so every consumer sees exactly one series per fee id.
+    This matches the totals the portal reported before the change.
+    The input is modified in place.
     """
     chart = result.get("DetailedConsumptionChart")
     if not isinstance(chart, dict):
         return result
-    for series in chart.get("SeriesList") or []:
+    series_list = chart.get("SeriesList")
+    if not isinstance(series_list, list):
+        return result
+    for series in series_list:
         if not isinstance(series, dict):
             continue
         series_id = series.get("id")
@@ -152,7 +163,60 @@ def _normalize_fee_series(result: dict[str, Any]) -> dict[str, Any]:
                 break
         else:
             _LOGGER.debug("Unmapped fee series id=%r name=%r", series_id, series.get("name"))
+    chart["SeriesList"] = _merge_series_with_same_id(series_list)
     return result
+
+
+def _merge_series_with_same_id(series_list: list[Any]) -> list[Any]:
+    """Merge series that share an id, summing ``y`` per ``dateInterval``.
+
+    The first series of each id is kept (with its name and metadata) and the
+    data points of later series with the same id are added to it. Points are
+    matched on ``dateInterval``; a point whose month the first series lacks is
+    appended. Non-dict entries and series without an id are kept as they are.
+    """
+    merged: list[Any] = []
+    first_by_id: dict[str, dict[str, Any]] = {}
+    for series in series_list:
+        series_id = series.get("id") if isinstance(series, dict) else None
+        if not series_id:
+            merged.append(series)
+            continue
+        target = first_by_id.get(series_id)
+        if target is None:
+            # Copy so the merge below never mutates a point list shared with
+            # the caller's original series.
+            target = {
+                **series,
+                "data": [dict(p) for p in series.get("data") or [] if isinstance(p, dict)],
+            }
+            first_by_id[series_id] = target
+            merged.append(target)
+            continue
+        _LOGGER.debug(
+            "Merging fee series %r into %r (id %s)",
+            series.get("name"),
+            target.get("name"),
+            series_id,
+        )
+        points_by_month = {
+            p.get("dateInterval"): p for p in target["data"] if p.get("dateInterval")
+        }
+        for point in series.get("data") or []:
+            if not isinstance(point, dict):
+                continue
+            month = point.get("dateInterval")
+            existing = points_by_month.get(month) if month else None
+            if existing is None:
+                copy = dict(point)
+                target["data"].append(copy)
+                if month:
+                    points_by_month[month] = copy
+                continue
+            if point.get("y") is None:
+                continue
+            existing["y"] = round((existing.get("y") or 0) + point["y"], 2)
+    return merged
 
 
 class KarlstadsenergiApi:

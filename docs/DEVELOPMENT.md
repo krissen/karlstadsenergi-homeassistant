@@ -160,6 +160,8 @@ The invoice chart (`IsFeeTypeRequest: true`) identified its series as `Consumpti
 
 The ids are only unique per utility, so `_normalize_fee_series` maps the series back to the ids used by `FEE_SENSORS` by matching their *name*. The keywords are ASCII fragments on purpose: the series names can arrive with broken umlauts (`Förbrukning` as `FÃ¶rbrukning`). Series that match nothing keep their id and are logged at debug level (`Unmapped fee series`).
 
+An account with both electricity trading and grid gets more series than the table shows: `Elförbrukning` (consumption fee), `Fast avgift` (fixed fee) and `Elhandel moms` (VAT) next to the grid series. After mapping, series with the same id are merged and their amounts summed per `dateInterval`, so every consumer (`_extract_fees`, the fee statistics import, `monthly_breakdown`) sees one series per fee. Before October 2026 the portal reported these categories already summed; the old statistics confirm it (the fixed fee equals the trading fixed fee plus the grid subscription).
+
 ### Why the consumption sensor has no state_class
 
 The `ElectricityConsumptionSensor` intentionally omits `state_class`. The portal API provides delayed historical data (hours to days behind real-time), not a live meter feed. Setting `state_class=TOTAL_INCREASING` would cause the recorder to track entity state changes as if it were a real-time meter, producing misleading short-term statistics with gaps and flat lines. Instead, the external statistics (imported with correct hourly timestamps) are the intended source for the Energy Dashboard and history graphs.
