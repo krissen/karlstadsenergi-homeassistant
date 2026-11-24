@@ -158,7 +158,10 @@ class KarlstadsenergiConfigFlow(ConfigFlow, domain=DOMAIN):
         previous setup failed), so reauth schedules the reload itself.
         """
         reauth_entry = self._get_reauth_entry()
-        result = self.async_update_and_abort(reauth_entry, data={**reauth_entry.data, **new_data})
+        # Replace the credentials completely (a method switch must not leave
+        # the old password behind) and carry over only the category switches.
+        kept = {key: reauth_entry.data[key] for key in FEATURE_KEYS if key in reauth_entry.data}
+        result = self.async_update_and_abort(reauth_entry, data={**new_data, **kept})
         self.hass.config_entries.async_schedule_reload(reauth_entry.entry_id)
         return result
 

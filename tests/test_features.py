@@ -339,6 +339,34 @@ async def test_reauth_preserves_data_options_and_switches(bankid: bool) -> None:
 
 
 @pytest.mark.asyncio
+async def test_reauth_method_switch_drops_old_credentials() -> None:
+    """Password -> BankID at reauth must not keep the stored password."""
+    flow = _make_flow(source="reauth")
+    entry = _make_entry(
+        data={
+            "personnummer": "123",
+            "auth_method": "password",
+            "password": "secret",
+            **selections(CONF_WASTE, CONF_ELECTRICITY),
+        },
+    )
+    flow.hass.config_entries.async_get_known_entry.return_value = entry
+    await flow.async_step_reauth(entry.data)
+    api = _mock_password_api()
+    api.bankid_login = AsyncMock()
+    flow._api = api
+    flow._bankid_init = {"transaction_id": "test"}
+    with patch.object(flow, "async_update_and_abort", return_value={"type": "abort"}) as update:
+        await flow._do_bankid_login({"customer_id": "id", "customer_code": "123"})
+
+    data = update.call_args.kwargs["data"]
+    assert data["auth_method"] == "bankid"
+    assert "password" not in data
+    # The category switches stored in data survive.
+    assert resolve_features(data, {}) == selections(CONF_WASTE, CONF_ELECTRICITY)
+
+
+@pytest.mark.asyncio
 async def test_disable_shutdown_and_reenable_keep_ids(setup_environment: SimpleNamespace) -> None:
     env = setup_environment
     entry = _make_entry(options=selections(CONF_ELECTRICITY))
