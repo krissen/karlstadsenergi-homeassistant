@@ -30,6 +30,8 @@ async def async_setup_entry(
 ) -> None:
     """Set up Karlstadsenergi binary sensors."""
     waste_coordinator = entry.runtime_data.waste_coordinator
+    if waste_coordinator is None:
+        return
     customer_id = entry.data.get("customer_code") or entry.data[CONF_PERSONNUMMER]
 
     # If waste data has both empty services and empty next_dates at startup

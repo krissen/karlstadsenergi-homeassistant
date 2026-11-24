@@ -53,9 +53,14 @@ from .api import (
 )
 from .const import (
     CONF_AUTH_METHOD,
+    CONF_CONTRACTS,
+    CONF_DISTRICT_HEATING,
+    CONF_ELECTRICITY,
     CONF_HISTORY_YEARS,
     CONF_PERSONNUMMER,
+    CONF_SPOT,
     CONF_UPDATE_INTERVAL,
+    CONF_WASTE,
     DEFAULT_HISTORY_YEARS,
     DEFAULT_UPDATE_INTERVAL,
     DOMAIN,
@@ -65,6 +70,7 @@ from .const import (
     PLATFORMS,
     SKIP_GROUP_NAMES,
     URL_SPOT_PRICES,
+    resolve_features,
     slug_for_waste_type,
 )
 
@@ -178,13 +184,48 @@ class KarlstadsenergiData:
     """Runtime data for a Karlstadsenergi config entry."""
 
     api: KarlstadsenergiApi
-    waste_coordinator: KarlstadsenergiWasteCoordinator
-    consumption_coordinator: KarlstadsenergiConsumptionCoordinator
-    district_heating_coordinator: KarlstadsenergiDistrictHeatingCoordinator
-    contract_coordinator: KarlstadsenergiContractCoordinator
-    spot_price_coordinator: KarlstadsenergiSpotPriceCoordinator
+    waste_coordinator: KarlstadsenergiWasteCoordinator | None
+    consumption_coordinator: KarlstadsenergiConsumptionCoordinator | None
+    district_heating_coordinator: KarlstadsenergiDistrictHeatingCoordinator | None
+    contract_coordinator: KarlstadsenergiContractCoordinator | None
+    spot_price_coordinator: KarlstadsenergiSpotPriceCoordinator | None
     setup_options: dict
     cache: _DataCache
+    discovery: _ModelDiscovery | None = None
+
+
+class _ModelDiscovery:
+    """Share portal discovery without retaining its bundled consumption charts."""
+
+    def __init__(
+        self,
+        api: KarlstadsenergiApi,
+        electricity: KarlstadsenergiConsumptionCoordinator | None = None,
+        update_interval_hours: int = 1,
+    ) -> None:
+        self.api = api
+        self.electricity = electricity
+        self.model: dict = {}
+        self._update_interval = timedelta(hours=update_interval_hours)
+        self._last_refresh: datetime | None = None
+        self._lock = asyncio.Lock()
+
+    async def async_get_model(self) -> dict:
+        """Reuse electricity, otherwise refresh shared metadata at the consumer interval."""
+        if self.electricity is not None:
+            return ((self.electricity.data or {}).get("consumption") or {}).get(
+                "ConsumptionModel"
+            ) or {}
+        async with self._lock:
+            if (
+                not self.model
+                or self._last_refresh is None
+                or dt_util.utcnow() - self._last_refresh >= self._update_interval
+            ):
+                response = await self.api.async_get_consumption()
+                self.model = response.get("ConsumptionModel") or {}
+                self._last_refresh = dt_util.utcnow()
+        return self.model
 
 
 type KarlstadsenergiConfigEntry = ConfigEntry[KarlstadsenergiData]
@@ -690,8 +731,8 @@ class KarlstadsenergiDistrictHeatingCoordinator(_UtilityConsumptionCoordinator):
     """Coordinator for district heating (fjärrvärme) consumption data.
 
     Uses the same GetConsumption endpoint as electricity but with
-    UtilityId "F" instead of "E". Reads the base consumption model
-    from the electricity coordinator to avoid duplicate API calls.
+    UtilityId "F" instead of "E". Shares discovery with contracts, reusing
+    the electricity coordinator's model when enabled.
     """
 
     UTILITY_ID = "F"
@@ -702,7 +743,7 @@ class KarlstadsenergiDistrictHeatingCoordinator(_UtilityConsumptionCoordinator):
         api: KarlstadsenergiApi,
         update_interval_hours: int,
         entry: ConfigEntry,
-        electricity_coordinator: KarlstadsenergiConsumptionCoordinator,
+        electricity_coordinator: KarlstadsenergiConsumptionCoordinator | None,
         customer_id: str = "",
         history_years: int = DEFAULT_HISTORY_YEARS,
     ) -> None:
@@ -718,7 +759,7 @@ class KarlstadsenergiDistrictHeatingCoordinator(_UtilityConsumptionCoordinator):
             stat_prefix="district_heating_consumption",
             fee_stat_prefix="dh_cost",
         )
-        self._electricity_coordinator = electricity_coordinator
+        self.discovery = _ModelDiscovery(api, electricity_coordinator)
 
     @classmethod
     def _has_district_heating(cls, model: dict) -> bool:
@@ -739,18 +780,10 @@ class KarlstadsenergiDistrictHeatingCoordinator(_UtilityConsumptionCoordinator):
             dh = self._widen_start_date(dh, history_years)
         return dh
 
-    def _get_base_model(self) -> dict | None:
-        """Read the base consumption model from the electricity coordinator."""
-        el_data = self._electricity_coordinator.data
-        if not el_data:
-            return None
-        consumption = el_data.get("consumption") or {}
-        return consumption.get("ConsumptionModel")
-
     async def _fetch_data(self) -> dict:
         """Fetch district heating consumption data."""
         try:
-            model = self._get_base_model()
+            model = await self.discovery.async_get_model()
             if not model:
                 _LOGGER.debug("No ConsumptionModel available for DH")
                 return {"available": False}
@@ -869,10 +902,15 @@ class KarlstadsenergiContractCoordinator(_CookieSavingCoordinator):
     ) -> None:
         super().__init__(hass, api, 24, entry, f"{DOMAIN}_contracts")
         self._site_ids = site_ids
+        self.discovery: _ModelDiscovery | None = None
 
     async def _fetch_data(self) -> dict:
         """Fetch contract details."""
         try:
+            if self.discovery is not None:
+                model = await self.discovery.async_get_model()
+                site_id = model.get("SiteId")
+                self._site_ids = [str(site_id)] if site_id else []
             contracts = await self.api.async_get_contract_details(self._site_ids)
             return {"contracts": contracts}
         except KarlstadsenergiAuthError as err:
@@ -1080,6 +1118,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: KarlstadsenergiConfigEnt
     personnummer = entry.data[CONF_PERSONNUMMER]
     auth_method = entry.data.get(CONF_AUTH_METHOD, AUTH_BANKID)
     password = entry.data.get(CONF_PASSWORD, "")
+    features = resolve_features(entry.data, entry.options)
+    portal_enabled = any(value for key, value in features.items() if key != CONF_SPOT)
 
     update_interval = min(
         max(
@@ -1097,7 +1137,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: KarlstadsenergiConfigEnt
             _cookie_fingerprint(saved_cookies),
         )
         api.set_session_cookies(saved_cookies)
-    elif auth_method == AUTH_PASSWORD:
+    elif auth_method == AUTH_PASSWORD and portal_enabled:
         try:
             await api.authenticate()
         except KarlstadsenergiAuthError as err:
@@ -1121,8 +1161,20 @@ async def async_setup_entry(hass: HomeAssistant, entry: KarlstadsenergiConfigEnt
     # step), and entities still report data_stale=True. With no cache (fresh install)
     # we keep the strict behaviour: a failed first fetch aborts/prompts reauth.
     cache = _DataCache(hass, entry)
+    entry.async_on_unload(cache.async_flush)
     cached = await cache.async_load()
-    has_cache = bool(cached)
+    enabled_names = {
+        f"{DOMAIN}_{name}"
+        for key, name in (
+            (CONF_WASTE, "waste"),
+            (CONF_ELECTRICITY, "consumption"),
+            (CONF_DISTRICT_HEATING, "district_heating"),
+            (CONF_CONTRACTS, "contracts"),
+            (CONF_SPOT, "spot_price"),
+        )
+        if features[key]
+    }
+    has_cache = any(cached.get(name, {}).get("data") is not None for name in enabled_names)
 
     def _seed(coordinator: DataUpdateCoordinator) -> None:
         """Seed a coordinator from the cache and wire success persistence."""
@@ -1152,76 +1204,56 @@ async def async_setup_entry(hass: HomeAssistant, entry: KarlstadsenergiConfigEnt
                 ) from err
             _LOGGER.warning("Could not fetch %s data: %s", coordinator.name, err)
 
-    waste_coordinator = KarlstadsenergiWasteCoordinator(
-        hass,
-        api,
-        update_interval,
-        entry,
-    )
     customer_id = entry.data.get("customer_code") or personnummer
     history_years = int(entry.options.get(CONF_HISTORY_YEARS, DEFAULT_HISTORY_YEARS))
-    consumption_coordinator = KarlstadsenergiConsumptionCoordinator(
-        hass,
-        api,
-        max(update_interval // 6, 1),
-        entry,
-        customer_id=customer_id,
-        history_years=history_years,
-    )
-
-    # Waste is the primary feature: a non-auth failure with no cache aborts
-    # setup (ConfigEntryNotReady) so HA retries.
-    await _refresh(waste_coordinator, critical=True)
-
-    # Re-key any legacy slug-based waste entities to the stable FlexServiceId
-    # before the platforms create entities, so portal renames don't orphan them.
-    if waste_coordinator.data:
-        await _migrate_waste_unique_ids(
+    waste_coordinator = None
+    consumption_coordinator = None
+    district_heating_coordinator = None
+    contract_coordinator = None
+    spot_price_coordinator = None
+    discovery = None
+    if features[CONF_WASTE]:
+        waste_coordinator = KarlstadsenergiWasteCoordinator(hass, api, update_interval, entry)
+        await _refresh(waste_coordinator, critical=True)
+        if waste_coordinator.data:
+            await _migrate_waste_unique_ids(
+                hass, entry, customer_id, waste_coordinator.data.get("services") or []
+            )
+    if features[CONF_ELECTRICITY]:
+        consumption_coordinator = KarlstadsenergiConsumptionCoordinator(
             hass,
+            api,
+            max(update_interval // 6, 1),
             entry,
-            customer_id,
-            waste_coordinator.data.get("services") or [],
+            customer_id=customer_id,
+            history_years=history_years,
         )
-
-    # Consumption: a dead/expired session must surface reauth (handled inside
-    # _refresh). A non-auth failure with no cache is logged and setup continues
-    # so waste keeps working even if the electricity API is down.
-    await _refresh(consumption_coordinator)
-
-    # District heating coordinator: reads the base model from the electricity
-    # coordinator to avoid duplicate page visits and API calls.
-    district_heating_coordinator = KarlstadsenergiDistrictHeatingCoordinator(
-        hass,
-        api,
-        max(update_interval // 6, 1),
-        entry,
-        electricity_coordinator=consumption_coordinator,
-        customer_id=customer_id,
-        history_years=history_years,
-    )
-    await _refresh(district_heating_coordinator)
-
-    # Extract site_id from consumption data for contract fetching
-    site_ids: list[str] = []
-    if consumption_coordinator.data:
-        consumption = consumption_coordinator.data.get("consumption") or {}
-        model = consumption.get("ConsumptionModel") or {}
-        site_id = model.get("SiteId", "")
-        if site_id:
-            site_ids = [str(site_id)]
-
-    # Contract coordinator (24h interval, needs site_id from consumption)
-    contract_coordinator = KarlstadsenergiContractCoordinator(
-        hass,
-        api,
-        entry,
-        site_ids,
-    )
-    await _refresh(contract_coordinator)
-
-    # Spot price coordinator (15 min interval, public API, no auth).
-    spot_price_coordinator = KarlstadsenergiSpotPriceCoordinator(hass, entry)
-    await _refresh(spot_price_coordinator)
+        await _refresh(consumption_coordinator)
+    if features[CONF_DISTRICT_HEATING] or features[CONF_CONTRACTS]:
+        discovery = _ModelDiscovery(
+            api,
+            consumption_coordinator,
+            max(update_interval // 6, 1) if features[CONF_DISTRICT_HEATING] else 24,
+        )
+    if features[CONF_DISTRICT_HEATING]:
+        district_heating_coordinator = KarlstadsenergiDistrictHeatingCoordinator(
+            hass,
+            api,
+            max(update_interval // 6, 1),
+            entry,
+            electricity_coordinator=consumption_coordinator,
+            customer_id=customer_id,
+            history_years=history_years,
+        )
+        district_heating_coordinator.discovery = discovery
+        await _refresh(district_heating_coordinator)
+    if features[CONF_CONTRACTS]:
+        contract_coordinator = KarlstadsenergiContractCoordinator(hass, api, entry, [])
+        contract_coordinator.discovery = discovery
+        await _refresh(contract_coordinator)
+    if features[CONF_SPOT]:
+        spot_price_coordinator = KarlstadsenergiSpotPriceCoordinator(hass, entry)
+        await _refresh(spot_price_coordinator)
 
     entry.runtime_data = KarlstadsenergiData(
         api=api,
@@ -1232,6 +1264,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: KarlstadsenergiConfigEnt
         spot_price_coordinator=spot_price_coordinator,
         setup_options=dict(entry.options),
         cache=cache,
+        discovery=discovery,
     )
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -1251,12 +1284,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: KarlstadsenergiConfigEnt
         except Exception:
             _LOGGER.debug("Heartbeat failed", exc_info=True)
 
-    cancel_heartbeat = async_track_time_interval(
-        hass,
-        _heartbeat,
-        HEARTBEAT_INTERVAL,
-    )
-    entry.async_on_unload(cancel_heartbeat)
+    if portal_enabled:
+
+        @callback
+        def _schedule_heartbeat(_now: datetime) -> None:
+            # Entry-owned tasks are cancelled on reload, including an in-flight heartbeat.
+            entry.async_create_background_task(hass, _heartbeat(), name=f"{DOMAIN} heartbeat")
+
+        cancel_heartbeat = async_track_time_interval(hass, _schedule_heartbeat, HEARTBEAT_INTERVAL)
+        entry.async_on_unload(cancel_heartbeat)
     entry.async_on_unload(entry.add_update_listener(_async_reload_entry))
 
     return True
@@ -1269,6 +1305,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: KarlstadsenergiConfigEn
         PLATFORMS,
     )
     if unload_ok:
+        # Coordinators register async_shutdown with entry.async_on_unload;
+        # HA also removes deferred platform listeners and the heartbeat there.
         # Flush any pending cache write before tearing down, so a reload seeds
         # from the latest data instead of a stale debounced snapshot.
         await entry.runtime_data.cache.async_flush()

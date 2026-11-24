@@ -11,8 +11,13 @@
     "step": {
       "user": {
         "title": "Karlstadsenergi",
-        "description": "Log in to your Karlstadsenergi account. Customer number and password is recommended for most users.",
+        "description": "Choose data categories (waste only by default) and log in to your Karlstadsenergi account. Categories can be changed later in Configure. Customer number and password is recommended for most users.",
         "data": {
+          "enable_waste": "Waste collection",
+          "enable_electricity": "Electricity consumption and costs",
+          "enable_district_heating": "District heating",
+          "enable_contracts": "Contracts",
+          "enable_spot_prices": "Public spot prices",
           "auth_method": "Authentication method"
         },
         "data_description": {
@@ -68,6 +73,7 @@
       }
     },
     "error": {
+      "no_features": "Select at least one data category.",
       "invalid_auth": "Invalid credentials",
       "account_locked": "This account is locked by Karlstadsenergi. Check the account in the customer portal, then try again.",
       "invalid_personnummer": "Invalid personnummer. Enter 10 or 12 digits.",
@@ -156,18 +162,24 @@
     "step": {
       "init": {
         "title": "Options",
-        "description": "Configure update settings for the Karlstadsenergi integration.",
+        "description": "Choose which data categories to fetch. Disabling a category stops its updates and entities; existing history is kept. Heating/contracts may require shared portal discovery even without electricity (see README).",
         "data": {
+          "enable_waste": "Waste collection",
+          "enable_electricity": "Electricity consumption and costs",
+          "enable_district_heating": "District heating",
+          "enable_contracts": "Contracts",
+          "enable_spot_prices": "Public spot prices",
           "update_interval": "Update interval (hours)",
           "history_years": "Statistics history (years)"
         },
         "data_description": {
-          "update_interval": "How often to fetch new data from Karlstadsenergi (1-24 hours).",
-          "history_years": "How many years of historical consumption and cost data to import into long-term statistics. More history means richer Energy Dashboard graphs, but the first import may be slow with many years of hourly data (roughly 9,000 data points per year). Default: 2 years."
+          "update_interval": "Waste refresh interval (1-24 hours). Enabled electricity/heating refresh every max(interval // 6, 1) hours (integer division). Contracts: 24 hours; spot prices: 15 minutes.",
+          "history_years": "Years of consumption/cost history to import for enabled electricity and heating only (default: 2). Kept but unused in waste-only mode; existing statistics are never deleted."
         }
       }
     },
     "error": {
+      "no_features": "Select at least one data category.",
       "invalid_interval": "Update interval must be between 1 and 24 hours.",
       "invalid_history_years": "Statistics history must be between 1 and 10 years."
     }
