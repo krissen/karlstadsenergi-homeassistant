@@ -1767,7 +1767,8 @@ class TestNormalizeFeeSeries:
             )
         )
 
-        assert _fee_ids(result) == ["ConsumptionFee", "ConsumptionFee"]
+        # Both map to the consumption fee and are merged into one series.
+        assert _fee_ids(result) == ["ConsumptionFee"]
 
     def test_series_with_a_known_id_are_left_alone(self) -> None:
         result = _normalize_fee_series(_fee_chart(_fee_series("PowerFee", "Something else")))
@@ -1811,6 +1812,155 @@ class TestNormalizeFeeSeries:
         result = await api.async_get_fee_consumption({})
 
         assert _fee_ids(result) == ["PowerFee", "SUM"]
+
+
+# ---------------------------------------------------------------------------
+# _normalize_fee_series -- series mapping to the same fee are merged
+# ---------------------------------------------------------------------------
+
+
+def _monthly(series_id: str, name: str, values: dict[str, float | None]) -> dict[str, Any]:
+    return {
+        "id": series_id,
+        "name": name,
+        "data": [{"dateInterval": f"{month}-01", "y": y} for month, y in values.items()],
+    }
+
+
+def _by_id(result: dict[str, Any]) -> dict[str, dict[str, float | None]]:
+    """Map fee id -> {month: y}; fails if an id occurs twice."""
+    out: dict[str, dict[str, float | None]] = {}
+    for series in result["DetailedConsumptionChart"]["SeriesList"]:
+        assert series["id"] not in out, f"duplicate fee id {series['id']}"
+        out[series["id"]] = {p["dateInterval"][:7]: p["y"] for p in series["data"]}
+    return out
+
+
+class TestMergeFeeSeriesWithSameId:
+    """Invariant: after normalization every fee id occurs at most once."""
+
+    def test_trading_and_grid_account_sums_each_fee(self) -> None:
+        # An account with both electricity trading and grid has two series for
+        # the consumption fee, the fixed fee and VAT.
+        result = _normalize_fee_series(
+            _fee_chart(
+                _monthly("100", "ElfÃ¶rbrukning", {"2026-09": 1000.0, "2026-10": 1100.0}),
+                _monthly("200", "Elöverföring", {"2026-09": 90.0, "2026-10": 95.5}),
+                _monthly("201", "Effektavgift", {"2026-09": 300.0, "2026-10": 310.0}),
+                _monthly("101", "Fast avgift", {"2026-09": 20.0, "2026-10": 20.0}),
+                _monthly("202", "Abonnemangsavgift", {"2026-09": 125.0, "2026-10": 125.0}),
+                _monthly("203", "Energiskatt", {"2026-09": 400.0, "2026-10": 410.0}),
+                _monthly("102", "Elhandel moms", {"2026-09": 280.0, "2026-10": 290.0}),
+                _monthly("204", "ElnÃ¤t moms", {"2026-09": 240.0, "2026-10": 245.0}),
+                _monthly("SUM", "Summa", {"2026-09": 2455.0, "2026-10": 2595.5}),
+            )
+        )
+
+        fees = _by_id(result)
+        assert fees == {
+            "ConsumptionFee": {"2026-09": 1090.0, "2026-10": 1195.5},
+            "PowerFee": {"2026-09": 300.0, "2026-10": 310.0},
+            "FixFee": {"2026-09": 145.0, "2026-10": 145.0},
+            "EnergyTax": {"2026-09": 400.0, "2026-10": 410.0},
+            "VAT": {"2026-09": 520.0, "2026-10": 535.0},
+            "SUM": {"2026-09": 2455.0, "2026-10": 2595.5},
+        }
+        # The parts still add up to the portal's own total.
+        for month in ("2026-09", "2026-10"):
+            parts = sum(v[month] for k, v in fees.items() if k != "SUM")
+            assert parts == pytest.approx(fees["SUM"][month])
+
+    def test_grid_only_account_is_unchanged(self) -> None:
+        result = _normalize_fee_series(
+            _fee_chart(
+                _monthly("200", "Elöverföring", {"2026-10": 90.0}),
+                _monthly("202", "Abonnemangsavgift", {"2026-10": 125.0}),
+                _monthly("204", "Elnät moms", {"2026-10": 54.0}),
+            )
+        )
+
+        assert _by_id(result) == {
+            "ConsumptionFee": {"2026-10": 90.0},
+            "FixFee": {"2026-10": 125.0},
+            "VAT": {"2026-10": 54.0},
+        }
+
+    def test_district_heating_series_are_merged_the_same_way(self) -> None:
+        result = _normalize_fee_series(
+            _fee_chart(
+                _monthly("200", "FÃ¶rbrukning", {"2026-10": 500.0}),
+                _monthly("201", "Effektavgift", {"2026-10": 200.0}),
+                _monthly("205", "Fast avgift", {"2026-10": 50.0}),
+                _monthly("206", "Moms", {"2026-10": 187.5}),
+            )
+        )
+
+        assert _by_id(result) == {
+            "ConsumptionFee": {"2026-10": 500.0},
+            "PowerFee": {"2026-10": 200.0},
+            "FixFee": {"2026-10": 50.0},
+            "VAT": {"2026-10": 187.5},
+        }
+
+    def test_legacy_ids_that_repeat_are_merged(self) -> None:
+        result = _normalize_fee_series(
+            _fee_chart(
+                _monthly("VAT", "Elhandel moms", {"2026-10": 10.0}),
+                _monthly("VAT", "Elnät moms", {"2026-10": 5.0}),
+            )
+        )
+
+        assert _by_id(result) == {"VAT": {"2026-10": 15.0}}
+
+    def test_months_missing_from_one_series_are_kept(self) -> None:
+        result = _normalize_fee_series(
+            _fee_chart(
+                _monthly("100", "Fast avgift", {"2026-09": 20.0}),
+                _monthly("202", "Abonnemangsavgift", {"2026-09": 125.0, "2026-10": 125.0}),
+            )
+        )
+
+        assert _by_id(result) == {"FixFee": {"2026-09": 145.0, "2026-10": 125.0}}
+
+    def test_missing_values_count_as_nothing(self) -> None:
+        result = _normalize_fee_series(
+            _fee_chart(
+                _monthly("100", "Fast avgift", {"2026-09": None, "2026-10": 20.0}),
+                _monthly("202", "Abonnemangsavgift", {"2026-09": 125.0, "2026-10": None}),
+            )
+        )
+
+        assert _by_id(result) == {"FixFee": {"2026-09": 125.0, "2026-10": 20.0}}
+
+    def test_first_series_keeps_its_name_and_metadata(self) -> None:
+        first = _monthly("100", "Fast avgift", {"2026-10": 20.0})
+        first["colorIndex"] = "fix-fee"
+        result = _normalize_fee_series(
+            _fee_chart(first, _monthly("202", "Abonnemangsavgift", {"2026-10": 125.0}))
+        )
+
+        (series,) = result["DetailedConsumptionChart"]["SeriesList"]
+        assert series["name"] == "Fast avgift"
+        assert series["colorIndex"] == "fix-fee"
+
+    def test_input_point_lists_are_not_mutated(self) -> None:
+        first = _monthly("100", "Fast avgift", {"2026-10": 20.0})
+        second = _monthly("202", "Abonnemangsavgift", {"2026-10": 125.0, "2026-11": 125.0})
+        first_points = [dict(p) for p in first["data"]]
+
+        _normalize_fee_series(_fee_chart(first, second))
+
+        assert first["data"] == first_points
+
+    def test_unmapped_series_with_distinct_ids_are_kept(self) -> None:
+        result = _normalize_fee_series(
+            _fee_chart(
+                _monthly("998", "Okänd post", {"2026-10": 1.0}),
+                _monthly("999", "Annan post", {"2026-10": 2.0}),
+            )
+        )
+
+        assert _by_id(result) == {"998": {"2026-10": 1.0}, "999": {"2026-10": 2.0}}
 
 
 # ---------------------------------------------------------------------------
