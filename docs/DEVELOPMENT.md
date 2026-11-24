@@ -135,6 +135,31 @@ All consumption data lags ~1 day behind real-time. The portal appears to update 
 
 To request 15-min data, set `IntervalEnum: 6` and `Interval: "QUARTER"` in the ConsumptionModel payload. Note that this returns ~96 points/day (~5500 for the default 2-month window) vs ~24/day for hourly.
 
+### GetConsumption request body
+
+`Consumption.aspx/GetConsumption` takes two parameters:
+
+```json
+{"data": "<JSON-encoded ConsumptionModel>", "selectedMeterServiceIds": "[]"}
+```
+
+Since October 2026 the second one is required: without it the server answers HTTP 500. It is a JSON-encoded list sent as a string; an empty list means "all meters", which is what the portal's own page sends on load. `_request` adds it to every call to this method. `GetConsumptionViewModelOnLoad`, which the page load uses, is a different method and takes no such parameter.
+
+### Invoice (fee) series ids
+
+The invoice chart (`IsFeeTypeRequest: true`) identified its series as `ConsumptionFee`, `PowerFee`, `FixFee`, `EnergyTax`, `VAT` and `SUM`. Since October 2026 the fees carry numeric ids and only `SUM` keeps its name:
+
+| Utility | id | Series name |
+|---|---|---|
+| Electricity | `200` | Elöverföring (`ConsumptionFee`) |
+| Electricity | `201` | Effektavgift (`PowerFee`) |
+| Electricity | `202` | Abonnemangsavgift (`FixFee`) |
+| Electricity | `203` | Energiskatt (`EnergyTax`) |
+| Electricity | `204` | Elnät moms (`VAT`) |
+| District heating | `200` | Förbrukning (`ConsumptionFee`) |
+
+The ids are only unique per utility, so `_normalize_fee_series` maps the series back to the ids used by `FEE_SENSORS` by matching their *name*. The keywords are ASCII fragments on purpose: the series names can arrive with broken umlauts (`Förbrukning` as `FÃ¶rbrukning`). Series that match nothing keep their id and are logged at debug level (`Unmapped fee series`).
+
 ### Why the consumption sensor has no state_class
 
 The `ElectricityConsumptionSensor` intentionally omits `state_class`. The portal API provides delayed historical data (hours to days behind real-time), not a live meter feed. Setting `state_class=TOTAL_INCREASING` would cause the recorder to track entity state changes as if it were a real-time meter, producing misleading short-term statistics with gaps and flat lines. Instead, the external statistics (imported with correct hourly timestamps) are the intended source for the Energy Dashboard and history graphs.

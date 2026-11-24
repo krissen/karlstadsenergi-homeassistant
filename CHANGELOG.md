@@ -10,6 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - **Spot price list as attributes** -- the spot price sensor now exposes `prices_today` and `prices_tomorrow`: every 15-minute bucket as `{start, end, price}` (local ISO 8601 times, SEK/kWh). Automations and template sensors can use them to estimate what a load will cost over a future time window, which the min/max/average summaries cannot. The lists are kept out of the recorder so they do not bloat the database. (#42)
 
+### Fixed
+- **Hourly, monthly, invoice and district-heating data stopped updating after a portal change (October 2026)** -- the portal's `GetConsumption` page method now requires a second parameter, `selectedMeterServiceIds` (a JSON-encoded list sent as a string), and answers HTTP 500 without it. Every request that goes through `GetConsumption` -- hourly and monthly consumption, the invoice/fee breakdown and the district-heating data -- failed, so the long-term statistics froze, the fee sensors went `unknown` and the district-heating sensors went stale. The integration now sends an empty list, which means "all meters" (what the portal's own page sends on load). The daily consumption request uses a different method and was not affected.
+- **Fee sensors stayed `unknown` after the portal renamed the invoice series** -- the invoice chart now identifies its series with numeric ids (`200`-`204`) instead of `ConsumptionFee`, `PowerFee`, `FixFee`, `EnergyTax` and `VAT`, so only the total (`SUM`) was recognised. The numeric ids are only unique per utility (electricity `200` is the transfer fee, district heating `200` the consumption fee), so the series are now matched on their name. The statistics gap is filled automatically on the next refresh once the data is available again.
+
 ## [0.5.0] - 2026-07-07
 
 ### Added

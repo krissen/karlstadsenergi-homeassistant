@@ -15,6 +15,12 @@ from yarl import URL
 
 from .const import (
     BASE_URL,
+    FEE_CONSUMPTION,
+    FEE_ENERGY_TAX,
+    FEE_FIXED,
+    FEE_POWER,
+    FEE_SUM,
+    FEE_VAT,
     URL_CONTRACT_DETAILS,
     URL_FLEX_DATES,
     URL_FLEX_SERVICES,
@@ -53,6 +59,31 @@ LOGIN_RESULT_STATUS = {
     7: "LockedAccount",  # account temporarily locked
 }
 LOGIN_STATUS_LOCKED_ACCOUNT = 7
+
+# Path of the portal's GetConsumption page method. Hourly, monthly, fee and
+# district-heating requests all go through it (the page-load request uses
+# GetConsumptionViewModelOnLoad, which is a different method).
+_GET_CONSUMPTION_PATH = "/Consumption/Consumption.aspx/GetConsumption"
+
+# Fee series ids that FEE_SENSORS is keyed on.
+_KNOWN_FEE_IDS = frozenset(
+    {FEE_CONSUMPTION, FEE_POWER, FEE_FIXED, FEE_ENERGY_TAX, FEE_VAT, FEE_SUM}
+)
+
+# Keywords, matched against the lower-cased series name, that map a series in
+# the invoice chart to one of the fee ids above. They are ASCII fragments on
+# purpose: series names can arrive with broken umlauts (for example
+# "Förbrukning" as "FÃ¶rbrukning"), so a keyword must not contain one.
+_FEE_NAME_KEYWORDS: tuple[tuple[str, str], ...] = (
+    ("moms", FEE_VAT),  # "Elnät moms"
+    ("skatt", FEE_ENERGY_TAX),  # "Energiskatt"
+    ("effekt", FEE_POWER),  # "Effektavgift"
+    ("abonnemang", FEE_FIXED),  # "Abonnemangsavgift"
+    ("fast", FEE_FIXED),  # "Fast avgift"
+    ("verf", FEE_CONSUMPTION),  # "Elöverföring"
+    ("energiavg", FEE_CONSUMPTION),  # "Energiavgift"
+    ("brukning", FEE_CONSUMPTION),  # district heating: "Förbrukning"
+)
 
 
 class KarlstadsenergiApiError(Exception):
@@ -93,6 +124,35 @@ def _parse_aspnet_response(data: dict[str, Any]) -> Any:
         except (json.JSONDecodeError, TypeError):
             return value
     return value
+
+
+def _normalize_fee_series(result: dict[str, Any]) -> dict[str, Any]:
+    """Map the invoice chart's fee series to the ids ``FEE_SENSORS`` expects.
+
+    Since October 2026 the portal identifies the fee series with numeric ids
+    ("200", "201", ...) instead of "ConsumptionFee", "PowerFee", ... The numeric
+    ids are only unique per utility (electricity "200" is the transfer fee,
+    district heating "200" is the consumption fee), so the series are matched on
+    their name instead. Series that already carry a known id, and series that
+    match nothing, are left untouched. The input is modified in place.
+    """
+    chart = result.get("DetailedConsumptionChart")
+    if not isinstance(chart, dict):
+        return result
+    for series in chart.get("SeriesList") or []:
+        if not isinstance(series, dict):
+            continue
+        series_id = series.get("id")
+        if isinstance(series_id, str) and series_id in _KNOWN_FEE_IDS:
+            continue
+        name = str(series.get("name", "")).lower()
+        for keyword, fee_id in _FEE_NAME_KEYWORDS:
+            if keyword in name:
+                series["id"] = fee_id
+                break
+        else:
+            _LOGGER.debug("Unmapped fee series id=%r name=%r", series_id, series.get("name"))
+    return result
 
 
 class KarlstadsenergiApi:
@@ -499,6 +559,13 @@ class KarlstadsenergiApi:
         if not self._authenticated:
             await self.authenticate()
 
+        # Since October 2026 the portal's GetConsumption page method requires a
+        # second parameter, ``selectedMeterServiceIds`` (a JSON-encoded list sent
+        # as a string); without it the server answers HTTP 500. An empty list
+        # means "all meters", which is what the portal's own page sends on load.
+        if url.endswith(_GET_CONSUMPTION_PATH):
+            json_data = {"selectedMeterServiceIds": "[]", **(json_data or {})}
+
         resp = await self._post(
             url,
             json_data if json_data is not None else {},
@@ -734,7 +801,7 @@ class KarlstadsenergiApi:
             result = await self._request(url, {"data": json.dumps(model)}, retry_auth=False)
         if not isinstance(result, dict):
             return {}
-        return result
+        return _normalize_fee_series(result)
 
     async def async_get_consumption_with_model(
         self,
