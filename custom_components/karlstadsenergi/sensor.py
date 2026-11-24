@@ -151,9 +151,12 @@ async def async_setup_entry(
         site_address = model.get("SiteName", "")
         site_place_id = model.get("SiteId", "")
     elif getattr(runtime, "discovery", None) is not None:
+        # Fall back to the last known site (cached) when the first discovery
+        # after a restart failed, so device identifiers stay stable.
         model = runtime.discovery.model
-        site_address = model.get("SiteName", "")
-        site_place_id = model.get("SiteId", "")
+        site = runtime.discovery.site
+        site_address = model.get("SiteName") or site.get("SiteName", "")
+        site_place_id = model.get("SiteId") or site.get("SiteId", "")
 
     # Waste collection sensors.
     # If data has both empty services and empty next_dates at startup (first

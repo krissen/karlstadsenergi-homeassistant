@@ -15,6 +15,7 @@ import pytest
 from homeassistant.exceptions import ConfigEntryNotReady
 
 from custom_components.karlstadsenergi import (
+    DISCOVERY_SITE_CACHE_KEY,
     KarlstadsenergiSpotPriceCoordinator,
     _async_reload_entry,
     async_setup_entry,
@@ -462,6 +463,53 @@ async def test_initial_discovery_failure_recovers(
     assert runtime.district_heating_coordinator.data["available"]
     env.api.async_get_contract_details.assert_awaited_with(["site-99"])
     assert env.api.async_get_consumption.await_count == before + 1
+
+
+@pytest.mark.asyncio
+async def test_device_identity_survives_failed_discovery_after_restart(
+    setup_environment: SimpleNamespace,
+) -> None:
+    """With electricity disabled, a failed first discovery keeps the site device."""
+    env = setup_environment
+    store: dict = {}
+
+    class _PersistentCache(_FakeCache):
+        async def async_load(self) -> dict:
+            self._state = store
+            return store
+
+        def record(self, name: str, data: dict, last_success_time) -> None:
+            store[name] = {"data": data, "last_success_time": last_success_time}
+
+    async def _setup_and_collect_devices(entry) -> set:
+        await async_setup_entry(env.hass, entry)
+        entities: list = []
+        await sensor.async_setup_entry(env.hass, entry, lambda new, **kwargs: entities.extend(new))
+        devices = {
+            identifier
+            for entity in entities
+            if getattr(entity, "device_info", None)
+            for identifier in entity.device_info["identifiers"]
+        }
+        await async_unload_entry(env.hass, entry)
+        for call in reversed(entry.async_on_unload.call_args_list):
+            result = call.args[0]()
+            if inspect.isawaitable(result):
+                await result
+        return devices
+
+    options = selections(CONF_DISTRICT_HEATING, CONF_CONTRACTS)
+    with patch("custom_components.karlstadsenergi._DataCache", _PersistentCache):
+        before = await _setup_and_collect_devices(_make_entry(options=options))
+        assert store[DISCOVERY_SITE_CACHE_KEY]["data"]["SiteId"] == "site-99"
+
+        # Restart: the first discovery request fails.
+        env.api.async_get_consumption.side_effect = KarlstadsenergiConnectionError("offline")
+        after = await _setup_and_collect_devices(_make_entry(options=options))
+
+    assert before
+    assert after == before
+    assert any("site-99" in str(identifier) for identifier in after)
 
 
 @pytest.mark.asyncio

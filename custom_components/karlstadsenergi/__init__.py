@@ -91,6 +91,9 @@ CACHE_SAVE_DELAY = 30  # seconds -- debounce frequent coordinator successes
 # history, so they are small, and the DH flow/dT sensors derive their *state*
 # from them -- pruning would make those sensors go unavailable after a restore.)
 CACHE_PRUNE_KEYS = ("hourly",)
+# Cache slice for the last known site metadata of shared portal discovery
+# (used when electricity is disabled; see _ModelDiscovery.site).
+DISCOVERY_SITE_CACHE_KEY = f"{DOMAIN}_discovery_site"
 
 
 def _json_encode(obj: Any) -> Any:
@@ -206,6 +209,11 @@ class _ModelDiscovery:
         self.api = api
         self.electricity = electricity
         self.model: dict = {}
+        # Last known site metadata (SiteName, SiteId). Seeded from the on-disk
+        # cache at setup, so device identifiers stay stable when the first
+        # discovery after a restart fails.
+        self.site: dict[str, str] = {}
+        self.on_site_update: Callable[[dict[str, str]], None] | None = None
         self._update_interval = timedelta(hours=update_interval_hours)
         self._last_refresh: datetime | None = None
         self._lock = asyncio.Lock()
@@ -225,7 +233,19 @@ class _ModelDiscovery:
                 response = await self.api.async_get_consumption()
                 self.model = response.get("ConsumptionModel") or {}
                 self._last_refresh = dt_util.utcnow()
+                self._remember_site()
         return self.model
+
+    def _remember_site(self) -> None:
+        """Keep the site metadata of a successful discovery and report changes."""
+        site_id = self.model.get("SiteId")
+        if not site_id:
+            return
+        site = {"SiteName": self.model.get("SiteName") or "", "SiteId": site_id}
+        if site != self.site:
+            self.site = site
+            if self.on_site_update is not None:
+                self.on_site_update(site)
 
 
 type KarlstadsenergiConfigEntry = ConfigEntry[KarlstadsenergiData]
@@ -1234,6 +1254,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: KarlstadsenergiConfigEnt
             api,
             consumption_coordinator,
             max(update_interval // 6, 1) if features[CONF_DISTRICT_HEATING] else 24,
+        )
+        site_slice = cached.get(DISCOVERY_SITE_CACHE_KEY) or {}
+        if isinstance(site_slice.get("data"), dict):
+            discovery.site = dict(site_slice["data"])
+        discovery.on_site_update = lambda site: cache.record(
+            DISCOVERY_SITE_CACHE_KEY, site, dt_util.utcnow()
         )
     if features[CONF_DISTRICT_HEATING]:
         district_heating_coordinator = KarlstadsenergiDistrictHeatingCoordinator(
