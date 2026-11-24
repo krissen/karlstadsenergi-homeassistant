@@ -582,6 +582,7 @@ class _UtilityConsumptionSensor(
     imported with correct hourly timestamps by the coordinator.
     """
 
+    _data_parts = ("hourly", "monthly_kwh")
     _attr_has_entity_name = True
     _attr_device_class = SensorDeviceClass.ENERGY
     _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
@@ -786,6 +787,7 @@ class _UtilityPriceSensor(
     Computed as consumption fee / kWh for the latest invoiced month.
     """
 
+    _data_parts = ("fee_data", "monthly_kwh")
     _attr_has_entity_name = True
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = "SEK/kWh"
@@ -967,6 +969,7 @@ class _UtilityCostSensor(
 ):
     """Base monthly cost sensor for a specific fee type."""
 
+    _data_parts = ("fee_data",)
     _attr_has_entity_name = True
     _attr_device_class = SensorDeviceClass.MONETARY
     _attr_native_unit_of_measurement = "SEK"
@@ -1108,6 +1111,7 @@ class DistrictHeatingFlowSensor(
 ):
     """Sensor for district heating water flow (m³)."""
 
+    _data_parts = ("flow",)
     _attr_has_entity_name = True
     _attr_state_class = SensorStateClass.TOTAL_INCREASING
     _attr_native_unit_of_measurement = "m³"
@@ -1197,6 +1201,7 @@ class DistrictHeatingDtSensor(
     A higher dT means more efficient heat extraction from the water.
     """
 
+    _data_parts = ("dt",)
     _attr_has_entity_name = True
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = "°C"

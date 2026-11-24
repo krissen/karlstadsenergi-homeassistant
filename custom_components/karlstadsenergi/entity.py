@@ -24,6 +24,12 @@ class KarlstadsenergiEntity(CoordinatorEntity[_CoordinatorT]):
     successful fetch).
     """
 
+    # Detail parts of the coordinator data this entity reads ("hourly",
+    # "fee_data", ...). When the coordinator kept the last good value of one
+    # of them because its fetch failed (listed in ``stale_parts``), the entity
+    # reports ``data_stale`` even though the update as a whole succeeded.
+    _data_parts: tuple[str, ...] = ()
+
     @property
     def available(self) -> bool:
         """Stay available as long as we have data, even after a failed update.
@@ -36,8 +42,11 @@ class KarlstadsenergiEntity(CoordinatorEntity[_CoordinatorT]):
     @property
     def _staleness_attrs(self) -> dict[str, Any]:
         """Attributes describing data freshness, merged into every entity."""
+        data = self.coordinator.data
+        stale_parts = (data.get("stale_parts") or ()) if isinstance(data, dict) else ()
         attrs: dict[str, Any] = {
-            "data_stale": not self.coordinator.last_update_success,
+            "data_stale": not self.coordinator.last_update_success
+            or any(part in stale_parts for part in self._data_parts),
         }
         last = getattr(self.coordinator, "last_success_time", None)
         if last is not None:
