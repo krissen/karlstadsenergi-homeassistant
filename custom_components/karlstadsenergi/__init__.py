@@ -6,7 +6,7 @@ import asyncio
 import json
 import logging
 import re
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
@@ -471,6 +471,62 @@ class _UtilityConsumptionCoordinator(_CookieSavingCoordinator):
         self._statistic_id = f"{DOMAIN}:{stat_prefix}_{customer_id}"
         self._fee_stat_prefix = fee_stat_prefix
         self._backfill_done = False
+        # Optional detail parts ("hourly", "fee_data", ...) whose last fetch
+        # raised; used to log a failure once per outage and its recovery.
+        self._failing_parts: set[str] = set()
+
+    async def _fetch_part(self, part: str, fetch: Callable[[], Awaitable[Any]]) -> Any:
+        """Fetch one optional detail part; return ``{}`` when it fails.
+
+        Authentication errors propagate so the coordinator can start reauth.
+        Any other error is logged as a warning the first time the part fails
+        and at debug level while the outage lasts; the first success after
+        that is logged at info level.
+        """
+        try:
+            result = await fetch()
+        except KarlstadsenergiAuthError:
+            raise
+        except Exception as err:  # noqa: BLE001 -- one failing part must not fail the update
+            if part in self._failing_parts:
+                _LOGGER.debug("%s %s still unavailable: %s", self._utility_label, part, err)
+            else:
+                self._failing_parts.add(part)
+                _LOGGER.warning(
+                    "Fetching %s %s failed, keeping the last data: %s",
+                    self._utility_label,
+                    part,
+                    err or type(err).__name__,
+                )
+            return {}
+        if part in self._failing_parts:
+            self._failing_parts.discard(part)
+            _LOGGER.info("Fetching %s %s works again", self._utility_label, part)
+        return result
+
+    def _with_last_good(self, fresh: dict[str, Any]) -> dict[str, Any]:
+        """Fill empty detail parts with the last good data and list them as stale.
+
+        ``fresh`` maps part name to what this update fetched. A part that came
+        back empty (failure or empty response) keeps the value from the
+        previous successful update, if there is one, and is listed under
+        ``stale_parts`` so its entities report ``data_stale``. Callers must
+        base statistics imports and the backfill flag on ``fresh``, never on
+        the retained values.
+        """
+        previous = self.data or {}
+        merged: dict[str, Any] = {}
+        stale: list[str] = []
+        for part, value in fresh.items():
+            if value:
+                merged[part] = value
+            elif previous.get(part):
+                merged[part] = previous[part]
+                stale.append(part)
+            else:
+                merged[part] = value or {}
+        merged["stale_parts"] = stale
+        return merged
 
     @staticmethod
     def _widen_start_date(model: dict, history_years: int) -> dict:
@@ -720,24 +776,15 @@ class KarlstadsenergiConsumptionCoordinator(_UtilityConsumptionCoordinator):
             if model:
                 wide_model = self._widen_start_date(model, self._history_years)
                 fetch_model = wide_model if not self._backfill_done else model
-                try:
-                    hourly = await self.api.async_get_hourly_consumption(fetch_model)
-                except KarlstadsenergiAuthError:
-                    raise
-                except Exception:
-                    _LOGGER.debug("Hourly consumption unavailable")
-                try:
-                    fee_data = await self.api.async_get_fee_consumption(wide_model)
-                except KarlstadsenergiAuthError:
-                    raise
-                except Exception:
-                    _LOGGER.debug("Fee consumption unavailable")
-                try:
-                    monthly_kwh = await self.api.async_get_monthly_consumption(wide_model)
-                except KarlstadsenergiAuthError:
-                    raise
-                except Exception:
-                    _LOGGER.debug("Monthly consumption unavailable")
+                hourly = await self._fetch_part(
+                    "hourly", lambda: self.api.async_get_hourly_consumption(fetch_model)
+                )
+                fee_data = await self._fetch_part(
+                    "fee_data", lambda: self.api.async_get_fee_consumption(wide_model)
+                )
+                monthly_kwh = await self._fetch_part(
+                    "monthly_kwh", lambda: self.api.async_get_monthly_consumption(wide_model)
+                )
 
             # Import hourly data into long-term statistics
             if hourly and self._customer_id:
@@ -759,14 +806,16 @@ class KarlstadsenergiConsumptionCoordinator(_UtilityConsumptionCoordinator):
             elif not fee_data:
                 _LOGGER.debug("No fee data to import (empty response)")
 
+            # Based on the fresh results only: retained data must never mark
+            # the backfill done or be imported again.
             if not self._backfill_done and (hourly or fee_data):
                 self._backfill_done = True
 
             return {
                 "consumption": consumption,
-                "hourly": hourly,
-                "fee_data": fee_data,
-                "monthly_kwh": monthly_kwh,
+                **self._with_last_good(
+                    {"hourly": hourly, "fee_data": fee_data, "monthly_kwh": monthly_kwh}
+                ),
             }
         except KarlstadsenergiAuthError as err:
             raise ConfigEntryAuthFailed(f"Authentication failed: {err}") from err
@@ -859,54 +908,27 @@ class KarlstadsenergiDistrictHeatingCoordinator(_UtilityConsumptionCoordinator):
             wide_dh_model = self._prepare_dh_model(model, self._history_years)
             fetch_model = wide_dh_model if not self._backfill_done else dh_daily_model
 
-            # Fetch hourly DH consumption (for statistics import)
-            dh_hourly = {}
-            try:
-                dh_hourly = await self.api.async_get_hourly_consumption(fetch_model)
-            except KarlstadsenergiAuthError:
-                raise
-            except Exception:
-                _LOGGER.debug("DH hourly consumption unavailable")
-
-            # Fetch monthly DH consumption
-            dh_monthly = {}
-            try:
-                dh_monthly = await self.api.async_get_monthly_consumption(wide_dh_model)
-            except KarlstadsenergiAuthError:
-                raise
-            except Exception:
-                _LOGGER.debug("DH monthly consumption unavailable")
-
-            # Fetch DH fee/cost breakdown (SEK by month)
-            dh_fee = {}
-            try:
-                dh_fee = await self.api.async_get_fee_consumption(wide_dh_model)
-            except KarlstadsenergiAuthError:
-                raise
-            except Exception:
-                _LOGGER.debug("DH fee consumption unavailable")
-
-            # Fetch DH flow data (m³)
-            dh_flow = {}
-            try:
-                flow_model = self._prepare_dh_model(model)
-                flow_model["Loadoptions"] = ["Flow"]
-                dh_flow = await self.api.async_get_consumption_with_model(flow_model)
-            except KarlstadsenergiAuthError:
-                raise
-            except Exception:
-                _LOGGER.debug("DH flow data unavailable")
-
-            # Fetch DH temperature difference (dT)
-            dh_dt = {}
-            try:
-                dt_model = self._prepare_dh_model(model)
-                dt_model["Loadoptions"] = ["DT"]
-                dh_dt = await self.api.async_get_consumption_with_model(dt_model)
-            except KarlstadsenergiAuthError:
-                raise
-            except Exception:
-                _LOGGER.debug("DH dT data unavailable")
+            flow_model = self._prepare_dh_model(model)
+            flow_model["Loadoptions"] = ["Flow"]
+            dt_model = self._prepare_dh_model(model)
+            dt_model["Loadoptions"] = ["DT"]
+            # Hourly (for statistics import), monthly, fee/cost breakdown (SEK
+            # by month), flow (m³) and temperature difference (dT).
+            dh_hourly = await self._fetch_part(
+                "hourly", lambda: self.api.async_get_hourly_consumption(fetch_model)
+            )
+            dh_monthly = await self._fetch_part(
+                "monthly_kwh", lambda: self.api.async_get_monthly_consumption(wide_dh_model)
+            )
+            dh_fee = await self._fetch_part(
+                "fee_data", lambda: self.api.async_get_fee_consumption(wide_dh_model)
+            )
+            dh_flow = await self._fetch_part(
+                "flow", lambda: self.api.async_get_consumption_with_model(flow_model)
+            )
+            dh_dt = await self._fetch_part(
+                "dt", lambda: self.api.async_get_consumption_with_model(dt_model)
+            )
 
             # Import hourly DH data into long-term statistics
             if dh_hourly and self._customer_id:
@@ -922,17 +944,22 @@ class KarlstadsenergiDistrictHeatingCoordinator(_UtilityConsumptionCoordinator):
                 except Exception:
                     _LOGGER.warning("DH fee statistics import failed", exc_info=True)
 
+            # Based on the fresh results only (see the electricity coordinator).
             if not self._backfill_done and (dh_hourly or dh_fee):
                 self._backfill_done = True
 
             return {
                 "available": True,
                 "consumption": dh_consumption,
-                "hourly": dh_hourly,
-                "monthly_kwh": dh_monthly,
-                "fee_data": dh_fee,
-                "flow": dh_flow,
-                "dt": dh_dt,
+                **self._with_last_good(
+                    {
+                        "hourly": dh_hourly,
+                        "monthly_kwh": dh_monthly,
+                        "fee_data": dh_fee,
+                        "flow": dh_flow,
+                        "dt": dh_dt,
+                    }
+                ),
             }
         except KarlstadsenergiAuthError as err:
             raise ConfigEntryAuthFailed(f"Authentication failed: {err}") from err
