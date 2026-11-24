@@ -488,60 +488,73 @@ class _UtilityConsumptionCoordinator(_CookieSavingCoordinator):
         self._statistic_id = f"{DOMAIN}:{stat_prefix}_{customer_id}"
         self._fee_stat_prefix = fee_stat_prefix
         self._backfill_done = False
-        # Optional detail parts ("hourly", "fee_data", ...) whose last fetch
-        # raised; used to log a failure once per outage and its recovery.
+        # Outage state per optional detail part ("hourly", "fee_data", ...):
+        # parts in an outage (logged once), and this round's fetch errors.
         self._failing_parts: set[str] = set()
+        self._part_errors: dict[str, Exception] = {}
 
     async def _fetch_part(self, part: str, fetch: Callable[[], Awaitable[Any]]) -> Any:
-        """Fetch one optional detail part; return ``{}`` when it fails.
+        """Fetch one optional detail part; return ``{}`` when it raises.
 
         Authentication errors propagate so the coordinator can start reauth.
-        Any other error is logged as a warning the first time the part fails
-        and at debug level while the outage lasts; the first success after
-        that is logged at info level.
+        Any other error is remembered for ``_with_last_good``, which logs it.
         """
+        self._part_errors.pop(part, None)
         try:
-            result = await fetch()
+            return await fetch()
         except KarlstadsenergiAuthError:
             raise
         except Exception as err:  # noqa: BLE001 -- one failing part must not fail the update
-            if part in self._failing_parts:
-                _LOGGER.debug("%s %s still unavailable: %s", self._utility_label, part, err)
-            else:
-                self._failing_parts.add(part)
-                _LOGGER.warning(
-                    "Fetching %s %s failed, keeping the last data: %s",
-                    self._utility_label,
-                    part,
-                    err or type(err).__name__,
-                )
+            self._part_errors[part] = err
             return {}
-        if part in self._failing_parts:
-            self._failing_parts.discard(part)
-            _LOGGER.info("Fetching %s %s works again", self._utility_label, part)
-        return result
 
     def _with_last_good(self, fresh: dict[str, Any]) -> dict[str, Any]:
-        """Fill empty detail parts with the last good data and list them as stale.
+        """Fill parts without data with the last good data; log outages once.
 
         ``fresh`` maps part name to what this update fetched. A part without
-        chart data (failure, empty response or an empty chart) keeps the value
-        from the previous successful update, if that one had data, and is listed under
-        ``stale_parts`` so its entities report ``data_stale``. Callers must
-        base statistics imports and the backfill flag on ``fresh``, never on
-        the retained values.
+        chart data (the request raised, or answered with nothing or an empty
+        chart) keeps the value from the previous update, if that one had data,
+        and is listed under ``stale_parts`` so its entities report
+        ``data_stale``. Callers must base statistics imports and the backfill
+        flag on ``fresh``, never on the retained values.
+
+        An outage is a part whose request raised, or whose empty answer means
+        the last good data is being shown. It is logged as a warning when it
+        starts (with the error, or "no data in the response") and at info
+        level when the part has data again. An empty answer with nothing to
+        retain, such as an account without hourly metering, is not an outage.
         """
         previous = self.data or {}
         merged: dict[str, Any] = {}
         stale: list[str] = []
         for part, value in fresh.items():
+            error = self._part_errors.get(part)
             if _has_chart_data(value):
                 merged[part] = value
-            elif _has_chart_data(previous.get(part)):
+                if part in self._failing_parts:
+                    self._failing_parts.discard(part)
+                    _LOGGER.info("Fetching %s %s works again", self._utility_label, part)
+                continue
+            retained = _has_chart_data(previous.get(part))
+            if retained:
                 merged[part] = previous[part]
                 stale.append(part)
             else:
                 merged[part] = value or {}
+            if error is None and not retained:
+                continue
+            reason = (str(error) or type(error).__name__) if error else "no data in the response"
+            if part in self._failing_parts:
+                _LOGGER.debug("%s %s still unavailable: %s", self._utility_label, part, reason)
+            else:
+                self._failing_parts.add(part)
+                _LOGGER.warning(
+                    "Fetching %s %s failed, %s: %s",
+                    self._utility_label,
+                    part,
+                    "keeping the last data" if retained else "no earlier data to keep",
+                    reason,
+                )
         merged["stale_parts"] = stale
         return merged
 

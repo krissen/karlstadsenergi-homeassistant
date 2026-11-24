@@ -177,8 +177,56 @@ async def test_empty_response_does_not_warn(caplog: pytest.LogCaptureFixture) ->
     api.async_get_hourly_consumption.return_value = {}
 
     await coord._async_update_data()
+    await coord._async_update_data()
 
     assert not _records(caplog, logging.WARNING)
+    assert not _records(caplog, logging.INFO)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("empty", list(_EMPTY_RESPONSES))
+async def test_empty_answer_while_showing_last_data_is_an_outage(
+    caplog: pytest.LogCaptureFixture, empty: str
+) -> None:
+    """HTTP 200 with no data, while the last good data is shown, is logged once."""
+    caplog.set_level(logging.DEBUG, logger="custom_components.karlstadsenergi")
+    coord, api = _coordinator(customer_id="c1")
+    coord._async_import_consumption_statistics = AsyncMock()
+    coord._async_import_fee_statistics = AsyncMock()
+    coord.data = await coord._async_update_data()
+    caplog.clear()
+
+    api.async_get_fee_consumption.return_value = _EMPTY_RESPONSES[empty]
+    coord.data = await coord._async_update_data()
+    coord.data = await coord._async_update_data()
+
+    warnings = _records(caplog, logging.WARNING)
+    assert len(warnings) == 1
+    assert "fee_data" in warnings[0]
+    assert "no data in the response" in warnings[0]
+    assert coord.data["stale_parts"] == ["fee_data"]
+
+    caplog.clear()
+    api.async_get_fee_consumption.return_value = FEES
+    coord.data = await coord._async_update_data()
+
+    assert any("fee_data" in m and "works again" in m for m in _records(caplog, logging.INFO))
+    assert coord.data["stale_parts"] == []
+
+
+@pytest.mark.asyncio
+async def test_error_without_earlier_data_is_logged(caplog: pytest.LogCaptureFixture) -> None:
+    caplog.set_level(logging.DEBUG, logger="custom_components.karlstadsenergi")
+    coord, api = _coordinator(customer_id="c1")
+    coord._async_import_consumption_statistics = AsyncMock()
+    api.async_get_fee_consumption.side_effect = KarlstadsenergiApiError("API returned status 500")
+
+    await coord._async_update_data()
+
+    warnings = _records(caplog, logging.WARNING)
+    assert len(warnings) == 1
+    assert "no earlier data to keep" in warnings[0]
+    assert "status 500" in warnings[0]
 
 
 # ---------------------------------------------------------------------------
