@@ -246,27 +246,8 @@ Quick reference (the template has full details):
 
 ## Category selection and lifecycle
 
-`const.resolve_features(data, options)` is the single legacy/default resolver:
-options override data; absent flags mean enabled. New config flows explicitly
-write all five switches with waste-only defaults. Reauth merges credentials
-into existing entry data without replacing selections or options.
+`const.resolve_features(data, options)` is the single legacy/default resolver: options override data; absent flags mean enabled. New config flows explicitly write all five switches with waste-only defaults. Reauth merges credentials into existing entry data without replacing selections or options.
 
-Runtime coordinators are optional. Platforms and diagnostics must handle `None`;
-never seed disabled coordinators from cache. Cache availability is computed only
-from enabled slices. Shared `_ModelDiscovery` is created only for heating or
-contracts, reuses enabled electricity, or retains only `ConsumptionModel` from
-`GetConsumptionViewModelOnLoad`. The endpoint also returns consumption charts
-and values: it cannot provide metadata-only discovery. No electricity coordinator,
-backfill or statistics is needed in this case. Waste/spot-only never discover.
-Without electricity, shared discovery expires at the heating interval, or after
-24 hours for contracts-only. A lock coalesces concurrent successful refreshes;
-failed/empty discovery is retried on the next consumer update. With electricity,
-consumers read its current model and recovery follows its normal refreshes.
+Runtime coordinators are optional. Platforms and diagnostics must handle `None`; never seed disabled coordinators from cache. Cache availability is computed only from enabled slices. Shared `_ModelDiscovery` is created only for heating or contracts, reuses enabled electricity, or retains only `ConsumptionModel` from `GetConsumptionViewModelOnLoad`. The endpoint also returns consumption charts and values: it cannot provide metadata-only discovery. No electricity coordinator, backfill or statistics is needed in this case. Waste/spot-only never discover. Without electricity, shared discovery expires at the heating interval, or after 24 hours for contracts-only. A lock coalesces concurrent successful refreshes; failed/empty discovery is retried on the next consumer update. The last known site metadata (`SiteName`, `SiteId`) is kept in the on-disk cache (`DISCOVERY_SITE_CACHE_KEY`) and seeded into `_ModelDiscovery.site` at setup. It is only used for device identifiers: if the first discovery after a restart fails, contract and heating entities stay on their site device instead of moving to a customer-level device. Requests always use a freshly discovered model. With electricity, consumers read its current model and recovery follows its normal refreshes.
 
-Each coordinator registers shutdown with HA's config-entry unload callbacks.
-Deferred entity listeners, the portal heartbeat (absent in spot-only), and the
-cache flush are also entry-scoped. Options changes reload; cookie-only updates
-do not. Cache flush cancels delayed writes before a replacement entry can save.
-Entity and statistic IDs are unchanged; switching off never purges registry or
-recorder data. No custom refresh services are registered; standard entity
-refreshes reach only their enabled coordinator.
+Each coordinator registers shutdown with HA's config-entry unload callbacks. Deferred entity listeners, the portal heartbeat (absent in spot-only), and the cache flush are also entry-scoped. Options changes reload; cookie-only updates do not. Cache flush cancels delayed writes before a replacement entry can save. Entity and statistic IDs are unchanged; switching off never purges registry or recorder data. No custom refresh services are registered; standard entity refreshes reach only their enabled coordinator.

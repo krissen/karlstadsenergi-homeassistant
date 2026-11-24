@@ -2,7 +2,7 @@
 
 > **Note:** Entity IDs shown in this document are examples. Your actual entity IDs depend on your address and installation. Check **Settings -> Devices & Services -> Karlstadsenergi** for your actual entity IDs.
 
-All entities created by the Karlstadsenergi integration, grouped by type.
+All entities created by the Karlstadsenergi integration, grouped by type. Entities are only created for the categories switched on under **Configure** (waste collection, electricity, district heating, contracts, spot prices). New installations collect waste collection data only; see [Choose what to collect](../../README.md#choose-what-to-collect).
 
 ![Integration page showing devices and entities](../images/integration.png)
 
@@ -164,7 +164,7 @@ Derived from your invoice fee breakdown. Shows the latest invoiced month's effec
 
 ## Cost breakdown sensors
 
-Individual sensors for each fee component from the Karlstadsenergi invoice. Each sensor shows the latest month's amount. Monthly cost data is also imported into HA long-term statistics for Energy Dashboard integration and history graphs.
+Individual sensors for each fee component from the Karlstadsenergi invoice. Each sensor shows the latest month's amount. If you buy both electricity and grid service from Karlstads Energi, each sensor covers both parts: the consumption fee is the energy charge plus the grid transfer fee, the fixed fee is the trading fee plus the grid subscription, and VAT covers both, so the components add up to the total cost. Monthly cost data is also imported into HA long-term statistics for Energy Dashboard integration and history graphs.
 
 | Sensor | Entity ID example | State | Unit | Device class |
 |--------|-------------------|-------|------|--------------|

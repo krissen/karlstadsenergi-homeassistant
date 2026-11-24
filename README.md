@@ -6,7 +6,7 @@
 [![Project Maintenance][maintenance-shield]][user_profile]
 [![BuyMeCoffee][buymecoffeebadge]][buymecoffee]
 
-A Home Assistant integration for [Karlstads Energi](https://www.karlstadsenergi.se/) customers. Track waste collection pickup dates and electricity consumption.
+A Home Assistant integration for [Karlstads Energi](https://www.karlstadsenergi.se/) customers. Track waste collection pickup dates, electricity consumption and costs, and district heating.
 
 > **Disclaimer:** This is an unofficial integration built entirely for personal use. It talks to Karlstads Energi's customer portal through a reverse-engineered API that could break at any time -- so we really can't recommend that anyone else use it.
 >
@@ -23,39 +23,6 @@ A Home Assistant integration for [Karlstads Energi](https://www.karlstadsenergi.
 
 ## Features
 
-### Choose the data you use
-
-Setup and **Configure** offer five independent switches: waste collection,
-electricity consumption **and costs**, district heating, contracts, and public
-spot prices. New installations explicitly enable **waste only**. Existing entries
-without switches keep all five enabled until you change them. At least one must
-remain enabled. Choices survive reloads, restarts, and password/BankID reauthentication.
-
-Waste-only keeps all waste sensors, attributes, calendars, pickup-tomorrow
-binary sensors, authentication and cached values. It makes **no consumption,
-cost, heating, contract or spot-price requests**. Disabled categories have no
-coordinator, polling, backfill, statistics import or active entities, even when
-old cached data exists. Configure reloads the entry; registry customizations,
-unique IDs, recorder history and statistics are retained when reenabled.
-
-**Portal limitation:** district heating and contracts need the site's
-`ConsumptionModel`/`SiteId`. With electricity disabled, shared discovery visits
-the portal start/consumption pages and calls
-`GetConsumptionViewModelOnLoad`. That endpoint bundles consumption values/charts
-with the metadata: this is **not a metadata-only request**, and electricity
-payload may be downloaded. Only the model is retained, not the bundled charts;
-no electricity follow-up requests, entities or statistics are produced. Discovery
-is shared by heating/contracts and refreshed at the heating interval (or every
-24 hours for contracts-only), with failed/empty discovery retried on the next update. With
-electricity enabled its model is reused, avoiding duplicate discovery. This
-exception never applies to waste-only or spot-only mode.
-
-The update interval remains configurable (default 6 hours) for waste; enabled
-electricity/heating use `max(interval // 6, 1)` hours. Contracts refresh every
-24 hours and spot prices every 15 minutes. History depth (default 2 years)
-applies only to enabled electricity/heating imports. Both settings are preserved
-when unused. Spot-only needs no portal heartbeat or startup portal authentication.
-
 ### Available entities
 
 - **Waste collection sensors** -- Next pickup date for each waste type (food & residual waste, glass/metal, plastic & paper packaging)
@@ -64,11 +31,13 @@ when unused. Spot-only needs no portal heartbeat or startup portal authenticatio
 - **Electricity consumption** -- Daily and hourly consumption data with year-over-year comparison, Energy Dashboard compatible
 - **Electricity price** -- Effective energy price (SEK/kWh) derived from your invoice fee breakdown, Energy Dashboard compatible
 - **Cost breakdown** -- Individual sensors for each invoice fee component: consumption fee, power fee, fixed fee, energy tax, VAT, and total cost (SEK), with monthly long-term statistics for the Energy Dashboard
+- **District heating** -- Consumption, price, cost breakdown, flow and temperature difference (dT) for accounts with district heating, with long-term statistics like electricity
 - **Spot price** -- Current Nord Pool SE3 spot price (15-minute intervals) from Karlstadsenergi/Evado public API
 - **Historical statistics** -- Hourly consumption and monthly cost data imported into HA long-term statistics with configurable depth (1--10 years, default 2). The portal API has data going back to contract start -- this integration unlocks it for Energy Dashboard graphs and history analysis.
 - **Contract overview** -- Sensors for each contract (grid, trading, waste) with contract type, dates, and identifiers
 - **Computed attributes** -- `days_until_pickup`, `pickup_is_today`, `pickup_is_tomorrow`
 - **Session management** -- Cookie persistence across restarts and automatic re-authentication on session expiry (silent and indefinite for password logins; BankID expires after ~15 min and needs a manual re-scan -- see below). When the session expires, sensors keep their last values (marked `data_stale`) instead of going unavailable, and those values are cached on disk so they also survive a Home Assistant restart or integration reload (the re-authentication prompt still appears when action is needed). At re-authentication you can also **switch login method** -- for example move a BankID account over to customer number & password without re-adding the integration.
+- **Choose what to collect** -- Switch waste collection, electricity, district heating, contracts and spot prices on or off individually (see [Choose what to collect](#choose-what-to-collect))
 - **Configurable update interval** -- Set how often data is refreshed (1--24 hours)
 
 ---
@@ -101,6 +70,7 @@ when unused. Spot-only needs no portal heartbeat or startup portal authenticatio
 1. Go to **Settings -> Devices & Services -> Add Integration**.
 2. Search for `Karlstadsenergi`.
 3. Choose your authentication method (see below).
+4. Choose which data to collect (see [Choose what to collect](#choose-what-to-collect)). New installations collect waste collection data only.
 
 ### Authentication methods
 
@@ -134,16 +104,25 @@ The integration supports two login methods. **Customer number & password is by f
 
 > **Already set up with BankID?** You can switch to customer number & password without removing the integration. When the re-authentication prompt appears -- or any time via **Settings -> Devices & Services -> Karlstadsenergi -> Reconfigure** -- choose **Kundnummer & lösenord** and enter your customer number and password. Since password logins re-authenticate silently and indefinitely, this is the recommended way to escape the ~15-minute BankID re-scan cycle.
 
+### Choose what to collect
+
+Setup and **Configure** have five switches: waste collection, electricity (consumption and costs), district heating, contracts, and spot prices. New installations start with **waste collection only**, which keeps the load on the customer portal low; switch on the rest if you use it. Spot prices come from a public price API rather than the portal, but they are mainly useful together with electricity. Installations set up before this option existed keep everything switched on until you change it. At least one category must stay on.
+
+A category that is switched off makes no requests and has no active entities. Switching it back on brings back the same entities, with their history, long-term statistics and customizations.
+
+District heating and contracts need account information that the portal only returns together with the electricity data. With electricity switched off, the integration still makes that one request (at the heating interval, or once a day for contracts only) but keeps only the account information. The [development documentation](docs/DEVELOPMENT.md#category-selection-and-lifecycle) has the details.
+
 ### Options
 
 After setup, go to **Settings -> Devices & Services -> Karlstadsenergi -> Configure** to adjust:
 
 | Setting | Default | Range | Description |
 |---------|---------|-------|-------------|
+| Data to collect | Waste collection only (new installations) | Any combination, at least one | Which categories to fetch; see [Choose what to collect](#choose-what-to-collect) |
 | Update interval | 6 hours | 1--24 hours | How often to fetch new data |
 | Statistics history | 2 years | 1--10 years | How far back to import hourly consumption and monthly cost data |
 
-> **Tip:** Waste pickup dates rarely change, so 6--12 hours is usually sufficient. Electricity consumption updates more frequently (1/6 of the waste interval, minimum 1 hour). The history setting controls the initial backfill depth -- the first refresh fetches the full historical range, and subsequent refreshes use a shorter window while still importing any new data points. Two years imports ~17,500 hourly data points; larger values are fine but the initial import takes longer.
+> **Tip:** Waste pickup dates rarely change, so 6--12 hours is usually sufficient. Electricity and district heating update more often (1/6 of the waste interval, minimum 1 hour); contracts update daily and spot prices every 15 minutes. The history setting applies to electricity and district heating and controls the initial backfill depth -- the first refresh fetches the full historical range, and subsequent refreshes use a shorter window while still importing any new data points. Two years imports ~17,500 hourly data points; larger values are fine but the initial import takes longer.
 
 ---
 
