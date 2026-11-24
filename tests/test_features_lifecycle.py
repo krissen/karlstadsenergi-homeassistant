@@ -28,7 +28,7 @@ from custom_components.karlstadsenergi.const import (
 
 from .test_features import selections
 from .test_features import setup_environment as setup_environment
-from .test_integration import _make_api, _make_hass
+from .test_integration import _make_api, _make_hass, _persistent_cache
 
 
 @pytest.mark.asyncio
@@ -183,6 +183,9 @@ async def test_spot_registration_preserves_device_on_feature_reload(
     devices = dr.async_get(hass)
     spot_id = None
     device_id = None
+    # The on-disk cache survives the reloads, as it does in a real install.
+    cache = patch("custom_components.karlstadsenergi._DataCache", _persistent_cache({}))
+    cache.start()
     try:
         categories = [selections(CONF_ELECTRICITY, CONF_SPOT), selections(CONF_SPOT)]
         if start_spot_only:
@@ -227,6 +230,7 @@ async def test_spot_registration_preserves_device_on_feature_reload(
             if entry.runtime_data.consumption_coordinator is not None:
                 await entry.runtime_data.consumption_coordinator.async_shutdown()
     finally:
+        cache.stop()
         await platform.async_reset()
         await hass.async_stop(force=True)
 

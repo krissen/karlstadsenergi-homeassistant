@@ -15,7 +15,7 @@ import pytest
 from homeassistant.exceptions import ConfigEntryNotReady
 
 from custom_components.karlstadsenergi import (
-    DISCOVERY_SITE_CACHE_KEY,
+    SITE_CACHE_KEY,
     KarlstadsenergiSpotPriceCoordinator,
     _async_reload_entry,
     async_setup_entry,
@@ -46,7 +46,7 @@ from custom_components.karlstadsenergi.diagnostics import async_get_config_entry
 
 from .conftest import load_fixture
 from .test_config_flow import _make_flow, _mock_password_api
-from .test_integration import _FakeCache, _make_api, _make_entry, _make_hass
+from .test_integration import _FakeCache, _make_api, _make_entry, _make_hass, _persistent_cache
 
 COORDINATORS = (
     "waste_coordinator",
@@ -493,51 +493,95 @@ async def test_initial_discovery_failure_recovers(
     assert env.api.async_get_consumption.await_count == before + 1
 
 
+_SITE_CELLS = [
+    (prev, this, fails, slice_)
+    for prev in (True, False)
+    for this in (True, False)
+    for fails in (False, True)
+    # A missing site slice means an entry from before the slice existed,
+    # which always ran with electricity on.
+    for slice_ in ((True, False) if prev else (True,))
+]
+
+
+async def _setup_and_collect_devices(env: SimpleNamespace, entry) -> dict[str, set]:
+    """Set up the entry and sensor platform; return unique_id -> device identifiers."""
+    await async_setup_entry(env.hass, entry)
+    entities: list = []
+    await sensor.async_setup_entry(env.hass, entry, lambda new, **kwargs: entities.extend(new))
+    devices = {
+        entity.unique_id: set(entity.device_info["identifiers"])
+        for entity in entities
+        if getattr(entity, "device_info", None)
+    }
+    await async_unload_entry(env.hass, entry)
+    for call in reversed(entry.async_on_unload.call_args_list):
+        result = call.args[0]()
+        if inspect.isawaitable(result):
+            await result
+    return devices
+
+
+def _site_options(electricity: bool) -> dict[str, bool]:
+    enabled = [CONF_DISTRICT_HEATING, CONF_CONTRACTS, CONF_SPOT]
+    if electricity:
+        enabled.append(CONF_ELECTRICITY)
+    return selections(*enabled)
+
+
 @pytest.mark.asyncio
-async def test_device_identity_survives_failed_discovery_after_restart(
+@pytest.mark.parametrize(
+    ("prev_electricity", "this_electricity", "fails", "has_slice"), _SITE_CELLS
+)
+async def test_site_device_identity_matrix(
     setup_environment: SimpleNamespace,
+    prev_electricity: bool,
+    this_electricity: bool,
+    fails: bool,
+    has_slice: bool,
 ) -> None:
-    """With electricity disabled, a failed first discovery keeps the site device."""
+    """Site-scoped entities keep their device across restarts and category changes.
+
+    Electricity, heating, contract and spot entities x previous run with or
+    without electricity x this run with or without electricity x first
+    request ok or failing x site slice present or missing (legacy entry).
+    """
     env = setup_environment
     store: dict = {}
+    with patch("custom_components.karlstadsenergi._DataCache", _persistent_cache(store)):
+        before = await _setup_and_collect_devices(
+            env, _make_entry(options=_site_options(prev_electricity))
+        )
+        assert store[SITE_CACHE_KEY]["data"]["SiteId"] == "site-99"
+        if not has_slice:
+            del store[SITE_CACHE_KEY]
+        if fails:
+            env.api.async_get_consumption.side_effect = KarlstadsenergiConnectionError("offline")
+        after = await _setup_and_collect_devices(
+            env, _make_entry(options=_site_options(this_electricity))
+        )
 
-    class _PersistentCache(_FakeCache):
-        async def async_load(self) -> dict:
-            self._state = store
-            return store
+    common = before.keys() & after.keys()
+    assert common
+    for unique_id in common:
+        assert after[unique_id] == before[unique_id], unique_id
+    # Entities that are new in this run still land on the site device.
+    for unique_id, identifiers in after.items():
+        assert any("site-99" in identifier[1] for identifier in identifiers), unique_id
 
-        def record(self, name: str, data: dict, last_success_time) -> None:
-            store[name] = {"data": data, "last_success_time": last_success_time}
 
-    async def _setup_and_collect_devices(entry) -> set:
-        await async_setup_entry(env.hass, entry)
-        entities: list = []
-        await sensor.async_setup_entry(env.hass, entry, lambda new, **kwargs: entities.extend(new))
-        devices = {
-            identifier
-            for entity in entities
-            if getattr(entity, "device_info", None)
-            for identifier in entity.device_info["identifiers"]
-        }
-        await async_unload_entry(env.hass, entry)
-        for call in reversed(entry.async_on_unload.call_args_list):
-            result = call.args[0]()
-            if inspect.isawaitable(result):
-                await result
-        return devices
+@pytest.mark.asyncio
+async def test_new_install_without_known_site_uses_customer_devices(
+    setup_environment: SimpleNamespace,
+) -> None:
+    env = setup_environment
+    env.api.async_get_consumption.side_effect = KarlstadsenergiConnectionError("offline")
+    with patch("custom_components.karlstadsenergi._DataCache", _persistent_cache({})):
+        devices = await _setup_and_collect_devices(env, _make_entry(options=selections(CONF_SPOT)))
 
-    options = selections(CONF_DISTRICT_HEATING, CONF_CONTRACTS)
-    with patch("custom_components.karlstadsenergi._DataCache", _PersistentCache):
-        before = await _setup_and_collect_devices(_make_entry(options=options))
-        assert store[DISCOVERY_SITE_CACHE_KEY]["data"]["SiteId"] == "site-99"
-
-        # Restart: the first discovery request fails.
-        env.api.async_get_consumption.side_effect = KarlstadsenergiConnectionError("offline")
-        after = await _setup_and_collect_devices(_make_entry(options=options))
-
-    assert before
-    assert after == before
-    assert any("site-99" in str(identifier) for identifier in after)
+    assert devices
+    for identifiers in devices.values():
+        assert not any("site" in identifier[1] for identifier in identifiers)
 
 
 @pytest.mark.asyncio
