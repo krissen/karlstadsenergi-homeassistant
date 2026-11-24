@@ -173,7 +173,7 @@
           "history_years": "Statistikhistorik (år)"
         },
         "data_description": {
-          "update_interval": "Intervall för sophämtning (1-24 timmar). Aktiverad el/fjärrvärme uppdateras var max(heltalsdelen av intervallet / 6, 1) timme. Avtal: 24 timmar; spotpriser: 15 minuter.",
+          "update_interval": "Hur ofta sophämtningsdata uppdateras (1–24 timmar). El och fjärrvärme uppdateras sex gånger så ofta, högst en gång i timmen. Avtal uppdateras dagligen och spotpriser var 15:e minut.",
           "history_years": "Antal års förbruknings- och kostnadshistorik för aktiverad el/fjärrvärme (standard: 2). Sparas men används inte vid enbart sophämtning. Befintlig statistik raderas aldrig."
         }
       }

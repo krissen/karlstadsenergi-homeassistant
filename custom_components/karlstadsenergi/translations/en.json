@@ -173,7 +173,7 @@
           "history_years": "Statistics history (years)"
         },
         "data_description": {
-          "update_interval": "Waste refresh interval (1-24 hours). Enabled electricity/heating refresh every max(interval // 6, 1) hours (integer division). Contracts: 24 hours; spot prices: 15 minutes.",
+          "update_interval": "How often waste collection data is refreshed (1-24 hours). Electricity and district heating refresh six times as often, at most once an hour. Contracts refresh daily and spot prices every 15 minutes.",
           "history_years": "Years of consumption/cost history to import for enabled electricity and heating only (default: 2). Kept but unused in waste-only mode; existing statistics are never deleted."
         }
       }

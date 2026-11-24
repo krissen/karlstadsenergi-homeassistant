@@ -108,7 +108,7 @@ The integration supports two login methods. **Customer number & password is by f
 
 Setup and **Configure** have five switches: waste collection, electricity (consumption and costs), district heating, contracts, and spot prices. New installations start with **waste collection only**, which keeps the load on the customer portal low; switch on the rest if you use it. Spot prices come from a public price API rather than the portal, but they are mainly useful together with electricity. Installations set up before this option existed keep everything switched on until you change it. At least one category must stay on.
 
-A category that is switched off makes no requests and has no active entities. Switching it back on brings back the same entities, with their history, long-term statistics and customizations.
+A category that is switched off makes no requests and has no active entities. Its entities stay in Home Assistant, shown as unavailable, so that switching the category back on brings back the same entities with their history, long-term statistics and customizations. Delete them under **Settings -> Devices & Services -> Entities** only if you do not plan to switch the category on again.
 
 District heating and contracts need account information that the portal only returns together with the electricity data. With electricity switched off, the integration still makes that one request (at the heating interval, or once a day for contracts only) but keeps only the account information. The [development documentation](docs/DEVELOPMENT.md#category-selection-and-lifecycle) has the details.
 
