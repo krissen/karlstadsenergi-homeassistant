@@ -441,6 +441,23 @@ class KarlstadsenergiWasteCoordinator(_CookieSavingCoordinator):
 # ── Shared utility consumption coordinator ──────────────────────
 
 
+def _has_chart_data(value: Any) -> bool:
+    """True when a GetConsumption response has at least one data point.
+
+    The detail endpoints answer with a chart dict even when there is nothing
+    in it (``SeriesList`` empty, or series with empty ``data``), so the dict
+    being truthy says nothing about whether it is usable.
+    """
+    if not isinstance(value, dict):
+        return False
+    chart = value.get("DetailedConsumptionChart")
+    if not isinstance(chart, dict):
+        return False
+    return any(
+        isinstance(series, dict) and series.get("data") for series in chart.get("SeriesList") or []
+    )
+
+
 class _UtilityConsumptionCoordinator(_CookieSavingCoordinator):
     """Base coordinator for utility consumption data.
 
@@ -507,9 +524,9 @@ class _UtilityConsumptionCoordinator(_CookieSavingCoordinator):
     def _with_last_good(self, fresh: dict[str, Any]) -> dict[str, Any]:
         """Fill empty detail parts with the last good data and list them as stale.
 
-        ``fresh`` maps part name to what this update fetched. A part that came
-        back empty (failure or empty response) keeps the value from the
-        previous successful update, if there is one, and is listed under
+        ``fresh`` maps part name to what this update fetched. A part without
+        chart data (failure, empty response or an empty chart) keeps the value
+        from the previous successful update, if that one had data, and is listed under
         ``stale_parts`` so its entities report ``data_stale``. Callers must
         base statistics imports and the backfill flag on ``fresh``, never on
         the retained values.
@@ -518,9 +535,9 @@ class _UtilityConsumptionCoordinator(_CookieSavingCoordinator):
         merged: dict[str, Any] = {}
         stale: list[str] = []
         for part, value in fresh.items():
-            if value:
+            if _has_chart_data(value):
                 merged[part] = value
-            elif previous.get(part):
+            elif _has_chart_data(previous.get(part)):
                 merged[part] = previous[part]
                 stale.append(part)
             else:
@@ -808,7 +825,7 @@ class KarlstadsenergiConsumptionCoordinator(_UtilityConsumptionCoordinator):
 
             # Based on the fresh results only: retained data must never mark
             # the backfill done or be imported again.
-            if not self._backfill_done and (hourly or fee_data):
+            if not self._backfill_done and (_has_chart_data(hourly) or _has_chart_data(fee_data)):
                 self._backfill_done = True
 
             return {
@@ -945,7 +962,7 @@ class KarlstadsenergiDistrictHeatingCoordinator(_UtilityConsumptionCoordinator):
                     _LOGGER.warning("DH fee statistics import failed", exc_info=True)
 
             # Based on the fresh results only (see the electricity coordinator).
-            if not self._backfill_done and (dh_hourly or dh_fee):
+            if not self._backfill_done and (_has_chart_data(dh_hourly) or _has_chart_data(dh_fee)):
                 self._backfill_done = True
 
             return {

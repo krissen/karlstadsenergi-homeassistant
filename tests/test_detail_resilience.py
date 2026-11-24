@@ -26,9 +26,22 @@ from custom_components.karlstadsenergi.entity import KarlstadsenergiEntity
 
 from .test_integration import _make_api
 
-HOURLY = {"DetailedConsumptionChart": {"SeriesList": [{"id": "h"}]}}
-FEES = {"DetailedConsumptionChart": {"SeriesList": [{"id": "SUM"}]}}
-MONTHLY = {"DetailedConsumptionChart": {"SeriesList": [{"id": "m"}]}}
+
+def _chart(series_id: str) -> dict[str, Any]:
+    return {"DetailedConsumptionChart": {"SeriesList": [{"id": series_id, "data": [{"y": 1.0}]}]}}
+
+
+HOURLY = _chart("h")
+FEES = _chart("SUM")
+MONTHLY = _chart("m")
+
+# Responses without usable data: the endpoint answers with a chart dict even
+# when there is nothing in it.
+_EMPTY_RESPONSES = {
+    "empty": {},
+    "empty_chart": {"DetailedConsumptionChart": {"SeriesList": []}},
+    "empty_series": {"DetailedConsumptionChart": {"SeriesList": [{"id": "x", "data": []}]}},
+}
 
 _ELECTRICITY_FETCHERS = {
     "hourly": "async_get_hourly_consumption",
@@ -63,7 +76,7 @@ def _good() -> dict[str, Any]:
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("part", list(_ELECTRICITY_FETCHERS))
-@pytest.mark.parametrize("outcome", ["error", "empty"])
+@pytest.mark.parametrize("outcome", ["error", *_EMPTY_RESPONSES])
 @pytest.mark.parametrize("has_previous", [True, False])
 async def test_failed_or_empty_part_keeps_last_good(
     part: str, outcome: str, has_previous: bool
@@ -75,7 +88,7 @@ async def test_failed_or_empty_part_keeps_last_good(
     if outcome == "error":
         fetcher.side_effect = KarlstadsenergiApiError("API returned status 500")
     else:
-        fetcher.return_value = {}
+        fetcher.return_value = _EMPTY_RESPONSES[outcome]
 
     result = await coord._async_update_data()
 
@@ -83,7 +96,7 @@ async def test_failed_or_empty_part_keeps_last_good(
         assert result[part] == _good()[part]
         assert result["stale_parts"] == [part]
     else:
-        assert result[part] == {}
+        assert result[part] == ({} if outcome == "error" else _EMPTY_RESPONSES[outcome])
         assert result["stale_parts"] == []
     # The other parts are fresh and never stale.
     for other in _ELECTRICITY_FETCHERS:
@@ -205,6 +218,18 @@ async def test_retained_data_is_not_imported_and_does_not_finish_backfill() -> N
     assert coord._backfill_done is True
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize("empty", ["empty_chart", "empty_series"])
+async def test_empty_chart_does_not_finish_backfill(empty: str) -> None:
+    coord, api = _coordinator()
+    api.async_get_hourly_consumption.return_value = _EMPTY_RESPONSES[empty]
+    api.async_get_fee_consumption.return_value = _EMPTY_RESPONSES[empty]
+
+    await coord._async_update_data()
+
+    assert coord._backfill_done is False
+
+
 # ---------------------------------------------------------------------------
 # District heating: same behaviour for all five parts
 # ---------------------------------------------------------------------------
@@ -235,7 +260,7 @@ async def test_district_heating_part_keeps_last_good(part: str) -> None:
             }
         }
     )
-    good = {name: {"part": name} for name in _DH_FETCHES}
+    good = {name: _chart(name) for name in _DH_FETCHES}
     api.async_get_hourly_consumption = AsyncMock(return_value=good["hourly"])
     api.async_get_monthly_consumption = AsyncMock(return_value=good["monthly_kwh"])
     api.async_get_fee_consumption = AsyncMock(return_value=good["fee_data"])
@@ -246,7 +271,7 @@ async def test_district_heating_part_keeps_last_good(part: str) -> None:
         option = (model.get("Loadoptions") or [None])[0]
         if part in ("flow", "dt") and option == load_option:
             raise KarlstadsenergiApiError("500")
-        return {"Flow": good["flow"], "DT": good["dt"]}.get(option, {"daily": True})
+        return {"Flow": good["flow"], "DT": good["dt"]}.get(option, _chart("daily"))
 
     api.async_get_consumption_with_model = AsyncMock(side_effect=_with_model)
     if part not in ("flow", "dt"):
