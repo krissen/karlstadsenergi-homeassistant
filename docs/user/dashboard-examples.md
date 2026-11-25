@@ -590,7 +590,7 @@ A built-in `statistics-graph` card showing daily consumption from the external s
   title: Elförbrukning per dag (30 dagar)
   chart_type: bar
   entities:
-    - karlstadsenergi:electricity_consumption_166667   # use your own customer_id
+    - karlstadsenergi:electricity_consumption_1234567   # use your own customer_id
   period: day
   stat_types:
     - change
