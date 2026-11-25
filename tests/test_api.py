@@ -547,7 +547,7 @@ class TestAuthenticatePassword:
     """authenticate_password maps the portal LoginResultStatus correctly."""
 
     def _api_with_login_response(self, response_d: Any) -> KarlstadsenergiApi:
-        api = KarlstadsenergiApi("166667", AUTH_PASSWORD, "pw")
+        api = KarlstadsenergiApi("1234567", AUTH_PASSWORD, "pw")
         mock_session = MagicMock()
         mock_session.cookie_jar = MagicMock()
         api._ensure_session = AsyncMock(return_value=mock_session)

@@ -240,7 +240,7 @@ class TestStepPassword:
             return_value=mock_api,
         ):
             result = await flow.async_step_password(
-                user_input={"customer_number": "166667", "password": "pw"}
+                user_input={"customer_number": "1234567", "password": "pw"}
             )
 
         assert result["type"] == "form"
