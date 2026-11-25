@@ -200,6 +200,17 @@ All data is retrieved from the [Karlstads Energi customer portal](https://minasi
 
 ---
 
+## Contributors
+
+**Maintainer:** [@krissen](https://github.com/krissen)
+
+Thank you to everyone who has contributed to this project:
+
+- [@bazuz](https://github.com/bazuz) - District heating support (#7); diagnosis and fix of the October 2026 portal change (#44, #45)
+- [@basn](https://github.com/basn) - Choose what to collect, with waste-only mode (#46)
+
+---
+
 [Want to support development? Buy me a coffee!](https://coff.ee/krissen)
 
 ---
