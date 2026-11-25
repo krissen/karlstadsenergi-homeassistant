@@ -154,16 +154,16 @@ template:
 
 ### Cost of a load started now
 
-The `prices_today` and `prices_tomorrow` attributes list every 15-minute bucket, so you can price a load whose run spans several buckets. This example assumes an even draw of 6 kWh over 1.5 hours (6 buckets), for example charging an electric car, and starts with the current bucket. Change `kwh` and `slots` to match your load. Spot price only; grid fees, energy tax and VAT come on top.
+The `prices_today` and `prices_tomorrow` attributes list every 15-minute bucket, so you can price a load whose run spans several buckets. This example assumes an even draw of 10 kWh over 1.5 hours (6 buckets), for example a sauna with a Finnish-made electric stove, and starts with the current bucket. Change `kwh` and `slots` to match your load. Spot price only; grid fees, energy tax and VAT come on top.
 
 ```yaml
 template:
   - sensor:
-      - name: "Car charging cost if started now"
+      - name: "Sauna session spot cost"
         unit_of_measurement: "SEK"
         state: >
           {% set entity = 'sensor.karlstadsenergi_spot_price' %}
-          {% set kwh = 6 %}
+          {% set kwh = 10 %}
           {% set slots = 6 %}
           {% set buckets = (state_attr(entity, 'prices_today') or [])
                            + (state_attr(entity, 'prices_tomorrow') or []) %}
