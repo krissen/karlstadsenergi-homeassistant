@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-25
+
 ### Added
 - **Spot price list as attributes** -- the spot price sensor now exposes `prices_today` and `prices_tomorrow`: every 15-minute bucket as `{start, end, price}` (local ISO 8601 times, SEK/kWh). Automations and template sensors can use them to estimate what a load will cost over a future time window, which the min/max/average summaries cannot. The lists are kept out of the recorder so they do not bloat the database. (#42)
 - **Choose what to collect** -- setup and **Configure** have five switches: waste collection, electricity (consumption and costs), district heating, contracts and spot prices. A category that is switched off makes no requests and has no active entities; switching it back on restores the same entities with their history and statistics. **New installations collect waste collection data only**; existing installations keep everything switched on. Based on @basn's contribution (#46).
